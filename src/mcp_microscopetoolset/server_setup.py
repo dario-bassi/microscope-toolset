@@ -4,6 +4,10 @@ from pydantic import Field
 from src.local.prepare_code import prepare_code
 import logging
 import sys
+import numpy as np
+from io import BytesIO
+from mcp.types import ImageContent
+from PIL import Image
 
 #  logger
 logger = logging.getLogger("Server Setup")
@@ -24,7 +28,8 @@ def create_mcp_server(
         microscope_status,
         no_coding_agent,
         executor,
-        logger_agent
+        logger_agent, 
+        viewer
 ) -> FastMCP:
     # Server definition
     mcp = FastMCP(
@@ -479,6 +484,248 @@ def create_mcp_server(
                 "is_final_output": False,
                 "message": message
             }
+        
+    # New Tool added
+    # ------------------------------------------#
+    # Napari Viewer
+    # ------------------------------------------#
+    @mcp.tool(
+        name="viewer_session_information",
+        description="to add later!"
+    )
+    def viewer_session_information():
+        """
+        Docstring for viewer_session_information
+
+        Return information regarding the viewer session of napari micromanager
+        """
+        return viewer.session_information()
+    
+    # List of layer
+    @mcp.tool(
+        name="viewer_list_of_layers",
+        description="add later!"
+    )
+    def viewer_list_of_layers():
+        """
+        Docstring for viewer_list_of_layers
+
+        Return a list of layers with all information
+        """
+        return viewer.list_of_layers()
+    
+    # screenshot
+    @mcp.tool(
+        name="viewer_screenshot", 
+        description="to add",
+    )
+    def viewer_screenshot(canvas_only: bool):
+        """
+        Docstring for viewer_screenshot
+        
+        :param canvas_only: If True, only capture the canvas area
+        :type canvas_only: bool
+
+        Return the ImageContent to pass the image data to the LLM
+        """
+        return viewer.screenshot(canvas_only)
+    
+    @mcp.tool(
+        name="viewer_layer_screenshot", 
+        description="to add!"
+    )
+    def viewer_layer_screenshot(layer_name: str):
+        """
+        Docstring for viewer_layer_screenshot
+        
+        :param layer_name: Description
+        :type layer_name: str
+
+        Return the ImageContent of a specific layer to pass to the LLM
+        """
+        return viewer.layer_screenshot(layer_name)
+    
+
+    # tools for open interact with napari viewer
+    @mcp.tool(
+        name="viewer_add_image",
+        description=""
+    )
+    def viewer_add_image(
+        path: str,
+        name: str | None = None,
+        colormap: str | None = None,
+        blending: str | None = None,
+        channel_axis: int | str | None = None
+    ):
+        """
+        Docstring for viewer_add_image
+        
+        :param path: Description
+        :type path: str
+        :param name: Description
+        :type name: str | None
+        :param colormap: Description
+        :type colormap: str | None
+        :param blending: Description
+        :type blending: str | None
+        :param channel_axis: Description
+        :type channel_axis: int | str | None
+
+        Add an image layer from a file path
+        """
+        return viewer.add_image(path, name, colormap, blending, channel_axis)
+    
+    @mcp.tool(
+        name="viewer_add_labels",
+        description="to add!"
+    )
+    def viewer_add_labels(
+        path: str, 
+        name: str | None = None
+    ):
+        """
+        Add a labels layer from a file
+        """
+
+        return viewer.add_labels(path, name)
+        
+    @mcp.tool(
+        name="viewer_add_points",
+        description="to add!"
+    )
+    def viewer_add_points(
+        points: list[list[float]], 
+        name: str | None = None,
+        size: int | str = 10
+    ):
+        """
+        Add a points layer
+        """
+
+        return viewer.add_points(points, name, size)
+        
+    
+    @mcp.tool(
+        name="viewer_remove_layer",
+        description="to add"
+    )
+    def viewer_remove_layer(name: str):
+        """
+        Remove an existince layer
+        """
+        return viewer.remove_layer(name)
+    
+
+    @mcp.tool(
+        name="viewer_set_layer_properties",
+        description="to add"
+    )
+    def viewer_set_layer_properties(
+        name: str, 
+        visible: bool | None = None,
+        opacity: float | None = None,
+        colormap: str | None = None,
+        blending: str | None = None,
+        contrast_limits: list[float] | None = None,
+        gamma: float | str | None = None,
+        new_name: str | None = None
+    ):
+        """
+        Set common properties on a layer name
+        """
+        return viewer.set_layer_properties(name,visible,opacity,colormap,blending,contrast_limits,gamma,new_name)
+    @mcp.tool(
+        name="viewer_reorder_layer",
+        description="to add"
+    )
+    def viewer_reorder_layer(
+        name: str,
+        index: int | str | None = None,
+        before: str | None = None,
+        after: str | None = None
+    ):
+        """
+        Reorder a layer by name
+        """
+        return viewer.reorder_layer(name, index, before, after)
+    
+    @mcp.tool(
+        name="viewer_set_active_layer",
+        description="to add"
+    )
+    def viewer_set_active_layer(
+        name: str
+    ):
+        """
+        Set the selected/active layer by name
+        """
+        return viewer.set_active_layer(name)
+    
+    @mcp.tool(
+        name="viewer_reset_view",
+        description="to add!"
+    )
+    def viewer_reset_view():
+        """
+        Reset the camera view to fit the data
+        """
+
+        return viewer.reset_view()
+    
+    @mcp.tool(
+        name="viewer_set_camera",
+        description="to add"
+    )
+    def viewer_set_camera(
+        center: list[float] | None = None,
+        zoom: float | str | None = None,
+        angle: float | str | None = None
+    ):
+        """
+        Set the camera properties: center, zoom, angle
+        """
+        
+        return viewer.set_camera(center, zoom, angle)
+    
+    @mcp.tool(
+        name="viewer_set_ndisplay", 
+        description="to add!"
+    )
+    def viewer_set_ndisplay(
+        ndisplay: int | str
+    ):
+        """
+        Set number of displayed dimension (2 or 3)
+        """
+        return viewer._set_ndisplay(ndisplay)
+    
+    @mcp.tool(
+        name="viewer_set_dims_current_step",
+        description="to add"
+    )
+    def viewer_set_dims_current_step(
+        axis: int | str, 
+        value: int | str
+    ):
+        """
+        Set the current step (slider position for a specific axis)
+        """
+
+        return viewer.set_dims_current_step(axis, value)
+    
+    @mcp.tool(
+        name="viewer_set_grid",
+        description="to add"
+    )
+    def set_grid(enabled: bool | str = True):
+        """
+        Enable or disable grid view
+        """
+        return viewer.set_grid(enabled)
+    
+    # TODO: add timelapse_screenshot later
+    
 
 
     return mcp

@@ -18,6 +18,7 @@ from src.mcp_microscopetoolset.utils import get_user_information
 from src.start_subprocess.servers import _start_server, wait_for_es
 from src.mcp_microscopetoolset.server_setup import create_mcp_server, run_server
 from src.mcp_microscopetoolset.agents_init import initialize_agents
+from src.mcp_microscopetoolset.viewer import NapariViewerMC
 
 #  logger
 logger = logging.getLogger("MCPServer")
@@ -120,7 +121,8 @@ class MCPWorker(QObject):
                     microscope_status=agents["microscope_status"],
                     no_coding_agent=agents["no_coding_agent"],
                     executor=agents["executor"],
-                    logger_agent=agents["logger_agent"]
+                    logger_agent=agents["logger_agent"], 
+                    viewer=NapariViewerMC(self._viewer)
                 )
 
                 # Run the server
@@ -310,7 +312,7 @@ class MCPServer(QWidget):
 
         # Create new Worker and thread for each start
         self.mcp_thread = QThread()
-        self.mcp_worker = MCPWorker(microscope_type=self._current_microscope_type, viewer=self.viewer)
+        self.mcp_worker = MCPWorker(microscope_type=self._current_microscope_type, viewer=NapariViewerMC(self.viewer))
         self.mcp_worker.moveToThread(self.mcp_thread)
 
         # Connect worker signal
