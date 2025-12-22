@@ -115,9 +115,12 @@ class StrategyAgent(BaseAgent):
 class DatabaseAgent(BaseAgent):
 
     # add missing variable
-    def __init__(self, client_openai: OpenAI,es_client: ElasticSearchDB, pdf_collection: str,
-                 micromanager_collection: str, api_collection: str, db_log: LoggerDB, db_log_collection_name: str,
-                 tokenizer: Any, model: Any):
+    def __init__(self, client_openai: OpenAI,es_client: ElasticSearchDB, 
+                  api_collection: str, db_log_collection_name: str,
+                 tokenizer: Any, model: Any,
+                 pdf_collection: str | None = None,
+                 micromanager_collection: str | None = None,
+                  db_log: LoggerDB | None = None):
         super().__init__(client_openai)
         self.es_client = es_client
         self.pdf_collection = pdf_collection

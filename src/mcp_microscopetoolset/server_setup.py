@@ -56,40 +56,40 @@ def create_mcp_server(
         reformulated_question = database_agent.rephrase_query(user_query)
 
         return database_agent.api_pymmcore_context(user_query, reformulated_question)
-
-    @mcp.tool(
-        name="micromanager_device_database",
-        description="This tool is part of the feedback loop of the Microscope Toolset. It will return the relevant information"
-                    "from the micromanager device. The relevant information will be searched by an hybrid method using"
-                    "the reformulated query. The hybrid method will use the BM25 text matching and KNN search using embedding"
-                    "vectors. Afterwards, a cross encoder will re-rank the result obtained to match only the most top 25 relevant"
-                    "chunks of information."
-    )
-    def micromanager_device_database(
-            user_query: str = Field(..., description="The user original question")
-    ) -> dict[str, Any]:
-
-        # reformulate user query
-        reformulated_question = database_agent.rephrase_query(user_query)
-
-        return database_agent.devices_micromanager_context(user_query, reformulated_question)
-
-    @mcp.tool(
-        name="pdfs_publication_database",
-        description="This tool is part of the feedback loop of the Microscope Toolset. It will return the relevant information"
-                    "from a collection of scientific publications. The relevant information will be searched by an hybrid method using"
-                    "the reformulated query. The hybrid method will use the BM25 text matching and KNN search using embedding"
-                    "vectors. Afterwards, a cross encoder will re-rank the result obtained to match only the most top 25 relevant"
-                    "chunks of information."
-    )
-    def pdfs_publication_database(
-            user_query: str = Field(..., description="The user original question")
-    ) -> dict[str, Any]:
+    # --new-- comment out for testing
+    #@mcp.tool(
+    #    name="micromanager_device_database",
+    #    description="This tool is part of the feedback loop of the Microscope Toolset. It will return the relevant information"
+    #                "from the micromanager device. The relevant information will be searched by an hybrid method using"
+    #                "the reformulated query. The hybrid method will use the BM25 text matching and KNN search using embedding"
+    #                "vectors. Afterwards, a cross encoder will re-rank the result obtained to match only the most top 25 relevant"
+    #                "chunks of information."
+    #)
+    #def micromanager_device_database(
+    #        user_query: str = Field(..., description="The user original question")
+    #) -> dict[str, Any]:
 
         # reformulate user query
-        reformulated_question = database_agent.rephrase_query(user_query)
+    #    reformulated_question = database_agent.rephrase_query(user_query)
 
-        return database_agent.pdf_publication_context(user_query, reformulated_question)
+    #    return database_agent.devices_micromanager_context(user_query, reformulated_question)
+    # --NEW-- comment to test
+    #@mcp.tool(
+    #    name="pdfs_publication_database",
+    #    description="This tool is part of the feedback loop of the Microscope Toolset. It will return the relevant information"
+    #                "from a collection of scientific publications. The relevant information will be searched by an hybrid method using"
+    #                "the reformulated query. The hybrid method will use the BM25 text matching and KNN search using embedding"
+    #                "vectors. Afterwards, a cross encoder will re-rank the result obtained to match only the most top 25 relevant"
+    #                "chunks of information."
+    #)
+    #def pdfs_publication_database(
+    #        user_query: str = Field(..., description="The user original question")
+    #) -> dict[str, Any]:
+
+        # reformulate user query
+    #    reformulated_question = database_agent.rephrase_query(user_query)
+
+     #   return database_agent.pdf_publication_context(user_query, reformulated_question)
 
     # @mcp.tool(
     #     name="reformulate_user_query",
@@ -379,9 +379,9 @@ def create_mcp_server(
         }
         try:
 
-
+            # --new-- comment out for testing
             # add to database
-            database_agent.add_log(data)
+            #database_agent.add_log(data)
 
             logger.info({
                 "tool": "save_result",

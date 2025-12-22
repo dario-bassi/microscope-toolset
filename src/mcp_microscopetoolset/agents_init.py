@@ -59,15 +59,15 @@ def initialize_agents(mmc: CMMCorePlus | UniMMCore, microscope_type: str = "real
     # initialize Logger database and his connection
     logger.info("Initializing Logger database...")
     logger.info("Initializing connection...")
-    db_connection = DBConnection()
-    db_log = LoggerDB(db_connection)
+    #db_connection = DBConnection() # for the moment comment this part for testing
+    #db_log = LoggerDB(db_connection)
 
     # check if the logger database already exist
-    logger.info("Checking if logger database exists...")
-    if not logger_database_exists(db_log, system_user_information['log_collection']):
+    #logger.info("Checking if logger database exists...")
+    #if not logger_database_exists(db_log, system_user_information['log_collection']):
         # it doesn't exist. We create a new one
-        db_log.create_collection(system_user_information['log_collection'])
-        logger.info(f"A new collection named {system_user_information['log_collection']} has been created.")
+    #    db_log.create_collection(system_user_information['log_collection'])
+    #    logger.info(f"A new collection named {system_user_information['log_collection']} has been created.")
 
     es_client = ElasticSearchDB()
     logger.info("Initialed ElasticSearch Python Client")
@@ -88,11 +88,12 @@ def initialize_agents(mmc: CMMCorePlus | UniMMCore, microscope_type: str = "real
             "Could not connect to Elasticsearch after 100 attempts. Please make sure the server is running.")
 
     # get relevant information for the db
-    pdf_publication = system_user_information['pdf_collection_name']
-    micromanager_collection = system_user_information['micromanager_devices_collection']
+    # --NEW-- for the moment comment this part for testing
+    #pdf_publication = system_user_information['pdf_collection_name']
+    #micromanager_collection = system_user_information['micromanager_devices_collection']
     api_collection = system_user_information['collection_name']
-    logger.info(f"Database Name: {pdf_publication}")
-    logger.info(f"Micromanager Collection: {micromanager_collection}")
+    #logger.info(f"Database Name: {pdf_publication}")
+    #logger.info(f"Micromanager Collection: {micromanager_collection}")
     logger.info(f"API Collection: {api_collection}")
 
     # Load the cross-encoder for re-ranking
@@ -107,9 +108,9 @@ def initialize_agents(mmc: CMMCorePlus | UniMMCore, microscope_type: str = "real
     logger.info("LLM API loaded")
 
     # initialize different Agents
-    database_agent = DatabaseAgent(client_openai=client_openai, es_client=es_client, pdf_collection=pdf_publication,
-                                   micromanager_collection=micromanager_collection, api_collection=api_collection,
-                                   db_log=db_log, db_log_collection_name=system_user_information['log_collection'],
+    database_agent = DatabaseAgent(client_openai=client_openai, es_client=es_client, pdf_collection=None,#pdf_publication
+                                   micromanager_collection=None, api_collection=api_collection, # micromanager_collection
+                                   db_log=None, db_log_collection_name=system_user_information['log_collection'], # db_log
                                    tokenizer=tokenizer, model=model)
     logger.info("Initialed Database Agent")
 
@@ -138,7 +139,7 @@ def initialize_agents(mmc: CMMCorePlus | UniMMCore, microscope_type: str = "real
         "no_coding_agent": no_coding_agent,
         "logger_agent": logger_agent,
         "classify_agent": classify_agent,
-        "db_log": db_log,
+        "db_log": None,#db_log
         "es_client": es_client,
         "client_openai": client_openai,
     }
