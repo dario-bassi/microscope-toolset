@@ -264,6 +264,7 @@ class NapariViewerMC:
         Remove an existe layer
         """
         if name in self._viewer.layers:
+            self._viewer.layers.remove(name)
             return {
                 "status": "success", 
                 "message": f"The layer {name} was successfully removed."
