@@ -30,3 +30,4 @@ pygame
 pillow
 scikit-image
 more-itertools
+beautifulsoup4
