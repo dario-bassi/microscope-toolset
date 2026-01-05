@@ -32,5 +32,5 @@ scikit-image
 more-itertools
 beautifulsoup4
 numba
-opencv
+opencv-python
 pre-commit
