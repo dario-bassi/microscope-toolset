@@ -34,3 +34,5 @@ beautifulsoup4
 numba
 opencv-python
 pre-commit
+vulture
+converage

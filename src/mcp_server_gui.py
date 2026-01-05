@@ -7,10 +7,12 @@ import signal
 import time
 
 from typing import Any
+from functools import wraps
+import threading
 
 import napari
-from PyQt6.QtCore import Qt, QObject, pyqtSlot, QThread, pyqtSignal
-from PyQt6.QtWidgets import QWidget, QVBoxLayout, QPushButton, QLabel, QComboBox, QMainWindow
+from PyQt6.QtCore import Qt, QObject, pyqtSlot, QThread, pyqtSignal, QCoreApplication
+from PyQt6.QtWidgets import QWidget, QVBoxLayout, QPushButton, QLabel, QComboBox, QMainWindow, QApplication
 from pymmcore_plus import CMMCorePlus
 from pymmcore_plus.experimental.unicore import UniMMCore
 
@@ -30,6 +32,58 @@ fh.setFormatter(logging.Formatter(
 ))
 logger.addHandler(fh)
 
+
+class ThreadSafeViewerProxy(QObject):
+    """Proxy to execute viewer operations on the main Qt thread"""
+    execute_on_main_thread = pyqtSignal(str, dict)  # Don't pass viewer through signal to avoid Qt threading issues
+    
+    def __init__(self, viewer):
+        super().__init__()
+        self.viewer = viewer
+        self.result = None
+        self.error = None
+        self.done_event = threading.Event()
+        
+        # Connect signal with explicit QueuedConnection for cross-thread safety
+        # This ensures the slot is called in the receiver's thread (main thread)
+        self.execute_on_main_thread.connect(
+            self._execute_viewer_method, 
+            type=Qt.ConnectionType.QueuedConnection
+        )
+    
+    @pyqtSlot(str, dict)
+    def _execute_viewer_method(self, method_name, kwargs):
+        """Execute viewer method on main thread"""
+        try:
+            method = getattr(self.viewer, method_name)
+            self.result = method(**kwargs)
+            self.error = None
+        except Exception as e:
+            logger.error(f"Error executing viewer method {method_name}: {e}")
+            self.result = None
+            self.error = e
+        finally:
+            self.done_event.set()
+    
+    def call_on_main_thread(self, method_name, **kwargs):
+        """Execute a viewer method on main thread and wait for result"""
+        self.result = None
+        self.error = None
+        self.done_event.clear()
+        
+        # Emit signal to execute on main thread
+        self.execute_on_main_thread.emit(method_name, kwargs)
+        
+        # Wait for result (with timeout to prevent deadlock)
+        if not self.done_event.wait(timeout=10):
+            raise RuntimeError(f"Timeout waiting for {method_name} to complete on main thread")
+        
+        if self.error:
+            raise self.error
+        
+        return self.result
+
+
 class MCPWorker(QObject):
     start_thread = pyqtSignal()
     stop_thread = pyqtSignal()
@@ -38,13 +92,14 @@ class MCPWorker(QObject):
     servers_ready = pyqtSignal()  # When both servers are ready
     servers_stopped = pyqtSignal()  # When both servers are stopped
     add_napari_micromanager = pyqtSignal()  # Signal to add napari-micromanager
-    def __init__(self,viewer: Any, microscope_type: str = "real"):
+    def __init__(self,viewer: Any, microscope_type: str = "real", viewer_proxy=None):
         super().__init__()
-        self._elastic_search_process: subprocess.Popen = None
+        self._elastic_search_process = None
         #self._fastmcp_process: subprocess.Popen = None
-        self._mmc: UniMMCore | CMMCorePlus = None
+        self._mmc = None
         self._viewer = viewer
         self._microscope_type = microscope_type
+        self._viewer_proxy = viewer_proxy
 
     def set_microscope_type(self, microscope_type: str):
         self._microscope_type = microscope_type
@@ -116,13 +171,19 @@ class MCPWorker(QObject):
                     agents = initialize_agents(mmc=self._mmc, microscope_type=self._microscope_type)
 
                 logger.info("Creating MCP server...")
+                # Set viewer on executor so it's available in code execution context
+                executor = agents["executor"]
+                viewer_instance = NapariViewerMC(self._viewer)
+                executor.set_viewer(viewer_instance)
+                
                 mcp_server = create_mcp_server(
                     database_agent=agents["database_agent"],
                     microscope_status=agents["microscope_status"],
                     no_coding_agent=agents["no_coding_agent"],
-                    executor=agents["executor"],
+                    executor=executor,
                     logger_agent=agents["logger_agent"], 
-                    viewer=NapariViewerMC(self._viewer)
+                    viewer=viewer_instance,
+                    viewer_proxy=self._viewer_proxy  # Pass the proxy created on main thread
                 )
 
                 # Run the server
@@ -267,6 +328,7 @@ class MCPServer(QWidget):
         self.mcp_thread = None
         self.mcp_worker = None
         self._current_microscope_type = None
+        self._viewer_proxy = None  # Store proxy as instance variable
         #self.mcp_worker.moveToThread(self.mcp_thread)
 
         # Connect worker signals
@@ -310,9 +372,17 @@ class MCPServer(QWidget):
         if self._current_microscope_type is None:
             return
 
+        # Create viewer proxy on main thread (before moving worker)
+        # Store as instance variable to prevent garbage collection
+        self._viewer_proxy = ThreadSafeViewerProxy(self.viewer)
+
         # Create new Worker and thread for each start
         self.mcp_thread = QThread()
-        self.mcp_worker = MCPWorker(microscope_type=self._current_microscope_type, viewer=NapariViewerMC(self.viewer))
+        self.mcp_worker = MCPWorker(
+            microscope_type=self._current_microscope_type, 
+            viewer=NapariViewerMC(self.viewer),
+            viewer_proxy=self._viewer_proxy
+        )
         self.mcp_worker.moveToThread(self.mcp_thread)
 
         # Connect worker signal

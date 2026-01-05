@@ -25,7 +25,7 @@ logger.addHandler(fh)
 
 class Execute:
 
-    def __init__(self, filename: str, mmc: CMMCorePlus | UniMMCore = None, microscope_type: str = "real"):
+    def __init__(self, filename: str, mmc: CMMCorePlus | UniMMCore = None, microscope_type: str = "real", viewer=None):
         self.namespace = {}
         #self.namespace["mmc"] = mmc
         #logger.info("mmc instance is loaded into the namespace")
@@ -46,9 +46,19 @@ class Execute:
 
             logger.info("mmc instance is loaded into the namespace")
 
-
+        # Add viewer to namespace if provided
+        if viewer is not None:
+            self.namespace["viewer"] = viewer
+            logger.info("viewer instance is loaded into the namespace")
 
         logger.info(f"Execute initialized for {microscope_type} microscope")
+
+    def set_viewer(self, viewer):
+        """Set the viewer object in the execution namespace"""
+        if viewer is not None:
+            self.namespace["viewer"] = viewer
+            logger.info("viewer instance is loaded into the namespace")
+        return self
 
 
     def _install_library(self, module: str):

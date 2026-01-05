@@ -29,7 +29,8 @@ def create_mcp_server(
         no_coding_agent,
         executor,
         logger_agent, 
-        viewer
+        viewer,
+        viewer_proxy=None
 ) -> FastMCP:
     # Server definition
     mcp = FastMCP(
@@ -56,52 +57,50 @@ def create_mcp_server(
         reformulated_question = database_agent.rephrase_query(user_query)
 
         return database_agent.api_pymmcore_context(user_query, reformulated_question)
-    # --new-- comment out for testing
-    #@mcp.tool(
-    #    name="micromanager_device_database",
-    #    description="This tool is part of the feedback loop of the Microscope Toolset. It will return the relevant information"
-    #                "from the micromanager device. The relevant information will be searched by an hybrid method using"
-    #                "the reformulated query. The hybrid method will use the BM25 text matching and KNN search using embedding"
-    #                "vectors. Afterwards, a cross encoder will re-rank the result obtained to match only the most top 25 relevant"
-    #                "chunks of information."
-    #)
-    #def micromanager_device_database(
-    #        user_query: str = Field(..., description="The user original question")
-    #) -> dict[str, Any]:
+    @mcp.tool(
+        name="micromanager_device_database",
+        description="This tool is part of the feedback loop of the Microscope Toolset. It will return the relevant information"
+                    "from the micromanager device. The relevant information will be searched by an hybrid method using"
+                    "the reformulated query. The hybrid method will use the BM25 text matching and KNN search using embedding"
+                    "vectors. Afterwards, a cross encoder will re-rank the result obtained to match only the most top 25 relevant"
+                    "chunks of information."
+    )
+    def micromanager_device_database(
+            user_query: str = Field(..., description="The user original question")
+    ) -> dict[str, Any]:
 
         # reformulate user query
-    #    reformulated_question = database_agent.rephrase_query(user_query)
+        reformulated_question = database_agent.rephrase_query(user_query)
 
-    #    return database_agent.devices_micromanager_context(user_query, reformulated_question)
-    # --NEW-- comment to test
-    #@mcp.tool(
-    #    name="pdfs_publication_database",
-    #    description="This tool is part of the feedback loop of the Microscope Toolset. It will return the relevant information"
-    #                "from a collection of scientific publications. The relevant information will be searched by an hybrid method using"
-    #                "the reformulated query. The hybrid method will use the BM25 text matching and KNN search using embedding"
-    #                "vectors. Afterwards, a cross encoder will re-rank the result obtained to match only the most top 25 relevant"
-    #                "chunks of information."
-    #)
-    #def pdfs_publication_database(
-    #        user_query: str = Field(..., description="The user original question")
-    #) -> dict[str, Any]:
+        return database_agent.devices_micromanager_context(user_query, reformulated_question)
+    @mcp.tool(
+        name="pdfs_publication_database",
+        description="This tool is part of the feedback loop of the Microscope Toolset. It will return the relevant information"
+                    "from a collection of scientific publications. The relevant information will be searched by an hybrid method using"
+                    "the reformulated query. The hybrid method will use the BM25 text matching and KNN search using embedding"
+                    "vectors. Afterwards, a cross encoder will re-rank the result obtained to match only the most top 25 relevant"
+                    "chunks of information."
+    )
+    def pdfs_publication_database(
+            user_query: str = Field(..., description="The user original question")
+    ) -> dict[str, Any]:
 
         # reformulate user query
-    #    reformulated_question = database_agent.rephrase_query(user_query)
+        reformulated_question = database_agent.rephrase_query(user_query)
 
-     #   return database_agent.pdf_publication_context(user_query, reformulated_question)
+        return database_agent.pdf_publication_context(user_query, reformulated_question)
 
-    # @mcp.tool(
-    #     name="reformulate_user_query",
-    #     description="This tool is part of the feedback loop of the Microscope Toolset. It is used to rephrase the user question"
-    #                 "that starts the feedback loop. The reformulated query will be used to search into different databases to retrieve"
-    #                 "important information using text match with BM25 and embedding vectors."
-    # )
-    # def reformulate_user_query(
-    #         user_question: str = Field(..., description="The user original question")
-    # ) -> dict[str, Any]:
-    #     # add check that structured response is getting the correct answer
-    #     return database_agent.rephrase_query(user_question)
+    @mcp.tool(
+         name="reformulate_user_query",
+         description="This tool is part of the feedback loop of the Microscope Toolset. It is used to rephrase the user question"
+                     "that starts the feedback loop. The reformulated query will be used to search into different databases to retrieve"
+                     "important information using text match with BM25 and embedding vectors."
+     )
+    def reformulate_user_query(
+             user_question: str = Field(..., description="The user original question")
+     ) -> dict[str, Any]:
+         # add check that structured response is getting the correct answer
+         return database_agent.rephrase_query(user_question)
 
     @mcp.tool(
         name="get_microscope_settings",
@@ -148,37 +147,6 @@ def create_mcp_server(
                 "configuration_groups_settings": {}
             }
 
-    # @mcp.tool(
-    #     name="classify_user_intent",
-    #     description="This tool is part of the feedback loop of the Microscope Toolset. This tool helps to classify "
-    #                 "the intent ot the user from the user's main query. "
-    #                 "There are three possible classification:"
-    #                 "- ask for info: Given the information retrieved from the database and the user request, some information are missing to be able to answer correctly the user's question."
-    #                 "- propose strategy: The information retrieved from the database are sufficient to answer the user's main question and a strategy can be formulated by the Strategy Agent."
-    #                 "- no code needed: From the information retrieved from the vector database and the user's main question, you are able to understand that it doesn't need any sort of coding script for answering the user's main question. You can call the No Coding Agent."
-    #                 "This tool normally is always the second tool to call in the feedback loop."
-    # )
-    # def classify_user_intent(
-    #         user_question: str = Field(..., description="The user original question"),
-    #         reformulated_question: str = Field(..., description="The reformulated question")
-    # ) -> dict[str, Any]:
-    #     """
-    #     Call the internal intent classification logic.
-    #     Returns a dictionary with 'intent' and 'message' (if clarification is needed).
-    #     """
-    #     # Get data dict of the session
-    #     #data_dict = microscope_session_object.get_data_dict()
-    #     data_dict = {
-    #         "user_query": user_question,
-    #         "reformulated_query": reformulated_question
-    #     }
-    #     classify_user_query = classify_agent.classify_user_intent(data_dict)
-    #     # add conversation
-    #     # loc_conversation = data_dict['conversation'] + [agent_message(classify_user_query["message"])]
-    #     # # update conversation
-    #     # microscope_session_object.update_data_dict(conversation=loc_conversation)
-    #     return classify_user_query
-
     @mcp.tool(
         name="answer_no_coding_query",
         description="This tool is part of the feedback loop of the Microscope Toolset.  It will flags if the main agent"
@@ -187,88 +155,10 @@ def create_mcp_server(
     def answer_no_coding_query(
             user_query: str = Field(..., description="The user original query")
     ):
-        # """Uses the NoCodingAgent to generate an answer for non-code-related queries."""
-        # # Get data dict of the session
-        # data_dict = {
-        #     "user_query": user_query
-        # }
-        # # final output
-        # output = no_coding_agent.no_coding_answer(data_dict)
-        # logger.info({
-        #     "tool": "answer_no_coding_query",
-        #     "is_final_output": True,
-        #     "output": output["message"]
-        # })
-        # return {
-        #     "is_final_output": True,
-        #     "output": output["message"]
-        # } # check which type of answer is given
         return {
             "user_query": user_query,
             "no_coding_query": True
         }
-
-    # @mcp.tool(
-    #     name="generate_strategy",
-    #     description="This tool is part of the feedback loop of the Microscope Toolset. It generates a strategic plan for "
-    #                 "solving a user's question, especially for coding tasks. This tool will be called if the classify agent tool "
-    #                 "classify the user's query as a 'propose strategy'. The user then will decide if the strategy proposed is good enough for answering the question. If the user doesn't agree"
-    #                 "with the strategy proposed, the user will add the missing information."
-    # )
-    # def generate_strategy(
-    #         user_query: str = Field(..., description="The user original query"),
-    #         reformulated_query: str = Field(..., description="The reformulated query"),
-    #         context: List[Dict[str, Any]] = Field(..., description="The contextual information retrieved from the user's main question"),
-    #         additional_information: str = Field(..., description="Additional information given by the user."),
-    #         microscope_settings: Dict[str, Any] = Field(..., description="The microscope settings")
-    # ) -> StrategyAgentOutput:
-    #     """
-    #     Calls the StrategyAgent to generate a strategy.
-    #     Return a json object with the 'strategy'
-    #     """
-    #     data_dict = {
-    #         "user_query": user_query,
-    #         "reformulated_query": reformulated_query,
-    #         "context": context,
-    #         "additional_information": additional_information,
-    #         "microscope_settings": microscope_settings
-    #     }
-    #     strategy = strategy_agent.generate_strategy(data_dict)
-    #
-    #     return strategy
-
-    # @mcp.tool(
-    #     name="generate_code",
-    #     description="This tool is part of the feedback loop of the Microscope Toolset. It generates Python code based on "
-    #                 "the current strategy and context. In addition, you could receive also the error produced by the code "
-    #                 "you wrote. If this is the case you will need to fix your implementation."
-    # )
-    # def generate_code(
-    #         user_query: str = Field(..., description="The user original query"),
-    #         reformulated_query: str = Field(..., description="The reformulated query"),
-    #         context: List[Dict[str, Any]] = Field(..., description="The contextual information retrieved from the user's main question"),
-    #         additional_information: str = Field(..., description="Additional information given by the user."),
-    #         microscope_settings: Dict[str, Any] = Field(..., description="The microscope settings"),
-    #         strategy: str = Field(..., description="The strategy elaborated by the Strategy Agent"),
-    # ) -> SoftwareAgentOutput:
-    #     """
-    #     Calls the SoftwareAgent to generate code.
-    #     Return a json object with 'intent' (code) and 'message'
-    #     """
-    #     # # Get current data dict
-    #     data_dict = {
-    #         "user_query": user_query,
-    #         "reformulated_query": reformulated_query,
-    #         "context": context,
-    #         "additional_information": additional_information,
-    #         "microscope_settings": microscope_settings,
-    #         "strategy": strategy
-    #     }
-    #
-    #     code = software_agent.generate_code(data_dict)
-    #
-    #     return code
-
     @mcp.tool(
         name="execute_python_code",
         description="""
@@ -508,65 +398,65 @@ def create_mcp_server(
     # ------------------------------------------#
     @mcp.tool(
         name="viewer_session_information",
-        description="to add later!"
+        description="Retrieve detailed information about the current napari viewer session. Returns metadata about the napari-micromanager viewer state including window size, available layers, camera position, and current display settings. Use this to understand the current state of the microscopy viewer before making changes."
     )
     def viewer_session_information():
         """
-        Docstring for viewer_session_information
-
         Return information regarding the viewer session of napari micromanager
         """
-        return viewer.session_information()
+        if viewer_proxy is not None:
+            return viewer_proxy.call_on_main_thread('session_information')
+        else:
+            return viewer.session_information()
     
     # List of layer
     @mcp.tool(
         name="viewer_list_of_layers",
-        description="add later!"
+        description="Get a list of all layers currently loaded in the napari viewer with their properties (name, type, visibility, opacity, colormap). Use this to understand what image layers, label layers, and other data layers are present in the viewer and plan layer manipulation operations."
     )
     def viewer_list_of_layers():
         """
-        Docstring for viewer_list_of_layers
-
         Return a list of layers with all information
         """
-        return viewer.list_of_layers()
+        if viewer_proxy is not None:
+            return viewer_proxy.call_on_main_thread('list_of_layers')
+        else:
+            return viewer.list_of_layers()
     
     # screenshot
     @mcp.tool(
         name="viewer_screenshot", 
-        description="to add",
+        description="Capture a screenshot of the napari viewer's current state. This renders all visible layers and returns the image as an array. Set canvas_only=false to include GUI elements like scale bars and labels, or canvas_only=true to capture only the image data. Use this to visually inspect microscopy images or analyze image data for cell detection, segmentation, or other computer vision tasks.",
     )
     def viewer_screenshot(canvas_only: bool):
         """
-        Docstring for viewer_screenshot
-        
-        :param canvas_only: If True, only capture the canvas area
-        :type canvas_only: bool
-
         Return the ImageContent to pass the image data to the LLM
         """
-        return viewer.screenshot(canvas_only)
+        # Use viewer proxy if available to execute on main thread
+        if viewer_proxy is not None:
+            return viewer_proxy.call_on_main_thread('screenshot', canvas_only=canvas_only)
+        else:
+            return viewer.screenshot(canvas_only)
     
     @mcp.tool(
         name="viewer_layer_screenshot", 
-        description="to add!"
+        description="Capture a screenshot of a specific layer from the napari viewer. Provide the exact layer name to isolate and render only that layer's data. Useful for examining individual microscopy channels, labeled regions, or segmentation masks without interference from other layers."
     )
     def viewer_layer_screenshot(layer_name: str):
         """
-        Docstring for viewer_layer_screenshot
-        
-        :param layer_name: Description
-        :type layer_name: str
-
         Return the ImageContent of a specific layer to pass to the LLM
         """
-        return viewer.layer_screenshot(layer_name)
+        # Use viewer proxy if available to execute on main thread
+        if viewer_proxy is not None:
+            return viewer_proxy.call_on_main_thread('layer_screenshot', layer_name=layer_name)
+        else:
+            return viewer.layer_screenshot(layer_name)
     
 
     # tools for open interact with napari viewer
     @mcp.tool(
         name="viewer_add_image",
-        description=""
+        description="Load and display an image file in the napari viewer as a new layer. Provide the file path (supports common image formats), optional layer name, and visualization parameters like colormap (e.g., 'viridis', 'magma'), blending mode ('additive', 'translucent'), and channel_axis for multi-channel images. Use this to add microscopy images, fluorescence channels, or processed image data to the viewer for analysis and visualization."
     )
     def viewer_add_image(
         path: str,
@@ -576,26 +466,16 @@ def create_mcp_server(
         channel_axis: int | str | None = None
     ):
         """
-        Docstring for viewer_add_image
-        
-        :param path: Description
-        :type path: str
-        :param name: Description
-        :type name: str | None
-        :param colormap: Description
-        :type colormap: str | None
-        :param blending: Description
-        :type blending: str | None
-        :param channel_axis: Description
-        :type channel_axis: int | str | None
-
         Add an image layer from a file path
         """
-        return viewer.add_image(path, name, colormap, blending, channel_axis)
+        if viewer_proxy is not None:
+            return viewer_proxy.call_on_main_thread('add_image', path=path, name=name, colormap=colormap, blending=blending, channel_axis=channel_axis)
+        else:
+            return viewer.add_image(path, name, colormap, blending, channel_axis)
     
     @mcp.tool(
         name="viewer_add_labels",
-        description="to add!"
+        description="Add a segmentation/labels layer from an image file containing labeled regions. Each unique integer value in the image represents a distinct region (e.g., individual cells, nucleus, organelles). Provide the file path to the labels image and an optional layer name. Use this to display cell detection results, segmentation masks, or any labeled image analysis results in the napari viewer with automatic color mapping for easy visualization of individual regions."
     )
     def viewer_add_labels(
         path: str, 
@@ -604,12 +484,14 @@ def create_mcp_server(
         """
         Add a labels layer from a file
         """
-
-        return viewer.add_labels(path, name)
+        if viewer_proxy is not None:
+            return viewer_proxy.call_on_main_thread('add_labels', path=path, name=name)
+        else:
+            return viewer.add_labels(path, name)
         
     @mcp.tool(
         name="viewer_add_points",
-        description="to add!"
+        description="Add a points layer to the napari viewer for marking locations of interest. Provide a list of coordinate pairs (2D) or triples (3D) representing point positions in pixel/voxel space. Optionally set the layer name and point size for visualization. Use this to annotate cell locations, mark regions of interest, indicate measurement points, or overlay coordinate data on microscopy images."
     )
     def viewer_add_points(
         points: list[list[float]], 
@@ -619,24 +501,29 @@ def create_mcp_server(
         """
         Add a points layer
         """
-
-        return viewer.add_points(points, name, size)
+        if viewer_proxy is not None:
+            return viewer_proxy.call_on_main_thread('add_points', points=points, name=name, size=size)
+        else:
+            return viewer.add_points(points, name, size)
         
     
     @mcp.tool(
         name="viewer_remove_layer",
-        description="to add"
+        description="Remove a layer from the napari viewer by its exact name. Use this to clean up the viewer workspace by deleting intermediate processing results, redundant layers, or layers that are no longer needed for analysis. Check the current layers with viewer_list_of_layers before removing."
     )
     def viewer_remove_layer(name: str):
         """
         Remove an existince layer
         """
-        return viewer.remove_layer(name)
+        if viewer_proxy is not None:
+            return viewer_proxy.call_on_main_thread('remove_layer', name=name)
+        else:
+            return viewer.remove_layer(name)
     
 
     @mcp.tool(
         name="viewer_set_layer_properties",
-        description="to add"
+        description="Modify visual properties of a layer in the napari viewer. Adjust visibility (True/False), opacity (0-1, where 0 is transparent), colormap ('viridis', 'magma', 'red', etc.), blending mode ('additive', 'translucent'), contrast limits for brightness/contrast adjustment, gamma for exposure, and optionally rename the layer. Use this to improve visualization, highlight specific features, or enhance contrast for better image analysis."
     )
     def viewer_set_layer_properties(
         name: str, 
@@ -651,10 +538,13 @@ def create_mcp_server(
         """
         Set common properties on a layer name
         """
-        return viewer.set_layer_properties(name,visible,opacity,colormap,blending,contrast_limits,gamma,new_name)
+        if viewer_proxy is not None:
+            return viewer_proxy.call_on_main_thread('set_layer_properties', name=name, visible=visible, opacity=opacity, colormap=colormap, blending=blending, contrast_limits=contrast_limits, gamma=gamma, new_name=new_name)
+        else:
+            return viewer.set_layer_properties(name,visible,opacity,colormap,blending,contrast_limits,gamma,new_name)
     @mcp.tool(
         name="viewer_reorder_layer",
-        description="to add"
+        description="Change the stacking order (z-order) of layers in the napari viewer. Specify the layer name and either an absolute index, or position it before/after another named layer. Use this to control which layers appear on top when layers overlap, which affects visibility in multi-layer microscopy visualizations where layer stacking order matters for interpretation."
     )
     def viewer_reorder_layer(
         name: str,
@@ -665,11 +555,14 @@ def create_mcp_server(
         """
         Reorder a layer by name
         """
-        return viewer.reorder_layer(name, index, before, after)
+        if viewer_proxy is not None:
+            return viewer_proxy.call_on_main_thread('reorder_layer', name=name, index=index, before=before, after=after)
+        else:
+            return viewer.reorder_layer(name, index, before, after)
     
     @mcp.tool(
         name="viewer_set_active_layer",
-        description="to add"
+        description="Select/activate a specific layer in the napari viewer by name. The active layer is highlighted in the layers panel and operations like drawing, annotation, or selection tools apply to this layer. Use this when you need to work with a specific layer or prepare a layer for editing."
     )
     def viewer_set_active_layer(
         name: str
@@ -677,22 +570,27 @@ def create_mcp_server(
         """
         Set the selected/active layer by name
         """
-        return viewer.set_active_layer(name)
+        if viewer_proxy is not None:
+            return viewer_proxy.call_on_main_thread('set_active_layer', name=name)
+        else:
+            return viewer.set_active_layer(name)
     
     @mcp.tool(
         name="viewer_reset_view",
-        description="to add!"
+        description="Reset the camera view to fit all visible data layers optimally in the viewer window. This adjusts zoom and pan to show the entire image extent. Use this to get a complete overview of your data after zooming into specific regions, or to standardize the view between different analyses."
     )
     def viewer_reset_view():
         """
         Reset the camera view to fit the data
         """
-
-        return viewer.reset_view()
+        if viewer_proxy is not None:
+            return viewer_proxy.call_on_main_thread('reset_view')
+        else:
+            return viewer.reset_view()
     
     @mcp.tool(
         name="viewer_set_camera",
-        description="to add"
+        description="Control the camera viewing parameters in the napari viewer. Set the center position to pan to a specific region, zoom level to magnify (larger = more zoom), and angle for 3D rotation (if working in 3D mode). Use this to navigate to regions of interest, zoom in on details, or create consistent viewing angles for image documentation."
     )
     def viewer_set_camera(
         center: list[float] | None = None,
@@ -702,12 +600,14 @@ def create_mcp_server(
         """
         Set the camera properties: center, zoom, angle
         """
-        
-        return viewer.set_camera(center, zoom, angle)
+        if viewer_proxy is not None:
+            return viewer_proxy.call_on_main_thread('set_camera', center=center, zoom=zoom, angle=angle)
+        else:
+            return viewer.set_camera(center, zoom, angle)
     
     @mcp.tool(
         name="viewer_set_ndisplay", 
-        description="to add!"
+        description="Switch the napari viewer between 2D and 3D display modes. Set ndisplay=2 for standard 2D microscopy slice viewing, or ndisplay=3 for 3D volumetric visualization when working with Z-stack or 3D image data. Use this to toggle between 2D slice inspection and 3D volume rendering."
     )
     def viewer_set_ndisplay(
         ndisplay: int | str
@@ -715,11 +615,14 @@ def create_mcp_server(
         """
         Set number of displayed dimension (2 or 3)
         """
-        return viewer._set_ndisplay(ndisplay)
+        if viewer_proxy is not None:
+            return viewer_proxy.call_on_main_thread('_set_ndisplay', ndisplay=ndisplay)
+        else:
+            return viewer._set_ndisplay(ndisplay)
     
     @mcp.tool(
         name="viewer_set_dims_current_step",
-        description="to add"
+        description="Navigate through a specific dimension (axis) of multi-dimensional image data. Provide the axis name/index (e.g., 'Z' for Z-stack depth, 0, 1, 2, etc.) and the step value. Use this to browse through Z-slices in a Z-stack, time frames in a time-lapse, or channels in multi-channel images. This is equivalent to moving the slider for that dimension."
     )
     def viewer_set_dims_current_step(
         axis: int | str, 
@@ -728,18 +631,23 @@ def create_mcp_server(
         """
         Set the current step (slider position for a specific axis)
         """
-
-        return viewer.set_dims_current_step(axis, value)
+        if viewer_proxy is not None:
+            return viewer_proxy.call_on_main_thread('set_dims_current_step', axis=axis, value=value)
+        else:
+            return viewer.set_dims_current_step(axis, value)
     
     @mcp.tool(
         name="viewer_set_grid",
-        description="to add"
+        description="Toggle the display of a pixel grid overlay in the napari viewer. Set enabled=true to show the grid (useful for precise pixel-level measurements and alignment), or enabled=false to hide it for a cleaner view. Use this to switch between detailed pixel-level work and overview visualization modes."
     )
     def set_grid(enabled: bool | str = True):
         """
         Enable or disable grid view
         """
-        return viewer.set_grid(enabled)
+        if viewer_proxy is not None:
+            return viewer_proxy.call_on_main_thread('set_grid', enabled=enabled)
+        else:
+            return viewer.set_grid(enabled)
     
     # TODO: add timelapse_screenshot later
     

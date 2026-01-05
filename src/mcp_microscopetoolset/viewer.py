@@ -149,8 +149,13 @@ class NapariViewerMC:
     def _transform_array_to_image_content(self, arr: np.ndarray) -> ImageContent:
         """Helper function to transfor the array in a ImageContent"""
 
+        # Ensure array is a NumPy array with proper dtype
         if not isinstance(arr, np.ndarray):
-            arr = np.asarray(arr, dtype=np.uint8, copy=False)
+            arr = np.asarray(arr)
+        
+        # Convert to uint8 if needed, allowing copy when necessary
+        if arr.dtype != np.uint8:
+            arr = arr.astype(np.uint8)
 
         img = Image.fromarray(arr)
         buf = BytesIO()
