@@ -111,25 +111,42 @@ def create_mcp_server(
                     "This tool is useful to discover the properties and devices of the microscope."
     )
     def get_microscope_settings() -> dict[str, Any]:
-
-        # Get Properties of the microscope
-        microscope_properties_response = microscope_status.get_properties()
-        # Get current settings
-        microscope_status_response = microscope_status.get_current_status()
-        # Get configuration settings
-        config_settings = microscope_status.get_available_configs()
-        microscope_status_settings = {
-            "properties_schema": microscope_properties_response,
-            "current_properties_status": microscope_status_response,
-            "configuration_groups_settings": config_settings
-        }
-        logger.info({
-            "tool": "get_microscope_settings",
-            "properties_schema": microscope_properties_response,
-            "current_properties_status": microscope_status_response,
-            "configuration_groups_settings": config_settings
-        })
-        return microscope_status_settings
+        try:
+            # Get Properties of the microscope
+            logger.info("Getting microscope properties...")
+            microscope_properties_response = microscope_status.get_properties()
+            logger.info(f"Properties retrieved: {type(microscope_properties_response)}")
+            
+            # Get current settings
+            logger.info("Getting microscope current status...")
+            microscope_status_response = microscope_status.get_current_status()
+            logger.info(f"Status retrieved: {type(microscope_status_response)}")
+            
+            # Get configuration settings
+            logger.info("Getting microscope available configs...")
+            config_settings = microscope_status.get_available_configs()
+            logger.info(f"Configs retrieved: {type(config_settings)}")
+            
+            microscope_status_settings = {
+                "properties_schema": microscope_properties_response,
+                "current_properties_status": microscope_status_response,
+                "configuration_groups_settings": config_settings
+            }
+            logger.info({
+                "tool": "get_microscope_settings",
+                "properties_schema": microscope_properties_response,
+                "current_properties_status": microscope_status_response,
+                "configuration_groups_settings": config_settings
+            })
+            return microscope_status_settings
+        except Exception as e:
+            logger.error(f"Error in get_microscope_settings: {e}", exc_info=True)
+            return {
+                "error": f"Failed to get microscope settings: {str(e)}",
+                "properties_schema": {},
+                "current_properties_status": {},
+                "configuration_groups_settings": {}
+            }
 
     # @mcp.tool(
     #     name="classify_user_intent",
