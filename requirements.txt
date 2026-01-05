@@ -31,3 +31,6 @@ pillow
 scikit-image
 more-itertools
 beautifulsoup4
+numba
+opencv
+pre-commit
