@@ -171,10 +171,12 @@ class MCPWorker(QObject):
                     agents = initialize_agents(mmc=self._mmc, microscope_type=self._microscope_type)
 
                 logger.info("Creating MCP server...")
-                # Set viewer on executor so it's available in code execution context
+                # Viewer instance for MCP tools (NOT for execution namespace!)
+                # Viewer operations must use thread-safe tools (viewer_screenshot, etc.)
+                # not direct calls from executed code (causes Qt/OpenGL threading errors)
                 executor = agents["executor"]
                 viewer_instance = NapariViewerMC(self._viewer)
-                executor.set_viewer(viewer_instance)
+                # DO NOT call: executor.set_viewer(viewer_instance) - causes threading issues
                 
                 mcp_server = create_mcp_server(
                     database_agent=agents["database_agent"],

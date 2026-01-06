@@ -207,10 +207,11 @@ def create_mcp_server(
                 - Use mmc (an instance of CMMCorePlus) to interact with the microscope.
                 - Do **not** re-instantiate or reconfigure CMMCorePlus.
                 - Only import essential, safe libraries.
+                - **CRITICAL: Do NOT call viewer methods directly** (e.g., viewer.screenshot(), viewer.add_labels(), etc.) from within this code execution. The code runs in a daemon thread which cannot access Qt/OpenGL objects. Instead, use the dedicated viewer tools (viewer_screenshot, viewer_add_labels, etc.) which are thread-safe.
                 - **Avoid redundant narration** — just return the code in triple backticks.
                 - **Print each result**, and if a value is None, print a human-readable message.
                 - Include **minimal but meaningful comments** when needed.
-                - We are using a GUI called napari-micromanager that is able to get a reference of the mmc object that you are using. Every images that you will produce will be shown in the GUI directly.
+                - We are using a GUI called napari-micromanager that displays images captured by mmc automatically.
             """)
     ) -> dict[str, Any]:
         """
@@ -428,7 +429,9 @@ def create_mcp_server(
         name="viewer_screenshot", 
         description="Capture a screenshot of the napari viewer's current state. This renders all visible layers and returns the image as an array. Set canvas_only=false to include GUI elements like scale bars and labels, or canvas_only=true to capture only the image data. Use this to visually inspect microscopy images or analyze image data for cell detection, segmentation, or other computer vision tasks.",
     )
-    def viewer_screenshot(canvas_only: bool):
+    def viewer_screenshot(
+        canvas_only: bool = Field(..., description="If True, capture only the canvas (image data) without GUI elements. If False, include scale bars, labels, and other UI elements in the screenshot.")
+    ):
         """
         Return the ImageContent to pass the image data to the LLM
         """
@@ -442,7 +445,9 @@ def create_mcp_server(
         name="viewer_layer_screenshot", 
         description="Capture a screenshot of a specific layer from the napari viewer. Provide the exact layer name to isolate and render only that layer's data. Useful for examining individual microscopy channels, labeled regions, or segmentation masks without interference from other layers."
     )
-    def viewer_layer_screenshot(layer_name: str):
+    def viewer_layer_screenshot(
+        layer_name: str = Field(..., description="The exact name of the layer to capture. Use viewer_list_of_layers to see available layer names.")
+    ):
         """
         Return the ImageContent of a specific layer to pass to the LLM
         """
@@ -459,11 +464,11 @@ def create_mcp_server(
         description="Load and display an image file in the napari viewer as a new layer. Provide the file path (supports common image formats), optional layer name, and visualization parameters like colormap (e.g., 'viridis', 'magma'), blending mode ('additive', 'translucent'), and channel_axis for multi-channel images. Use this to add microscopy images, fluorescence channels, or processed image data to the viewer for analysis and visualization."
     )
     def viewer_add_image(
-        path: str,
-        name: str | None = None,
-        colormap: str | None = None,
-        blending: str | None = None,
-        channel_axis: int | str | None = None
+        path: str = Field(..., description="File path to the image file (TIFF, PNG, JPEG, etc.) to load into the viewer."),
+        name: str | None = Field(None, description="Optional name for the image layer. If not provided, the filename will be used."),
+        colormap: str | None = Field(None, description="Colormap to apply to the image (e.g., 'gray', 'viridis', 'magma', 'red', 'green', 'blue'). Default is 'gray' for grayscale images."),
+        blending: str | None = Field(None, description="Blending mode for layer compositing: 'translucent' (default), 'additive', or 'opaque'."),
+        channel_axis: int | str | None = Field(None, description="Axis index for multi-channel images. If provided, channels will be split into separate layers.")
     ):
         """
         Add an image layer from a file path
@@ -475,28 +480,29 @@ def create_mcp_server(
     
     @mcp.tool(
         name="viewer_add_labels",
-        description="Add a segmentation/labels layer from an image file containing labeled regions. Each unique integer value in the image represents a distinct region (e.g., individual cells, nucleus, organelles). Provide the file path to the labels image and an optional layer name. Use this to display cell detection results, segmentation masks, or any labeled image analysis results in the napari viewer with automatic color mapping for easy visualization of individual regions."
+        description="Add a segmentation/labels layer to the napari viewer. You can provide EITHER a file path to a labels image OR a numpy array with labeled regions directly. Each unique integer value represents a distinct region (e.g., individual cells, nucleus, organelles). Use this to display cell detection results, segmentation masks, or any labeled image analysis results with automatic color mapping for easy visualization of individual regions."
     )
     def viewer_add_labels(
-        path: str, 
-        name: str | None = None
+        path: str | None = Field(None, description="File path to the labels image file (TIFF, PNG, etc.). Use this if loading from disk. Mutually exclusive with img_data."),
+        img_data: np.ndarray | None = Field(None, description="Numpy array containing the labeled mask where each unique integer represents a different region/object. Use this to pass segmentation results directly without saving to disk. Mutually exclusive with path."), 
+        name: str | None = Field(None, description="Optional name for the labels layer in the viewer. If not provided, a default name will be generated.")
     ):
         """
         Add a labels layer from a file
         """
         if viewer_proxy is not None:
-            return viewer_proxy.call_on_main_thread('add_labels', path=path, name=name)
+            return viewer_proxy.call_on_main_thread('add_labels', path=path, img_data=img_data, name=name)
         else:
-            return viewer.add_labels(path, name)
+            return viewer.add_labels(path, img_data, name)
         
     @mcp.tool(
         name="viewer_add_points",
         description="Add a points layer to the napari viewer for marking locations of interest. Provide a list of coordinate pairs (2D) or triples (3D) representing point positions in pixel/voxel space. Optionally set the layer name and point size for visualization. Use this to annotate cell locations, mark regions of interest, indicate measurement points, or overlay coordinate data on microscopy images."
     )
     def viewer_add_points(
-        points: list[list[float]], 
-        name: str | None = None,
-        size: int | str = 10
+        points: list[list[float]] = Field(..., description="List of point coordinates. For 2D: [[y1, x1], [y2, x2], ...]. For 3D: [[z1, y1, x1], [z2, y2, x2], ...]. Coordinates are in pixel/voxel space."), 
+        name: str | None = Field(None, description="Optional name for the points layer."),
+        size: int | str = Field(10, description="Display size (diameter) of the points in pixels.")
     ):
         """
         Add a points layer
@@ -511,7 +517,9 @@ def create_mcp_server(
         name="viewer_remove_layer",
         description="Remove a layer from the napari viewer by its exact name. Use this to clean up the viewer workspace by deleting intermediate processing results, redundant layers, or layers that are no longer needed for analysis. Check the current layers with viewer_list_of_layers before removing."
     )
-    def viewer_remove_layer(name: str):
+    def viewer_remove_layer(
+        name: str = Field(..., description="The exact name of the layer to remove. Must match a layer name in the viewer.")
+    ):
         """
         Remove an existince layer
         """
@@ -526,14 +534,14 @@ def create_mcp_server(
         description="Modify visual properties of a layer in the napari viewer. Adjust visibility (True/False), opacity (0-1, where 0 is transparent), colormap ('viridis', 'magma', 'red', etc.), blending mode ('additive', 'translucent'), contrast limits for brightness/contrast adjustment, gamma for exposure, and optionally rename the layer. Use this to improve visualization, highlight specific features, or enhance contrast for better image analysis."
     )
     def viewer_set_layer_properties(
-        name: str, 
-        visible: bool | None = None,
-        opacity: float | None = None,
-        colormap: str | None = None,
-        blending: str | None = None,
-        contrast_limits: list[float] | None = None,
-        gamma: float | str | None = None,
-        new_name: str | None = None
+        name: str = Field(..., description="The name of the layer to modify."), 
+        visible: bool | None = Field(None, description="Set layer visibility: True to show, False to hide."),
+        opacity: float | None = Field(None, description="Layer opacity from 0 (transparent) to 1 (opaque)."),
+        colormap: str | None = Field(None, description="Colormap name (e.g., 'gray', 'viridis', 'magma', 'red', 'green', 'blue')."),
+        blending: str | None = Field(None, description="Blending mode: 'translucent', 'additive', or 'opaque'."),
+        contrast_limits: list[float] | None = Field(None, description="Two-element list [min, max] for contrast/brightness adjustment."),
+        gamma: float | str | None = Field(None, description="Gamma correction value for exposure adjustment (typically 0.5-2.0)."),
+        new_name: str | None = Field(None, description="New name to rename the layer to.")
     ):
         """
         Set common properties on a layer name
@@ -547,10 +555,10 @@ def create_mcp_server(
         description="Change the stacking order (z-order) of layers in the napari viewer. Specify the layer name and either an absolute index, or position it before/after another named layer. Use this to control which layers appear on top when layers overlap, which affects visibility in multi-layer microscopy visualizations where layer stacking order matters for interpretation."
     )
     def viewer_reorder_layer(
-        name: str,
-        index: int | str | None = None,
-        before: str | None = None,
-        after: str | None = None
+        name: str = Field(..., description="Name of the layer to reorder."),
+        index: int | str | None = Field(None, description="Absolute position index (0 = bottom). Mutually exclusive with before/after."),
+        before: str | None = Field(None, description="Name of layer to position this layer before. Mutually exclusive with index/after."),
+        after: str | None = Field(None, description="Name of layer to position this layer after. Mutually exclusive with index/before.")
     ):
         """
         Reorder a layer by name
@@ -565,7 +573,7 @@ def create_mcp_server(
         description="Select/activate a specific layer in the napari viewer by name. The active layer is highlighted in the layers panel and operations like drawing, annotation, or selection tools apply to this layer. Use this when you need to work with a specific layer or prepare a layer for editing."
     )
     def viewer_set_active_layer(
-        name: str
+        name: str = Field(..., description="Name of the layer to activate/select.")
     ):
         """
         Set the selected/active layer by name
@@ -593,9 +601,9 @@ def create_mcp_server(
         description="Control the camera viewing parameters in the napari viewer. Set the center position to pan to a specific region, zoom level to magnify (larger = more zoom), and angle for 3D rotation (if working in 3D mode). Use this to navigate to regions of interest, zoom in on details, or create consistent viewing angles for image documentation."
     )
     def viewer_set_camera(
-        center: list[float] | None = None,
-        zoom: float | str | None = None,
-        angle: float | str | None = None
+        center: list[float] | None = Field(None, description="Center position coordinates [y, x] for 2D or [z, y, x] for 3D to pan the camera to."),
+        zoom: float | str | None = Field(None, description="Zoom level (larger values = more magnification). Typical range: 0.5 to 10+."),
+        angle: float | str | None = Field(None, description="Rotation angle in degrees for 3D viewing mode.")
     ):
         """
         Set the camera properties: center, zoom, angle
@@ -610,7 +618,7 @@ def create_mcp_server(
         description="Switch the napari viewer between 2D and 3D display modes. Set ndisplay=2 for standard 2D microscopy slice viewing, or ndisplay=3 for 3D volumetric visualization when working with Z-stack or 3D image data. Use this to toggle between 2D slice inspection and 3D volume rendering."
     )
     def viewer_set_ndisplay(
-        ndisplay: int | str
+        ndisplay: int | str = Field(..., description="Number of displayed dimensions: 2 for 2D view, 3 for 3D volumetric view.")
     ):
         """
         Set number of displayed dimension (2 or 3)
@@ -625,8 +633,8 @@ def create_mcp_server(
         description="Navigate through a specific dimension (axis) of multi-dimensional image data. Provide the axis name/index (e.g., 'Z' for Z-stack depth, 0, 1, 2, etc.) and the step value. Use this to browse through Z-slices in a Z-stack, time frames in a time-lapse, or channels in multi-channel images. This is equivalent to moving the slider for that dimension."
     )
     def viewer_set_dims_current_step(
-        axis: int | str, 
-        value: int | str
+        axis: int | str = Field(..., description="Axis identifier: integer index (0, 1, 2, ...) or axis name ('Z', 'T', 'C' for Z-stack, time, channel)."), 
+        value: int | str = Field(..., description="Step value (slice index) to navigate to along the specified axis. Must be within valid range for that dimension.")
     ):
         """
         Set the current step (slider position for a specific axis)
@@ -640,7 +648,9 @@ def create_mcp_server(
         name="viewer_set_grid",
         description="Toggle the display of a pixel grid overlay in the napari viewer. Set enabled=true to show the grid (useful for precise pixel-level measurements and alignment), or enabled=false to hide it for a cleaner view. Use this to switch between detailed pixel-level work and overview visualization modes."
     )
-    def set_grid(enabled: bool | str = True):
+    def set_grid(
+        enabled: bool | str = Field(True, description="Enable (True) or disable (False) the pixel grid overlay.")
+    ):
         """
         Enable or disable grid view
         """

@@ -208,22 +208,31 @@ class NapariViewerMC:
         
     def add_labels(
             self, 
-            path: str, 
+            path: str | None = None,
+            img_data: np.ndarray | None = None, 
             name: str | None = None
             ):
         """
         Add an label layer from a file
         """
         try:
-            p = Path(path).expanduser().resolve(strict=False)
-            img_data = iio.imread(str(p))
-            layer = self._viewer.add_image(img_data, name=name)
-
-            return {
+            if path is not None and img_data is None:
+                p = Path(path).expanduser().resolve(strict=False)
+                img = iio.imread(str(p))
+                layer = self._viewer.add_labels(img, name=name)
+                return {
                 "status": "success",
                 "name": layer.name,
-                "hsape": list(np.shape(img_data))
+                "hsape": list(np.shape(img))
             }
+            elif path is None and img_data is not None:
+                layer = self._viewer.add_labels(img_data, name=name)
+
+                return {
+                    "status": "success",
+                    "name": layer.name,
+                    "hsape": list(np.shape(img_data))
+                }
         except Exception as e:
             return {
                 "status": "error",
