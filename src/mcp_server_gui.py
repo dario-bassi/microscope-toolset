@@ -21,6 +21,7 @@ from src.start_subprocess.servers import _start_server, wait_for_es
 from src.mcp_microscopetoolset.server_setup import create_mcp_server, run_server
 from src.mcp_microscopetoolset.agents_init import initialize_agents
 from src.mcp_microscopetoolset.viewer import NapariViewerMC
+from src.microscope.microscope_event_cache import MicroscopeEventCache
 
 #  logger
 logger = logging.getLogger("MCPServer")
@@ -177,6 +178,8 @@ class MCPWorker(QObject):
                 executor = agents["executor"]
                 viewer_instance = NapariViewerMC(self._viewer)
                 # DO NOT call: executor.set_viewer(viewer_instance) - causes threading issues
+                # Create event cache
+                event_cache = MicroscopeEventCache(self._mmc)
                 
                 mcp_server = create_mcp_server(
                     database_agent=agents["database_agent"],
@@ -185,6 +188,7 @@ class MCPWorker(QObject):
                     executor=executor,
                     logger_agent=agents["logger_agent"], 
                     viewer=viewer_instance,
+                    event_cache=event_cache
                     viewer_proxy=self._viewer_proxy  # Pass the proxy created on main thread
                 )
 

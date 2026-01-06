@@ -30,6 +30,7 @@ def create_mcp_server(
         executor,
         logger_agent, 
         viewer,
+        event_cache,
         viewer_proxy=None
 ) -> FastMCP:
     # Server definition
@@ -393,6 +394,54 @@ def create_mcp_server(
                 "message": message
             }
         
+    @mcp.tool(
+            name="get_microscope_events",
+            description="Retrieve recent microscope activity events to check current state and discover user actions. Returns a chronological list of events (image captures, property changes, exposure adjustments, etc.) with timestamps. Use this to: verify that commanded actions completed successfully, discover manual user interactions with the GUI, check current microscope state, or debug timing issues. Each event includes type, timestamp, and relevant data."
+    )
+    def get_microscope_events(
+    limit: int = Field(100, description="Maximum number of recent events to retrieve (default 100).")
+    ) -> dict[str, Any]: #event_type: str | None = Field(None, description="Filter by specific event type: 'image_snapped', 'property_changed', 'exposure_changed', 'config_loaded', or None for all types.")
+        """Get recent microscope events from the event cache"""
+        try:
+            events = event_cache.get_recent_events(limit=limit)#event_type=event_type
+            return {
+                "status": "success",
+                "event_count": len(events),
+                "events": events
+            }
+        except Exception as e:
+            return {
+                "status": "error",
+                "message": str(e)
+            }
+        
+    @mcp.tool(
+    name="get_last_microscope_event",
+    description="Get the most recent microscope event. Useful for quick checks like 'did my last snap() succeed?' or 'what was the last property change?'"
+)
+    def get_last_microscope_event(
+        event_type: str | None = Field(None, description="Filter by event type or None for any event.")
+    ) -> dict[str, Any]:
+        """Get the most recent event"""
+        try:
+            event = event_cache.get_last_event(event_type=event_type)
+            if event:
+                return {
+                    "status": "success",
+                    "event": event
+                }
+            else:
+                return {
+                    "status": "success",
+                    "event": None,
+                    "message": "No events found"
+                }
+        except Exception as e:
+            return {
+                "status": "error",
+                "message": str(e)
+            }
+            
     # New Tool added
     # ------------------------------------------#
     # Napari Viewer
