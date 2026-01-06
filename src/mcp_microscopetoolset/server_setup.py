@@ -5,9 +5,6 @@ from src.local.prepare_code import prepare_code
 import logging
 import sys
 import numpy as np
-from io import BytesIO
-from mcp.types import ImageContent
-from PIL import Image
 
 #  logger
 logger = logging.getLogger("Server Setup")
@@ -500,7 +497,7 @@ def create_mcp_server(
         if viewer_proxy is not None:
             return viewer_proxy.call_on_main_thread('screenshot', canvas_only=canvas_only)
         else:
-            return viewer.screenshot(canvas_only)
+            return viewer.screenshot(canvas_only=canvas_only)
     
     @mcp.tool(
         name="viewer_layer_screenshot", 
@@ -516,7 +513,7 @@ def create_mcp_server(
         if viewer_proxy is not None:
             return viewer_proxy.call_on_main_thread('layer_screenshot', layer_name=layer_name)
         else:
-            return viewer.layer_screenshot(layer_name)
+            return viewer.layer_screenshot(layer_name=layer_name)
     
 
     # tools for open interact with napari viewer
@@ -537,7 +534,7 @@ def create_mcp_server(
         if viewer_proxy is not None:
             return viewer_proxy.call_on_main_thread('add_image', path=path, name=name, colormap=colormap, blending=blending, channel_axis=channel_axis)
         else:
-            return viewer.add_image(path, name, colormap, blending, channel_axis)
+            return viewer.add_image(path=path, name=name, colormap=colormap, blending=blending, channel_axis=channel_axis)
     
     @mcp.tool(
         name="viewer_add_labels",
@@ -554,7 +551,7 @@ def create_mcp_server(
         if viewer_proxy is not None:
             return viewer_proxy.call_on_main_thread('add_labels', path=path, img_data=img_data, name=name)
         else:
-            return viewer.add_labels(path, img_data, name)
+            return viewer.add_labels(path=path, img_data=img_data, name=name)
         
     @mcp.tool(
         name="viewer_add_points",
@@ -571,7 +568,7 @@ def create_mcp_server(
         if viewer_proxy is not None:
             return viewer_proxy.call_on_main_thread('add_points', points=points, name=name, size=size)
         else:
-            return viewer.add_points(points, name, size)
+            return viewer.add_points(points=points, name=name, size=size)
         
     
     @mcp.tool(
@@ -587,7 +584,7 @@ def create_mcp_server(
         if viewer_proxy is not None:
             return viewer_proxy.call_on_main_thread('remove_layer', name=name)
         else:
-            return viewer.remove_layer(name)
+            return viewer.remove_layer(name=name)
     
 
     @mcp.tool(
@@ -610,7 +607,7 @@ def create_mcp_server(
         if viewer_proxy is not None:
             return viewer_proxy.call_on_main_thread('set_layer_properties', name=name, visible=visible, opacity=opacity, colormap=colormap, blending=blending, contrast_limits=contrast_limits, gamma=gamma, new_name=new_name)
         else:
-            return viewer.set_layer_properties(name,visible,opacity,colormap,blending,contrast_limits,gamma,new_name)
+            return viewer.set_layer_properties(name=name, visible=visible, opacity=opacity, colormap=colormap, blending=blending, contrast_limits=contrast_limits, gamma=gamma, new_name=new_name)
     @mcp.tool(
         name="viewer_reorder_layer",
         description="Change the stacking order (z-order) of layers in the napari viewer. Specify the layer name and either an absolute index, or position it before/after another named layer. Use this to control which layers appear on top when layers overlap, which affects visibility in multi-layer microscopy visualizations where layer stacking order matters for interpretation."
@@ -627,7 +624,7 @@ def create_mcp_server(
         if viewer_proxy is not None:
             return viewer_proxy.call_on_main_thread('reorder_layer', name=name, index=index, before=before, after=after)
         else:
-            return viewer.reorder_layer(name, index, before, after)
+            return viewer.reorder_layer(name=name, index=index, before=before, after=after)
     
     @mcp.tool(
         name="viewer_set_active_layer",
@@ -642,7 +639,7 @@ def create_mcp_server(
         if viewer_proxy is not None:
             return viewer_proxy.call_on_main_thread('set_active_layer', name=name)
         else:
-            return viewer.set_active_layer(name)
+            return viewer.set_active_layer(name=name)
     
     @mcp.tool(
         name="viewer_reset_view",
@@ -672,7 +669,7 @@ def create_mcp_server(
         if viewer_proxy is not None:
             return viewer_proxy.call_on_main_thread('set_camera', center=center, zoom=zoom, angle=angle)
         else:
-            return viewer.set_camera(center, zoom, angle)
+            return viewer.set_camera(center=center, zoom=zoom, angle=angle)
     
     @mcp.tool(
         name="viewer_set_ndisplay", 
@@ -685,9 +682,9 @@ def create_mcp_server(
         Set number of displayed dimension (2 or 3)
         """
         if viewer_proxy is not None:
-            return viewer_proxy.call_on_main_thread('_set_ndisplay', ndisplay=ndisplay)
+            return viewer_proxy.call_on_main_thread('set_ndisplay', ndisplay=ndisplay)
         else:
-            return viewer._set_ndisplay(ndisplay)
+            return viewer.set_ndisplay(ndisplay=ndisplay)
     
     @mcp.tool(
         name="viewer_set_dims_current_step",
@@ -703,13 +700,13 @@ def create_mcp_server(
         if viewer_proxy is not None:
             return viewer_proxy.call_on_main_thread('set_dims_current_step', axis=axis, value=value)
         else:
-            return viewer.set_dims_current_step(axis, value)
+            return viewer.set_dims_current_step(axis=axis, value=value)
     
     @mcp.tool(
         name="viewer_set_grid",
         description="Toggle the display of a pixel grid overlay in the napari viewer. Set enabled=true to show the grid (useful for precise pixel-level measurements and alignment), or enabled=false to hide it for a cleaner view. Use this to switch between detailed pixel-level work and overview visualization modes."
     )
-    def set_grid(
+    def viewer_set_grid(
         enabled: bool | str = Field(True, description="Enable (True) or disable (False) the pixel grid overlay.")
     ):
         """
@@ -718,7 +715,7 @@ def create_mcp_server(
         if viewer_proxy is not None:
             return viewer_proxy.call_on_main_thread('set_grid', enabled=enabled)
         else:
-            return viewer.set_grid(enabled)
+            return viewer.set_grid(enabled=enabled)
     
     # TODO: add timelapse_screenshot later
     

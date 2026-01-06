@@ -378,15 +378,16 @@ class MCPServer(QWidget):
         if self._current_microscope_type is None:
             return
 
-        # Create viewer proxy on main thread (before moving worker)
+        # Create viewer wrapper and proxy on main thread (before moving worker)
         # Store as instance variable to prevent garbage collection
-        self._viewer_proxy = ThreadSafeViewerProxy(self.viewer)
+        viewer_instance = NapariViewerMC(self.viewer)
+        self._viewer_proxy = ThreadSafeViewerProxy(viewer_instance)
 
         # Create new Worker and thread for each start
         self.mcp_thread = QThread()
         self.mcp_worker = MCPWorker(
             microscope_type=self._current_microscope_type, 
-            viewer=NapariViewerMC(self.viewer),
+            viewer=viewer_instance,
             viewer_proxy=self._viewer_proxy
         )
         self.mcp_worker.moveToThread(self.mcp_thread)
@@ -471,7 +472,6 @@ class MCPServer(QWidget):
             logger.info("Successfully added napari micromanager plugin")
         except Exception as e:
             logger.error(f"Failed to add new napari micromanager plugin: {e}")
-
 
     def closeEvent(self, event):
         """Handle window close event"""

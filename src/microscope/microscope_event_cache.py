@@ -8,7 +8,7 @@ from typing import Any
 class MicroscopeEventCache:
     """
     This class wants to keep all the signal that occurred from the napari-micromanager GUI
-    and saved them in a cache
+    and saved them in a cache.
     """
     def __init__(self, mmc: CMMCorePlus | UniMMCore) -> None:
         self._mmc = mmc
@@ -69,7 +69,7 @@ class MicroscopeEventCache:
     def _on_channel_group_changed(self, newChannelGroupName: str):
         """Emit signal when a channel group has changed."""
         self._add_events("channel_group_changed", {"new_channel_group_set": newChannelGroupName})
-
+        
     def _on_config_defined(self, groupName: str, configName: str, deviceLabel: str, propName: str, value: Any):
         """Emit signal when a config is defined."""
         self._add_events("config_defined", {"groupName": groupName,"configName": configName, "deviceLabel": deviceLabel, "propName": propName, "value": value})
@@ -89,12 +89,12 @@ class MicroscopeEventCache:
     def _on_config_set(self, groupName: str, configName: str):
         """Emit signal when a config has been set."""
         self._add_events("config_set", {"groupName": groupName, "configName": configName})
-
+        
     def _on_properties_changed(self):
         """Emit signal with no arguments when properties have changed."""
         self._add_events("properties_changed", {"action": "Multiple properties have changed."})
 
-    def _on_property_changed(self, name: str, propName: str, propValue: str):
+    def _on_property_changed(self, name: str, propName: str, propValue: Any):
         """Emit signal when a specific property has changed."""
         self._add_events("property_changed", {"device": name, "propName": propName, "propValue": propValue})
 
