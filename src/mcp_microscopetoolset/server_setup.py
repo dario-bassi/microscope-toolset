@@ -1,6 +1,6 @@
-from typing import Any
+from typing import Any, Annotated
 from mcp.server.fastmcp import FastMCP
-from pydantic import Field
+from pydantic import Field, BaseModel, BeforeValidator, PlainSerializer, WithJsonSchema
 from src.local.prepare_code import prepare_code
 import logging
 import sys
@@ -21,6 +21,18 @@ fh.setFormatter(logging.Formatter(
 ))
 logger.addHandler(fh)
 
+# 1. Define the custom NumPy type for MCP
+# This ensures the LLM sees a standard list of numbers
+NDArray = Annotated[
+    np.ndarray,
+    BeforeValidator(lambda v: np.array(v)),
+    PlainSerializer(lambda v: v.tolist()),
+    WithJsonSchema({
+        "type": "array", 
+        "items": {"type": "number"},
+        "description": "A numerical array/matrix"
+    })
+]
 
 
 def create_mcp_server(
@@ -533,7 +545,7 @@ def create_mcp_server(
     )
     def viewer_add_labels(
         path: str | None = Field(None, description="File path to the labels image file (TIFF, PNG, etc.). Use this if loading from disk. Mutually exclusive with img_data."),
-        img_data: np.ndarray | None = Field(None, description="Numpy array containing the labeled mask where each unique integer represents a different region/object. Use this to pass segmentation results directly without saving to disk. Mutually exclusive with path."), 
+        img_data: NDArray | None = Field(None, description="Numpy array containing the labeled mask where each unique integer represents a different region/object. Use this to pass segmentation results directly without saving to disk. Mutually exclusive with path."), 
         name: str | None = Field(None, description="Optional name for the labels layer in the viewer. If not provided, a default name will be generated.")
     ):
         """

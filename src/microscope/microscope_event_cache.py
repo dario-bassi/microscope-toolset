@@ -31,7 +31,7 @@ class MicroscopeEventCache:
         self._mmc.events.propertiesChanged.connect(self._on_properties_changed)
         self._mmc.events.propertyChanged.connect(self._on_property_changed)
         self._mmc.events.roiSet.connect(self._on_roi_set)
-        self._mmc.events.shutterOpenChanged(self._on_shutter_open_changed)
+        self._mmc.events.shutterOpenChanged.connect(self._on_shutter_open_changed)
         # TO ADD
 
     def _add_events(self, event_type: str, data: dict, source: str = "Unknown"):
@@ -109,7 +109,7 @@ class MicroscopeEventCache:
     def _on_load_system_configuration(self):
         """Emit signal when the system configuration has been loaded."""
         self._add_events("loaded_system_configuration", {"action": "The file system configuration (.cfg) was loaded."})
-            
+
 
     def get_recent_events(self, limit: int = 100):
         """

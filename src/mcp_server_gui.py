@@ -188,7 +188,7 @@ class MCPWorker(QObject):
                     executor=executor,
                     logger_agent=agents["logger_agent"], 
                     viewer=viewer_instance,
-                    event_cache=event_cache
+                    event_cache=event_cache,
                     viewer_proxy=self._viewer_proxy  # Pass the proxy created on main thread
                 )
 
