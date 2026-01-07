@@ -501,7 +501,7 @@ def create_mcp_server(
     
     @mcp.tool(
         name="viewer_layer_screenshot", 
-        description="Capture a screenshot of a specific layer from the napari viewer. Provide the exact layer name to isolate and render only that layer's data. Useful for examining individual microscopy channels, labeled regions, or segmentation masks without interference from other layers."
+        description="Capture the image data of a specific layer from the napari viewer. Provide the exact layer name to isolate and render only that layer's data. Useful for examining individual microscopy channels, labeled regions, or segmentation masks without interference from other layers."
     )
     def viewer_layer_screenshot(
         layer_name: str = Field(..., description="The exact name of the layer to capture. Use viewer_list_of_layers to see available layer names.")
