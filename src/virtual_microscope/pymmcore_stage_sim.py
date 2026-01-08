@@ -33,10 +33,9 @@ class SimStageDevice(XYStageDevice):
         """
         self._x = x
         self._y = y
-        #print("i was run")
-        # update the camera offset of the simulation
-        #self.update_camera_offset()
+
         self.bridge.set_stage(self._x, self._y)
+        self.core.events.XYStagePositionChanged.emit(self.get_label(), x, y) # emit
 
     def get_position_um(self) -> tuple[float, float]:
         """

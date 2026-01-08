@@ -90,6 +90,7 @@ class SimSLMDevice(SLMDevice):
     def set_exposure(self, interval_ms: float) -> None:
         """Command the SLM to turn off after a specified interval."""
         self._exposure = interval_ms
+        self.core.events.SLMExposureChanged.emit(self.get_label(), interval_ms)
 
     def get_exposure(self) -> float:
         """Find out the exposure interval of an SLM."""

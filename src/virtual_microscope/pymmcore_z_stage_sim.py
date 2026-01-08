@@ -39,6 +39,7 @@ class SimZStageDevice(StageDevice):
         self.update_z_camera()
         # update focus direction
         self._direction = self._calculate_direction()
+        self.core.events.stagePositionChanged.emit(self.get_label(), val)
 
     def get_position_um(self) -> float:
         return self._z_current

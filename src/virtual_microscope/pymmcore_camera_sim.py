@@ -47,6 +47,7 @@ class SimCameraDevice(CameraDevice):
 
     def set_exposure(self, exposure: float) -> None:
         self._exposure = exposure
+        self.core.events.exposureChanged.emit(self.get_label(), exposure)
 
     def shape(self) -> tuple[int, int]:
         # Use the simulation's dimensions
