@@ -68,6 +68,10 @@ class SimZStageDevice(StageDevice):
         # update z pos
         #new_position = self._z_current + sign
         #self.set_position_um(new_position)
+        if sign > 0.0:
+            self._direction = FocusDirection.FocusDirectionTowardSample
+        if sign < 0.0:
+            self._direction = FocusDirection.FocusDirectionAwayFromSample
 
 
 
