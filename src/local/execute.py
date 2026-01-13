@@ -25,10 +25,9 @@ logger.addHandler(fh)
 
 class Execute:
 
-    def __init__(self, filename: str, mmc: CMMCorePlus | UniMMCore = None, microscope_type: str = "real", viewer=None):
+    def __init__(self, filename: str, mmc: CMMCorePlus | UniMMCore = None, microscope_type: str = "real"):
         self.namespace = {}
-        #self.namespace["mmc"] = mmc
-        #logger.info("mmc instance is loaded into the namespace")
+        
         if microscope_type == "real":
             if mmc is not None:
                 self.namespace["mmc"] = mmc
@@ -46,26 +45,7 @@ class Execute:
 
             logger.info("mmc instance is loaded into the namespace")
 
-        # IMPORTANT: Do NOT add viewer to namespace!
-        # Viewer methods must be called via viewer tools (viewer_screenshot, etc.) which use
-        # the thread-safe proxy. Direct viewer calls from executed code will cause Qt/OpenGL
-        # threading errors since this code runs in a daemon thread.
-        # if viewer is not None:
-        #     self.namespace["viewer"] = viewer
-        #     logger.info("viewer instance is loaded into the namespace")
-
         logger.info(f"Execute initialized for {microscope_type} microscope")
-
-    def set_viewer(self, viewer):
-        """
-        DEPRECATED: Do not add viewer to execution namespace.
-        Viewer operations must be performed through thread-safe viewer tools
-        (viewer_screenshot, viewer_add_labels, etc.) which use the proxy pattern
-        to execute on the main Qt thread. Direct viewer access causes threading errors.
-        """
-        logger.warning("set_viewer() called but viewer is not added to namespace to prevent threading issues")
-        pass
-        return self
 
 
     def _install_library(self, module: str):

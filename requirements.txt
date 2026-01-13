@@ -1,4 +1,3 @@
-chromadb
 openai
 pymupdf4llm
 pymupdf
@@ -7,7 +6,6 @@ napari[pyqt6, optional]
 napari-micromanager
 git+https://github.com/dario-bassi/pymmcore-widgets.git@main
 git+https://github.com/pymmcore-plus/pymmcore-plus.git@main
-openai-agents
 numpy
 psycopg2
 python-dotenv

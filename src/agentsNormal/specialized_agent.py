@@ -1,9 +1,6 @@
-from src.prompts.strategyAgentPrompt import STRATEGY_NEW
 from .base_agent import BaseAgent, OpenAI
 import json
-from .structuredOutput import ClassificationAgentOutput, NoCodingAgentOutput, SoftwareAgentOutput, StrategyAgentOutput,RephraseOutput, ExtractKeywordOutput
-from src.prompts.mainAgentPrompt import CLASSIFY_INTENT_NEW, ANSWER_PROMPT
-from src.prompts.softwareEngineeringPrompt import SOFTWARE_AGENT_NEW, SOFTWARE_AGENT_RETRY_NEW
+from .structuredOutput import RephraseOutput, ExtractKeywordOutput
 from src.databases.elasticsearch_db import ElasticSearchDB
 from src.postqrl.log_db import LoggerDB
 import torch
@@ -23,94 +20,6 @@ fh.setFormatter(logging.Formatter(
 ))
 logger.addHandler(fh)
 
-
-class ClassifyAgent(BaseAgent):
-    """
-    Classifier agent for the user input
-    """
-    def classify_user_intent(self, context):
-
-        prompt = CLASSIFY_INTENT_NEW.format(relevant_inputs=json.dumps(context))
-
-        history = [{"role": "system", "content": prompt},
-                   {"role": "user", "content": context['user_query']}] #+ context['conversation']
-        error_description = "Failed to classify intent"
-
-        return self.call_agent(model="gpt-4.1-mini",input_user=history, error_string=error_description, output_format=ClassificationAgentOutput)
-
-
-class NoCodingAgent(BaseAgent):
-    """
-    to add
-    """
-
-    def no_coding_answer(self, context):
-        prompt = ANSWER_PROMPT.format(additional_data=context)
-
-        history = [
-            {
-                "role": "system",
-                "content": prompt
-            },
-            {
-                "role": "user",
-                "content": context["user_query"]
-            }
-        ]
-
-        error_description = "Failed to answer a non coding question"
-
-        return self.call_agent(model="gpt-4.1-mini",input_user=history, error_string=error_description, output_format=NoCodingAgentOutput)
-
-
-class SoftwareEngeneeringAgent(BaseAgent):
-
-    def generate_code(self, context):
-        print(context)
-        prompt = SOFTWARE_AGENT_NEW.format(relevant_context=json.dumps(context))
-
-        history = [{"role": "system", "content": prompt}, {"role": "user", "content": context["user_query"]}] #+ context[
-            #"conversation"]
-
-        error_description = "Failed to generate code"
-
-        return self.call_agent(model="gpt-4.1-mini",input_user=history, error_string=error_description, output_format=SoftwareAgentOutput)
-
-    def fix_code(self, context):
-
-        prompt = SOFTWARE_AGENT_RETRY_NEW.format(relevant_context=json.dumps(context))
-        history = [{"role": "system", "content": prompt}, {"role": "user", "content": context["user_query"]}] + context[
-            "conversation"]
-
-        error_description = "Failed to fix code"
-
-        return self.call_agent(model="gpt-4.1-mini",input_user=history, error_string=error_description, output_format=SoftwareAgentOutput)
-
-
-class StrategyAgent(BaseAgent):
-
-    def generate_strategy(self, context):
-        #print(context)
-        prompt = STRATEGY_NEW.format(relevant_context=json.dumps(context))
-        print(prompt)
-
-        history = [{"role": "system", "content": prompt}, {"role": "user", "content": context["user_query"]}] #+ context[
-            #"conversation"]
-        print(history)
-        error_description = "Failed to generate strategy"
-
-        return self.call_agent(model="gpt-4.1-mini",input_user=history, error_string=error_description, output_format=StrategyAgentOutput)
-
-    def revise_strategy(self, context):
-
-        prompt = STRATEGY_NEW.format(relevant_context=json.dumps(context))
-
-        history = [{"role": "system", "content": prompt}, {"role": "user", "content": context["user_query"]}] + context[
-            "conversation"]
-
-        error_description = "Failed to revise strategy"
-
-        return self.call_agent(model="gpt-4.1-mini",input_user=history, error_string=error_description, output_format=StrategyAgentOutput)
 
 class DatabaseAgent(BaseAgent):
 

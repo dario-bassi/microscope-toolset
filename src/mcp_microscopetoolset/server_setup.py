@@ -1,6 +1,6 @@
 from typing import Any, Annotated
 from mcp.server.fastmcp import FastMCP
-from pydantic import Field, BaseModel, BeforeValidator, PlainSerializer, WithJsonSchema
+from pydantic import Field, BeforeValidator, PlainSerializer, WithJsonSchema
 from src.local.prepare_code import prepare_code
 import logging
 import sys
@@ -18,7 +18,7 @@ fh.setFormatter(logging.Formatter(
 ))
 logger.addHandler(fh)
 
-# 1. Define the custom NumPy type for MCP
+
 # This ensures the LLM sees a standard list of numbers
 NDArray = Annotated[
     np.ndarray,
@@ -35,9 +35,7 @@ NDArray = Annotated[
 def create_mcp_server(
         database_agent,
         microscope_status,
-        no_coding_agent,
         executor,
-        logger_agent, 
         viewer,
         event_cache,
         viewer_proxy=None

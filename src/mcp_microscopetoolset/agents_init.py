@@ -3,13 +3,10 @@ from openai import OpenAI
 from pymmcore_plus import CMMCorePlus
 from pymmcore_plus.experimental.unicore import UniMMCore
 from transformers import AutoTokenizer, AutoModelForSequenceClassification
-from src.agentsNormal.logger_agent import LoggerAgent
-from src.agentsNormal.classify_user_intent import ClassifyAgent
-from src.agentsNormal.specialized_agent import DatabaseAgent, SoftwareEngeneeringAgent, StrategyAgent, NoCodingAgent
+from src.agentsNormal.specialized_agent import DatabaseAgent
 from src.databases.elasticsearch_db import ElasticSearchDB
 from src.local.execute import Execute
-from src.mcp_microscopetoolset.microscope_session import MicroscopeSession
-from src.mcp_microscopetoolset.utils import logger_database_exists, get_user_information
+from src.mcp_microscopetoolset.utils import get_user_information
 from src.microscope.microscope_status import MicroscopeStatus
 from src.postqrl.connection import DBConnection
 from src.postqrl.log_db import LoggerDB
@@ -33,7 +30,7 @@ logger.addHandler(fh)
 def initialize_agents(mmc: CMMCorePlus | UniMMCore, microscope_type: str = "real"):
     # Initialize the microscope session object
     logger.info("Initializing Microscope Session")
-    microscope_session_object = MicroscopeSession()
+    #microscope_session_object = MicroscopeSession()
     logger.info("Microscope Session Initialized")
     # create the data_dict that will contain the feedback loop information
     # data_dict = microscope_session_object.get_data_dict()
@@ -114,35 +111,34 @@ def initialize_agents(mmc: CMMCorePlus | UniMMCore, microscope_type: str = "real
                                    tokenizer=tokenizer, model=model)
     logger.info("Initialed Database Agent")
 
-    software_agent = SoftwareEngeneeringAgent(client_openai=client_openai)
-    logger.info("Initialed Software Agent")
+    #software_agent = SoftwareEngeneeringAgent(client_openai=client_openai)
+    #logger.info("Initialed Software Agent")
 
-    strategy_agent = StrategyAgent(client_openai=client_openai)
-    logger.info("Initialed Strategy Agent")
+    #strategy_agent = StrategyAgent(client_openai=client_openai)
+    #logger.info("Initialed Strategy Agent")
 
-    no_coding_agent = NoCodingAgent(client_openai=client_openai)
-    logger.info("Initialed NoCoding Agent")
+    #no_coding_agent = NoCodingAgent(client_openai=client_openai)
+    #logger.info("Initialed NoCoding Agent")
 
-    logger_agent = LoggerAgent(client_openai=client_openai)
-    logger.info("Initialed Logger Agent")
+    #logger_agent = LoggerAgent(client_openai=client_openai)
+    #logger.info("Initialed Logger Agent")
 
-    classify_agent = ClassifyAgent(client_openai=client_openai)
-    logger.info("Initialed Classify Agent")
+    #classify_agent = ClassifyAgent(client_openai=client_openai)
+    #logger.info("Initialed Classify Agent")
 
     return {
-        "microscope_session_object": microscope_session_object,
         "executor": executor,
         "microscope_status": microscope_status,
         "database_agent": database_agent,
-        "software_agent": software_agent,
-        "strategy_agent": strategy_agent,
-        "no_coding_agent": no_coding_agent,
-        "logger_agent": logger_agent,
-        "classify_agent": classify_agent,
         "db_log": None,#db_log
         "es_client": es_client,
         "client_openai": client_openai,
     }
+#"software_agent": software_agent,
+#"strategy_agent": strategy_agent,
+#"no_coding_agent": no_coding_agent,
+#"logger_agent": logger_agent,
+#"classify_agent": classify_agent,
 
 
 

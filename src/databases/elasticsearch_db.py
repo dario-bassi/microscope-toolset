@@ -113,13 +113,6 @@ class ElasticSearchDB:
 
         return search_result
 
-        # return [{
-        #     "doc_id": hit["_source"]["doc_id"],
-        #     "content": hit["_source"]["content"],
-        #     "score":hit["_score"]
-        # }
-        #         for hit in search_result["hits"]["hits"]]
-
     def delete_index(self, index_name: str):
         """
         This function allows to delete an index/collection from the Elasticsearch database
