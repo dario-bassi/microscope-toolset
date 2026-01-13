@@ -4,6 +4,18 @@ from collections import deque
 from datetime import datetime
 import threading
 from typing import Any
+import logging
+
+
+#  logger
+logger = logging.getLogger("EventCache")
+logger.setLevel(logging.INFO)
+fh = logging.FileHandler("microscope_toolset.log", encoding="utf-8")
+fh.setFormatter(logging.Formatter(
+    "%(asctime)s [%(levelname)s] %(name)s: %(message)s",
+    datefmt="%Y-%m-%d %H:%M:%S",
+))
+logger.addHandler(fh)
 
 class MicroscopeEventCache:
     """
@@ -34,14 +46,16 @@ class MicroscopeEventCache:
         self._mmc.events.shutterOpenChanged.connect(self._on_shutter_open_changed)
         # TO ADD
 
-    def _add_events(self, event_type: str, data: dict, source: str = "Unknown"):
+    def _add_events(self, event_type: str, data: dict):
         with self._lock:
             self._cache.append({
                 "time": datetime.now().isoformat(),
                 "event_type": event_type,
-                "data": data,
-                "source": source # Either agent or user
+                "data": data
             })
+            logger.info(f"{event_type}: {data}")
+
+
     def _on_exposure_changed(self, device: str, new_exposure: float):
         """Emit signal when the exposure changes."""
         self._add_events("exposure_changed", {f"{device}": f"{new_exposure}"})
