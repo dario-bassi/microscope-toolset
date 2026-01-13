@@ -132,12 +132,12 @@ class DatabaseAgent(BaseAgent):
         self.model = model
 
     def _embeds_query(self, query: str) -> List[float]:
-
-        response = self.client_openai.embeddings.create(input=query, model="text-embedding-3-small",
+        query = query.replace("\n", " ")
+        response = self.client_openai.embeddings.create(input=[query], model="text-embedding-3-small",
                                                         dimensions=512)  # later add model's choice
 
         embedding = response.data[0].embedding  # list of floating values
-        print("Generating embedding")
+        logger.info("Generating embedding")
 
         return embedding
 
@@ -364,7 +364,10 @@ class DatabaseAgent(BaseAgent):
     def api_pymmcore_context(self, query: str, reformulated_query: str) -> dict[str, ...]:
 
         # retrieve relevant information from the api
+        logger.info(query)
+        logger.info(reformulated_query)
         list_api_docs_result = self._retrieve_api_information(reformulated_query)
+        logger.info(list_api_docs_result)
 
         if list_api_docs_result is None or len(list_api_docs_result) == 0:
             return {
@@ -496,7 +499,8 @@ class DatabaseAgent(BaseAgent):
             return scores.item()
 
         except Exception as e:
-            return f"Failed to rerank query: {e}"
+            logger.error(f"Failed to rerank query: {e}")
+            return 0.0
 
     def _rerank_and_add_to_list(self, merged_list: list, partial_result_list: list, keyword_field: str, query: str):
         """

@@ -188,7 +188,7 @@ def get_openai_embeddings(text: str, client: OpenAI) -> list[float]:
     This function return the embedding vector calculated by OpenAI
     """
     print("Generating embedding")
-    response = client.embeddings.create(input=text, model="text-embedding-3-small", dimensions=512)
+    response = client.embeddings.create(input=[text], model="text-embedding-3-small", dimensions=512)
 
     embedding = response.data[0].embedding
 

@@ -46,6 +46,8 @@ class MicroscopeEventCache:
         self._mmc.events.shutterOpenChanged.connect(self._on_shutter_open_changed)
         # TO ADD
 
+        logger.info("Event cache was initialized.")
+
     def _add_events(self, event_type: str, data: dict):
         with self._lock:
             self._cache.append({

@@ -43,7 +43,8 @@ class DatabaseAgent:
 
     def embeds_query(self, query) -> List[float]:
 
-        response = self.client_openai.embeddings.create(input=query, model="text-embedding-3-small",
+        
+        response = self.client_openai.embeddings.create(input=[query], model="text-embedding-3-small",
                                                         dimensions=512)  # later add model's choice
 
         embedding = response.data[0].embedding  # list of floating values

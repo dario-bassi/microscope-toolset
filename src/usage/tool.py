@@ -79,7 +79,7 @@ def get_openai_embeddings(text: str, client: OpenAI) -> List[str]:
     This function return the embedding vector calculated by OpenAI
     """
 
-    response = client.embeddings.create(input=text, model="text-embedding-3-small")
+    response = client.embeddings.create(input=[text], model="text-embedding-3-small")
 
     embedding = response.data[0].embedding
     print("Generating embedding")

@@ -89,11 +89,11 @@ def initialize_agents(mmc: CMMCorePlus | UniMMCore, microscope_type: str = "real
 
     # get relevant information for the db
     # --NEW-- for the moment comment this part for testing
-    #pdf_publication = system_user_information['pdf_collection_name']
-    #micromanager_collection = system_user_information['micromanager_devices_collection']
+    pdf_publication = system_user_information['pdf_collection_name']
+    micromanager_collection = system_user_information['micromanager_devices_collection']
     api_collection = system_user_information['collection_name']
-    #logger.info(f"Database Name: {pdf_publication}")
-    #logger.info(f"Micromanager Collection: {micromanager_collection}")
+    logger.info(f"Database Name: {pdf_publication}")
+    logger.info(f"Micromanager Collection: {micromanager_collection}")
     logger.info(f"API Collection: {api_collection}")
 
     # Load the cross-encoder for re-ranking
@@ -104,12 +104,12 @@ def initialize_agents(mmc: CMMCorePlus | UniMMCore, microscope_type: str = "real
     logger.info(f"Cross-encoder Model {model_name} loaded")
 
     # initialize LLM API
-    client_openai = OpenAI(api_key=os.getenv('OPENAI_API_KEY'))
+    client_openai = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
     logger.info("LLM API loaded")
 
     # initialize different Agents
-    database_agent = DatabaseAgent(client_openai=client_openai, es_client=es_client, pdf_collection=None,#pdf_publication
-                                   micromanager_collection=None, api_collection=api_collection, # micromanager_collection
+    database_agent = DatabaseAgent(client_openai=client_openai, es_client=es_client, pdf_collection=pdf_publication,#pdf_publication
+                                   micromanager_collection=micromanager_collection, api_collection=api_collection, # micromanager_collection
                                    db_log=None, db_log_collection_name=system_user_information['log_collection'], # db_log
                                    tokenizer=tokenizer, model=model)
     logger.info("Initialed Database Agent")

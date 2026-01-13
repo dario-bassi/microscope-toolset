@@ -62,11 +62,27 @@ def create_mcp_server(
     def pymmcore_api_database(
             user_query: str = Field(..., description="The user original question")
     ) -> dict[str, Any]:
+        try:
+            # reformulate user query
+            reformulated_question = database_agent.rephrase_query(user_query)
+            
+            # check if rephrase failed
+            if isinstance(reformulated_question, dict) and reformulated_question.get('intent') == 'error':
+                return {
+                    "user_query": user_query,
+                    "error": reformulated_question.get('message', 'Failed to reformulate query')
+                }
 
-        # reformulate user query
-        reformulated_question = database_agent.rephrase_query(user_query)
+            # extract reformulated_query string from dict
+            reformulated_query_str = reformulated_question.get("reformulated_query", user_query) if isinstance(reformulated_question, dict) else reformulated_question
 
-        return database_agent.api_pymmcore_context(user_query, reformulated_question)
+            return database_agent.api_pymmcore_context(user_query, reformulated_query_str)
+        except Exception as e:
+            logger.error(f"Error in pymmcore_api_database: {e}", exc_info=True)
+            return {
+                "user_query": user_query,
+                "error": f"Error retrieving information from databases: {str(e)}"
+            }
     @mcp.tool(
         name="micromanager_device_database",
         description="This tool is part of the feedback loop of the Microscope Toolset. It will return the relevant information"
@@ -78,11 +94,27 @@ def create_mcp_server(
     def micromanager_device_database(
             user_query: str = Field(..., description="The user original question")
     ) -> dict[str, Any]:
+        try:
+            # reformulate user query
+            reformulated_question = database_agent.rephrase_query(user_query)
+            
+            # check if rephrase failed
+            if isinstance(reformulated_question, dict) and reformulated_question.get('intent') == 'error':
+                return {
+                    "user_query": user_query,
+                    "error": reformulated_question.get('message', 'Failed to reformulate query')
+                }
 
-        # reformulate user query
-        reformulated_question = database_agent.rephrase_query(user_query)
+            # extract reformulated_query string from dict
+            reformulated_query_str = reformulated_question.get("reformulated_query", user_query) if isinstance(reformulated_question, dict) else reformulated_question
 
-        return database_agent.devices_micromanager_context(user_query, reformulated_question)
+            return database_agent.devices_micromanager_context(user_query, reformulated_query_str)
+        except Exception as e:
+            logger.error(f"Error in micromanager_device_database: {e}", exc_info=True)
+            return {
+                "user_query": user_query,
+                "error": f"Error retrieving information from databases: {str(e)}"
+            }
     @mcp.tool(
         name="pdfs_publication_database",
         description="This tool is part of the feedback loop of the Microscope Toolset. It will return the relevant information"
@@ -94,11 +126,26 @@ def create_mcp_server(
     def pdfs_publication_database(
             user_query: str = Field(..., description="The user original question")
     ) -> dict[str, Any]:
+        try:
+            # reformulate user query
+            reformulated_question = database_agent.rephrase_query(user_query)
+            
+            # check if rephrase failed
+            if isinstance(reformulated_question, dict) and reformulated_question.get('intent') == 'error':
+                return {
+                    "user_query": user_query,
+                    "error": reformulated_question.get('message', 'Failed to reformulate query')
+                }
 
-        # reformulate user query
-        reformulated_question = database_agent.rephrase_query(user_query)
+            reformulated_result = reformulated_question.get("reformulated_query", user_query) if isinstance(reformulated_question, dict) else user_query
 
-        return database_agent.pdf_publication_context(user_query, reformulated_question)
+            return database_agent.pdf_publication_context(user_query, reformulated_result)
+        except Exception as e:
+            logger.error(f"Error in pdfs_publication_database: {e}", exc_info=True)
+            return {
+                "user_query": user_query,
+                "error": f"Error retrieving information from databases: {str(e)}"
+            }
 
     @mcp.tool(
          name="reformulate_user_query",
