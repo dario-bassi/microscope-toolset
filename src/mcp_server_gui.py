@@ -96,7 +96,7 @@ class MCPWorker(QObject):
     def __init__(self,viewer: Any, microscope_type: str = "real", viewer_proxy=None):
         super().__init__()
         self._elastic_search_process = None
-        #self._fastmcp_process: subprocess.Popen = None
+        
         self._mmc = None
         self._viewer = viewer
         self._microscope_type = microscope_type
@@ -172,12 +172,9 @@ class MCPWorker(QObject):
                     agents = initialize_agents(mmc=self._mmc, microscope_type=self._microscope_type)
 
                 logger.info("Creating MCP server...")
-                # Viewer instance for MCP tools (NOT for execution namespace!)
-                # Viewer operations must use thread-safe tools (viewer_screenshot, etc.)
-                # not direct calls from executed code (causes Qt/OpenGL threading errors)
-                #executor = agents["executor"]
+
                 viewer_instance = NapariViewerMC(self._viewer)
-                # DO NOT call: executor.set_viewer(viewer_instance) - causes threading issues
+                
                 # Create event cache
                 event_cache = MicroscopeEventCache(self._mmc)
                 

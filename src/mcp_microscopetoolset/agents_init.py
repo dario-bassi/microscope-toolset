@@ -41,10 +41,14 @@ def initialize_agents(mmc: CMMCorePlus | UniMMCore, microscope_type: str = "real
     logger.info("System User Information: {}".format(system_user_information))
     # Determine configuration file based on executor
     if microscope_type == "virtual":
-        cfg_file = None
+        if system_user_information['cfg_file'] == "":
+            cfg_file = None
+        else:
+            cfg_file = system_user_information['cfg_file'] # in case a configuration file was written.
         logger.info("Initializing UniCore...")
     else:
         cfg_file = system_user_information['cfg_file']
+        logger.info(cfg_file)
         logger.info(f"Initializing real microscope with config: {cfg_file}")
     # start executor and tracking of the microscope status
     logger.info("Initializing Executor...")

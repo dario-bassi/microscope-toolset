@@ -119,3 +119,22 @@ def initialize_virtual_microscope(core: UniMMCore) -> None:
     except Exception as e:
         logger.error(f"Error: {e}")
         RuntimeError(f"Error: {e}")
+
+
+def initialize_virtual_microscope_from_configuration(core: UniMMCore) -> None:
+
+    try:
+        # access UniMMCore
+        # development python devices
+        logger.info("Initialized UniMMCore")
+        #microscope_simulation = MicroscopeSim() # old simulation to uncomment!
+        microscope_simulation = MicroscopeSimOptmized(cell_type="normal", nb_cells=100)
+        # Initialize global Singleton
+        bridge_module.GLOBAL_BRIDGE = SimulationBridge(microscope_simulation)
+        logger.info("Initialized MicroscopeSim")
+
+        logger.info("Initialization Complete")
+
+    except Exception as e:
+        logger.error(f"Error: {e}")
+        RuntimeError(f"Error: {e}")

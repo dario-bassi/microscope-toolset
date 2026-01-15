@@ -7,7 +7,7 @@ from contextlib import redirect_stdout,redirect_stderr
 
 from pymmcore_plus.experimental.unicore import UniMMCore
 
-from src.virtual_microscope.initialize_virtual_microscope import initialize_virtual_microscope
+from src.virtual_microscope.initialize_virtual_microscope import initialize_virtual_microscope, initialize_virtual_microscope_from_configuration
 
 from pymmcore_plus import CMMCorePlus
 import logging
@@ -41,7 +41,13 @@ class Execute:
         elif microscope_type == "virtual":
             logger.info("Initializing virtual microscope...")
             self.namespace["mmc"] = mmc
-            initialize_virtual_microscope(core=mmc)
+            if filename is None:
+                initialize_virtual_microscope(core=mmc)
+            elif isinstance(filename, str) and filename != "":
+                initialize_virtual_microscope_from_configuration(core=mmc)
+                mmc.loadSystemConfiguration(fileName=filename)
+            else:
+                raise ValueError(f"The file configuration {filename} doesn't exists. Please checks the name.")
 
             logger.info("mmc instance is loaded into the namespace")
 
