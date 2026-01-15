@@ -25,6 +25,8 @@ class FilterWheelDevice(StateDevice):
 
         self.bridge = bridge_module.GLOBAL_BRIDGE
 
+        self.update_microscope_simulation()
+
     def get_state(self) -> int:
         """
         Return the current state of the filter wheel
@@ -83,6 +85,8 @@ class LEDDevice(StateDevice):
         self._current_label = self._state_to_label.get(self._current_state)
         self._name = "LED"
 
+        self.update_microscope_simulation()
+
     def get_state(self) -> int:
         """
         Return the current state of the filter wheel
@@ -137,6 +141,8 @@ class ObjectiveDevice(StateDevice):
         self._name = "Objective"
 
         self.bridge = bridge_module.GLOBAL_BRIDGE
+
+        self.update_microscope_simulation()
 
     def get_state(self) -> int:
         """
