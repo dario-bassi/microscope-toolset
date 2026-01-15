@@ -195,8 +195,6 @@ chroma_storage/
 # json
 *.json
 
-*.cfg
-
 logs
 
 Vectore-store/
