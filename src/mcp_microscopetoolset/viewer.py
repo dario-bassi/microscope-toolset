@@ -146,7 +146,7 @@ class NapariViewerMC:
         
         return self._transform_array_to_image_content(img_arr)
     
-    def _transform_array_to_image_content(self, arr: np.ndarray) -> ImageContent:
+    def _transform_array_to_image_content(self, arr: np.ndarray) -> dict[str, Any]:#ImageContent
         """Helper function to transfor the array in a ImageContent"""
 
         # Ensure array is a NumPy array with proper dtype
@@ -164,11 +164,17 @@ class NapariViewerMC:
 
         base64_img = base64.b64encode(enc).decode("utf-8")
 
-        return ImageContent(
-            type="image",
-            data=base64_img,
-            mimeType="image/png"
-        )
+        #return ImageContent(
+        #    type="image",
+        #    data=base64_img,
+        #    mimeType="image/png"
+        #)
+        return {
+            "status": "success",
+            "data": base64_img,
+            "shape": list(arr.shape),
+            "dtype": str(arr.dtype)
+        }
     
     def add_image(
             self,
