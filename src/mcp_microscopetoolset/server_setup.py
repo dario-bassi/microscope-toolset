@@ -1,10 +1,12 @@
 from typing import Any, Annotated
-from mcp.server.fastmcp import FastMCP
+from mcp.server.fastmcp import FastMCP, Context
 from pydantic import Field, BeforeValidator, PlainSerializer, WithJsonSchema
 from src.local.prepare_code import prepare_code
 import logging
 import sys
 import numpy as np
+import asyncio
+from pydantic import BaseModel
 
 #  logger
 logger = logging.getLogger("Server Setup")
@@ -52,7 +54,7 @@ def create_mcp_server(
     @mcp.tool(
         name="pymmcore_api_database",
         description="This tool is part of the feedback loop of the Microscope Toolset. It will return the relevant information"
-                    "from the API database of pymmcore_plus. The relevant information will be searched by an hybrid method using"
+                    "from the ElasticSeach database of API pymmcore_plus. The relevant information will be searched by an hybrid method using"
                     "the reformulated query. The hybrid method will use the BM25 text matching and KNN search using embedding"
                     "vectors. Afterwards, a cross encoder will re-rank the result obtained to match only the most top 25 relevant"
                     "chunks of information."
@@ -763,7 +765,39 @@ def create_mcp_server(
             return viewer.set_grid(enabled=enabled)
     
     # TODO: add timelapse_screenshot later
+
     
+    @mcp.tool(
+            name="request_user_clarification",
+            description="Allow the MCP Client to interact with the user asking for clarification or some new input to asnwer the user's request."
+    )
+    async def request_user_clarification(
+        message: str,
+        ctx: Context
+    ) -> dict[str, Any]:
+        """Request user clarification from MCP client"""
+
+        # clarification
+        class elicitClarification(BaseModel):
+            agent_message: str = Field(description="The original Main Agent message.")
+            user_answer: str = Field(description="The user answer directed to the Main Agent.")
+
+        result = await ctx.elicit(message, elicitClarification)
+
+        if result.action == "accept":
+            result_data = result.data
+        elif result.action == "decline":
+            result_data = {
+                "agent_message": message,
+                "user_answer": "Operation declined"
+            }
+        elif result.action == "cancel":
+            result_data = {
+                "agent_message": message,
+                "user_asnwer": "Operation cancelled"
+            }
+
+        return result_data
 
 
     return mcp

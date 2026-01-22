@@ -179,6 +179,7 @@ cython_debug/
 
 # markdown
 *.md
+!microscope_tool.md
 
 # ignore database
 chroma_storage/
