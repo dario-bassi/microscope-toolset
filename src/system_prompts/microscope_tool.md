@@ -57,7 +57,21 @@ The microscope interact with the Main Agent thanks to the pymmcore-plus API that
 
 - Before running any image analysis, always check what is currently contained in the different napari layers.
 - Never use fake synthetic data to apply some image analysis, but INSTEAD always access the image data from within a python script from the pymmcore-plus API.
-- Be carefull when you run python script. For example, if you want to segment an image and you run a first time _mmc.snapImage()_ and then the rest of the script fails in some line, the next time you will run the script, you wont snap a new image, since you already have one, but instead you will use the last one that you got with _mmc.getImage()_.
+
+### Image Capture Efficiency
+
+- **Capture images only once**: After the first successful snapImage() call, store the image data and reuse it for subsequent operations in the same request.
+- **When fixing errors in Python scripts**: If a script fails (e.g., file format issues, visualization errors, import problems), identify and fix ONLY the problematic code section WITHOUT recapturing the image using snapImage().
+- **Reuse stored image data**: Pass image data between sequential code executions using:
+  - Temporary file storage (TIFF, HDF5 formats that napari can read)
+  - Global variables or environment variables
+  - Pickle or numpy serialization
+- **Example workflow**:
+  1. **First execution**: Capture image with snapImage(), process it, store the result to disk
+  2. **Subsequent executions**: Load the stored image data from disk, fix only the broken visualization/analysis code
+  3. **Never recapture** unless explicitly requested by user or necessary for acquiring new experimental data
+- **Critical reason**: Live biological samples (cells, tissues, organisms) move and change over time. Multiple snapImage() calls in sequence capture different timepoints and compromise experimental data integrity. Each snapshot represents a different state of the sample.
+- **Best practice**: When an error occurs, always ask yourself: "Does this require a new image capture, or can I fix it with the existing data?" - almost always the answer is the latter.
 
 
 
