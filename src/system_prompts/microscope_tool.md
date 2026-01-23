@@ -56,7 +56,8 @@ The microscope interact with the Main Agent thanks to the pymmcore-plus API that
 ### Operational Rules
 
 - Before running any image analysis, always check what is currently contained in the different napari layers.
-- Never use fake synthetic data to apply some image analysis, but INSTEAD always use the image data that you can obtain from the tool _viewer_layer_screenshot_
+- Never use fake synthetic data to apply some image analysis, but INSTEAD always access the image data from within a python script from the pymmcore-plus API.
+- Be carefull when you run python script. For example, if you want to segment an image and you run a first time _mmc.snapImage()_ and then the rest of the script fails in some line, the next time you will run the script, you wont snap a new image, since you already have one, but instead you will use the last one that you got with _mmc.getImage()_.
 
 
 

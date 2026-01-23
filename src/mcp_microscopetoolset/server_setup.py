@@ -532,7 +532,7 @@ def create_mcp_server(
     # screenshot
     @mcp.tool(
         name="viewer_screenshot", 
-        description="Capture a screenshot of the napari viewer's current state. This renders all visible layers and returns the image as an array. Set canvas_only=false to include GUI elements like scale bars and labels, or canvas_only=true to capture only the image data. Use this to visually inspect microscopy images or analyze image data for cell detection, segmentation, or other computer vision tasks.",
+        description="Capture a screenshot of the napari viewer's current state. This renders all visible layers and returns the image as an array. Set canvas_only=false to include GUI elements like scale bars and labels, or canvas_only=true to capture only the image data. Use this to visually inspect napari UI images.",
     )
     def viewer_screenshot(
         canvas_only: bool = Field(..., description="If True, capture only the canvas (image data) without GUI elements. If False, include scale bars, labels, and other UI elements in the screenshot.")

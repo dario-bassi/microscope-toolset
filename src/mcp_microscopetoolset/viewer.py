@@ -164,17 +164,11 @@ class NapariViewerMC:
 
         base64_img = base64.b64encode(enc).decode("utf-8")
 
-        #return ImageContent(
-        #    type="image",
-        #    data=base64_img,
-        #    mimeType="image/png"
-        #)
-        return {
-            "status": "success",
-            "data": base64_img,
-            "shape": list(arr.shape),
-            "dtype": str(arr.dtype)
-        }
+        return ImageContent(
+            type="image",
+            data=base64_img,
+            mimeType="image/png"
+        )
     
     def add_image(
             self,
