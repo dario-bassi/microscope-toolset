@@ -13,6 +13,8 @@ from pymmcore_plus import CMMCorePlus
 import logging
 import ast
 
+from src.local.gatekeeper_core import GatekeeperCore
+
 #  logger
 logger = logging.getLogger("Execute")
 logger.setLevel(logging.INFO)
@@ -31,17 +33,18 @@ class Execute:
         
         if microscope_type == "real":
             if mmc is not None:
-                self.namespace["mmc"] = mmc
-                logger.info("mmc instance is loaded into the namespace")
                 # Load config file
                 mmc.loadSystemConfiguration(fileName=filename)
                 logger.info("configuration file of the microscope was loaded")
+                self.namespace["mmc"] = GatekeeperCore(mmc)#mmc
+                logger.info("mmc instance is loaded into the namespace")
             else:
-                self.namespace["mmc"] = CMMCorePlus().instance()
-                exec(f"mmc.loadSystemConfiguration(fileName='{filename}')", self.namespace)
+                real_mmc = CMMCorePlus().instance()
+                real_mmc.loadSystemConfiguration(fileName=filename)
+                self.namespace["mmc"] = GatekeeperCore(real_mmc)#CMMCorePlus().instance()
+                #exec(f"mmc.loadSystemConfiguration(fileName='{filename}')", self.namespace)
         elif microscope_type == "virtual":
-            logger.info("Initializing virtual microscope...")
-            self.namespace["mmc"] = mmc
+            logger.info("Initializing virtual microscope...")          
             if filename is None:
                 initialize_virtual_microscope(core=mmc)
             elif isinstance(filename, str) and filename != "":
@@ -51,6 +54,8 @@ class Execute:
                 raise ValueError(f"The file configuration {filename} doesn't exists. Please checks the name.")
 
             logger.info("mmc instance is loaded into the namespace")
+
+            self.namespace["mmc"] = GatekeeperCore(mmc)#mmc
 
         logger.info(f"Execute initialized for {microscope_type} microscope")
 
@@ -86,6 +91,128 @@ class Execute:
         except Exception as e:
             logger.error(f"Unexpected error installing {module}: {e}")
             return False
+        
+    def _preimport_dependencies(self, code: str):
+        """Parse AST for import an ensure modules are available (install if needed)."""
+        tree = ast.parse(code)
+        for node in ast.walk(tree):
+            if isinstance(node, ast.Import):
+                for n in node.names:
+                    mod = n.name.split('.')[0]
+                    if importlib.util.find_spec(mod) is None:
+                        if not self._install_library(mod):
+                            raise ModuleNotFoundError(mod)
+                    importlib.import_module(mod)
+            elif isinstance(node, ast.ImportFrom) and node.module:
+                mod = node.module.split('.')[0]
+                if importlib.util.find_spec(mod) is None:
+                    if not self._install_library(mod):
+                        raise ModuleNotFoundError(node)
+                importlib.import_module(mod)
+
+    
+    def _find_mmc_calls(self, code: str):
+        """Return list of method names called on the 'mmc' name in the code string."""
+        tree = ast.parse(code)
+        calls = []
+        for node in ast.walk(tree):
+            if isinstance(node, ast.Call):
+                func = node.func
+                if isinstance(func, ast.Attribute) and isinstance(func.value, ast.Name) and func.value.id == 'mmc':
+                    calls.append(func.attr)
+
+        return calls
+    
+
+
+    def _classify_mmc_method(self, method_name: str) -> str:
+        """
+        Clasify pymmcore-plus methods
+        - 'allowed' : safe getters/queries
+         - 'buffer'  : idempotent setters / moves (buffer & replay with predicate)
+         - 'special' : acquisitions / non-idempotent (snap/sequence) -> cache / require explicit commit
+        Conservative default is 'buffer'.
+        """
+        if method_name.startswith(("get", "is")):
+            return "allowed"
+        special = {
+            "snapImage", "getImage", "startSequenceAcquisition", "stopSequenceAcquisition",
+            "snap", "getLastImage", "startContinuousSequenceAcquisition"
+        }
+        if method_name in special:
+            return "special"
+        
+        if method_name.startswith(("set", "load", "enable", "setPosition", "setXYPosition", "setZPosition")):
+            return "buffer"
+        
+        return "buffer"
+    
+
+    def run_code_new(self, code: str):
+        """Execute code after pre-importing deps. Use GatekeeperCore to buffer hardware calls and commit on succession"""
+
+        # Check code before running it
+        if not self.is_safe_viewer(code):
+            return "viewer"
+        
+        # Ensure dependencies present
+        try:
+            self._preimport_dependencies(code)
+        except ModuleNotFoundError as e:
+            return f"Dependency error: {e}"
+        
+        except Exception as e:
+            return f"Dependency parsing error: {e}"
+        
+        # Static analysis of mmc usage (convervatives)
+        mmc_obj = self.namespace.get("mmc")
+        try:
+            mmc_calls = self._find_mmc_calls(code)
+            classifications = {m: self._classify_mmc_method(m) for m in mmc_calls}
+            # If there are special non-idempotent calls, we allow them but they will be cached at commit time.
+        except Exception:
+            classifications = {}
+
+        # Snapshot state if GatekeeperCore present
+        snapshot = None
+        if mmc_obj and hasattr(mmc_obj, "snapshot_state"):
+            try:
+                snapshot = mmc_obj.snapshot_state()
+            except Exception:
+                snapshot = None
+
+        # Execute user code once
+        try:
+            out_f = StringIO()
+            err_f = StringIO()
+            with redirect_stdout(out_f), redirect_stderr(err_f):
+                exec(code, self.namespace)
+            
+            stdout_text = out_f.getvalue().strip()
+            stderr_text = err_f.getvalue().strip()
+            read_output = stdout_text
+
+            if stderr_text:
+                read_output = (read_output + "\nWarnings/Errors: " + stderr_text).strip()
+
+            # Commit buffered mmc calls if wrapper present
+            if mmc_obj and hasattr(mmc_obj, "commit"):
+                try:
+                    real = getattr(mmc_obj, "_mmc", None)
+                    mmc_obj.commit(real_mmc=real, check_snapshot=snapshot)
+                except Exception as e:
+                    return f"Commit failed: {e}"
+            logger.info("Code executed successfully")
+            return read_output if read_output else "Code executed successfully (no output)"
+        except ModuleNotFoundError as e:
+            module_name = str(e).split("'")[1] if "'" in str(e) else str(e)
+            logger.error(f"Module not found during execution (unexpected): {module_name}")
+            return f"Module not found during execution: {module_name}"
+        except Exception as e:
+            error_msg = f"Execution error: {type(e).__name__}: {str(e)}"
+            logger.error(error_msg)
+            return error_msg
+
 
     def run_code(self, code: str):
         """Execute code with better error handling and output capture"""
@@ -97,7 +224,7 @@ class Execute:
         if not self.is_safe_viewer(code):
             return "viewer"
         
-        
+
         while attempts < max_attempts:
             attempts += 1
             try:

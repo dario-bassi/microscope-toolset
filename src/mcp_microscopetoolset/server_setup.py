@@ -7,6 +7,7 @@ import sys
 import numpy as np
 import asyncio
 from pydantic import BaseModel
+from src.local.gatekeeper_core import GatekeeperCore
 
 #  logger
 logger = logging.getLogger("Server Setup")
@@ -50,6 +51,14 @@ def create_mcp_server(
         streamable_http_path="/mcp",
         log_level="INFO"
     )
+
+    # If a raw mmc instance is provided inside microscope_status, wrap it so tools run safely
+    try:
+        raw_mmc = getattr(microscope_status, "mmc", None)
+        if raw_mmc is not None and not isinstance(raw_mmc, GatekeeperCore):
+            microscope_status.mmc = GatekeeperCore(raw_mmc)
+    except Exception:
+        pass
 
     @mcp.tool(
         name="pymmcore_api_database",
@@ -278,7 +287,7 @@ def create_mcp_server(
         #code_string = code
         try:
             prepare_code_to_run = prepare_code(code)#code_string.strip("```")
-            execution_output = executor.run_code(prepare_code_to_run)
+            execution_output = executor.run_code_new(prepare_code_to_run)
             if "Error" in execution_output:
                 logger.error({
                     "tool": "execute_python_code",
