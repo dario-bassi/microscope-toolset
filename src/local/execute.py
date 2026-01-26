@@ -11,6 +11,7 @@ from src.virtual_microscope.initialize_virtual_microscope import initialize_virt
 
 from pymmcore_plus import CMMCorePlus
 import logging
+import ast
 
 #  logger
 logger = logging.getLogger("Execute")
@@ -92,6 +93,11 @@ class Execute:
         attempts = 0
         read_output = ""
 
+        # Check code before running it
+        if not self.is_safe_viewer(code):
+            return "viewer"
+        
+        
         while attempts < max_attempts:
             attempts += 1
             try:
@@ -141,3 +147,18 @@ class Execute:
                 return error_msg
 
         return f"Code execution failed after {max_attempts} attempts"
+    
+
+    def is_safe_viewer(self, code: str):
+        """
+        Checks if in the code there is viewer
+        """
+        tree = ast.parse(code)
+
+        for node in ast.walk(tree):
+            # Check if code contains 'viewer'
+            if isinstance(node, ast.Name) and node.id == 'viewer':
+                return False
+            
+        return True
+

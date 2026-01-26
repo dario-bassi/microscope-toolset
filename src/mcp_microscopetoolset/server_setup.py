@@ -293,6 +293,21 @@ def create_mcp_server(
                     "code": code,
                     "error": execution_output
                 }
+            elif 'viewer' in execution_output:
+                logger.info({
+                    "tool": "execute_python_code",
+                    "user_query": user_query,
+                    "strategy": strategy,
+                    "code": code,
+                    "error": "Agent tried to call 'viewer'. You are not allowed because you don't have access and you will crush the GUI."
+                })
+                return {
+                    "tool": "execute_python_code",
+                    "user_query": user_query,
+                    "strategy": strategy,
+                    "code": code,
+                    "error": "Agent tried to call 'viewer'. You are not allowed because you don't have access and you will crush the GUI."
+                }
             else:
                 logger.info({
                     "tool": "execute_python_code",
