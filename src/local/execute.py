@@ -111,42 +111,6 @@ class Execute:
                 importlib.import_module(mod)
 
     
-    def _find_mmc_calls(self, code: str):
-        """Return list of method names called on the 'mmc' name in the code string."""
-        tree = ast.parse(code)
-        calls = []
-        for node in ast.walk(tree):
-            if isinstance(node, ast.Call):
-                func = node.func
-                if isinstance(func, ast.Attribute) and isinstance(func.value, ast.Name) and func.value.id == 'mmc':
-                    calls.append(func.attr)
-
-        return calls
-    
-
-
-    def _classify_mmc_method(self, method_name: str) -> str:
-        """
-        Clasify pymmcore-plus methods
-        - 'allowed' : safe getters/queries
-         - 'buffer'  : idempotent setters / moves (buffer & replay with predicate)
-         - 'special' : acquisitions / non-idempotent (snap/sequence) -> cache / require explicit commit
-        Conservative default is 'buffer'.
-        """
-        if method_name.startswith(("get", "is")):
-            return "allowed"
-        special = {
-            "snapImage", "getImage", "startSequenceAcquisition", "stopSequenceAcquisition",
-            "snap", "getLastImage", "startContinuousSequenceAcquisition"
-        }
-        if method_name in special:
-            return "special"
-        
-        if method_name.startswith(("set", "load", "enable", "setPosition", "setXYPosition", "setZPosition")):
-            return "buffer"
-        
-        return "buffer"
-    
 
     def run_code_new(self, code: str):
         """Execute code after pre-importing deps. Use GatekeeperCore to buffer hardware calls and commit on succession"""
@@ -164,57 +128,57 @@ class Execute:
         except Exception as e:
             return f"Dependency parsing error: {e}"
         
-        # Static analysis of mmc usage (convervatives)
-        mmc_obj = self.namespace.get("mmc")
+        # Static analysis of mmc usage (convervatives because LLM Agent makes mistakes!)
+        mmc_obj = self.namespace["mmc"]
+        # Get current state before code run
         try:
-            mmc_calls = self._find_mmc_calls(code)
-            classifications = {m: self._classify_mmc_method(m) for m in mmc_calls}
-            # If there are special non-idempotent calls, we allow them but they will be cached at commit time.
-        except Exception:
-            classifications = {}
-
-        # Snapshot state if GatekeeperCore present
-        snapshot = None
-        if mmc_obj and hasattr(mmc_obj, "snapshot_state"):
-            try:
-                snapshot = mmc_obj.snapshot_state()
-            except Exception:
-                snapshot = None
+            snapshot = mmc_obj.snapshot_state()
+        except Exception as e:
+            logger.warning(f"Could not snapshot state: {e}")
+            snapshot = None
 
         # Execute user code once
         try:
             out_f = StringIO()
             err_f = StringIO()
+            # code execution
             with redirect_stdout(out_f), redirect_stderr(err_f):
                 exec(code, self.namespace)
-            
+            # reading output+errors
             stdout_text = out_f.getvalue().strip()
             stderr_text = err_f.getvalue().strip()
             read_output = stdout_text
 
             if stderr_text:
                 read_output = (read_output + "\nWarnings/Errors: " + stderr_text).strip()
-
-            # Commit buffered mmc calls if wrapper present
-            if mmc_obj and hasattr(mmc_obj, "commit"):
-                try:
-                    real = getattr(mmc_obj, "_mmc", None)
-                    mmc_obj.commit(real_mmc=real, check_snapshot=snapshot)
-                except Exception as e:
-                    return f"Commit failed: {e}"
-            logger.info("Code executed successfully")
+            # Commit buffer changes
+            try:
+                mmc_obj.commit(real_mmc=mmc_obj._mmc, check_snapshot=snapshot)
+                logger.info("Code executed successfully and committed.")
+            except Exception as e:
+                logger.error(f"Commit failed: {e}")
+                mmc_obj.clear_pending()
+                return f"Commit failed: {e}"
+                
+            
             return read_output if read_output else "Code executed successfully (no output)"
+        
         except ModuleNotFoundError as e:
+
             module_name = str(e).split("'")[1] if "'" in str(e) else str(e)
             logger.error(f"Module not found during execution (unexpected): {module_name}")
+            mmc_obj.clear_pending()
             return f"Module not found during execution: {module_name}"
+        
         except Exception as e:
+
             error_msg = f"Execution error: {type(e).__name__}: {str(e)}"
             logger.error(error_msg)
+            mmc_obj.clear_pending()
             return error_msg
 
 
-    def run_code(self, code: str):
+    def run_code_old(self, code: str):
         """Execute code with better error handling and output capture"""
         max_attempts = 3  # Prevent infinite loops
         attempts = 0
