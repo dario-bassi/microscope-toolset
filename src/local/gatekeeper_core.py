@@ -21,6 +21,34 @@ class GatekeeperCore:
         "startContinuousSequenceAcquisition"
     }
 
+    OTHER_FUNCTIONS = {
+        "canSequenceEvents", "channelGroup_pattern", "defineConfig","definePixelSizeConfig",
+        "deleteConfig", "deleteConfigGroup", "deletePixelSizeConfig", "describe", "detectDevice",
+        "events", "fixImage", "instance", "iterConfigGroups", "iterDeviceAdapters", "iterDevices",
+        "iterProperties", "loadDevice", "mda", "objective_device_pattern", "popNextImage", "popNextImageAndMD",
+        "popNextTaggedImage", "registerCallback", "register_mda_engine", "run_mda", "saveSystemConfiguration",
+        "setAutoFocusOffset", "setAutoShutter", "setChannelGroup", "setContext", "setDeviceAdapterSearchPaths",
+        "setFocusDevice", "setPixelSizeUm", "setROI", "setRelativeXYZPosition", "setShutterOpen","setState",
+        "setStateLabel","state","systemConfigurationFile", "unloadAllDevices", "addGalvoPolygonVertex",
+        "clearCircularBuffer", "clearROI", "debugLogEnabled", "defineConfigGroup", "defineStateLabel", 
+        "deleteGalvoPolygons", "deviceBusy", "deviceTypeBusy", "displaySLMImage", "enableContinuousFocus", 
+        "enableDebugLog", "enableFeature", "enableStderrLog", "fullFocus", "hasProperty", "hasPropertyLimits", "home",
+        "incrementalFocus", "initializeAllDevices", "initializeCircularBuffer", "initializeDevice", "invertPumpDirection",
+        "loadExposureSequence", "loadGalvoPolygons", "loadPropertySequence", "loadSLMSequence", "loadStageSequence", 
+        "loadSystemState", "loadXYStageSequence", "noop", "pointGalvoAndFire", "prepareSequenceAcquisition", "pressurePumpCalibrate",
+        "pressurePumpRequiresCalibration", "pressurePumpStop", "pumpDispenseDurationSeconds", "pumpDispenseVolumeUl", "pumpStart",
+        "readFromSerialPort", "renameConfig", "renameConfigGroup", "renamePixelSizeConfig", "reset", "runGalvoPolygons", "runGalvoSequence", "saveSystemState",
+        "setAutoFocusDevice", "setCircularBufferMemoryFootprint", "setDeviceAdapterSearchPaths", "setDeviceDelayMs", "setFocusDirection", "setGalvoDevice",
+        "setGalvoIlluminationState", "setGalvoPolygonRepetitions", "setGalvoPosition", "setGalvoSpotInterval", "setImageProcessorDevice", "setMultiROI",
+        "setParentLabel", "setPixelSizeAffine", "setPixelSizeConfig", "setPixelSizeOptimalZUm", "setPixelSizedxdz", "setPixelSizedydz", "setPumpFlowrate",
+        "setPumpMaxVolume", "setPumpPressureKPa", "setPumpVolume", "setSLMDevice", "setSLMExposure", "setSerialPortCommand", "setSerialProperties", 
+        "setShutterDevice", "setStageLinearSequence", "setSystemState", "setTimeoutMs", "sleep", "startExposureSequence", "startPropertySequence",
+        "startSLMSequence", "startStageSequence", "startXYStageSequence", "stderrLogEnabled", "stop", "stopExposureSequence", "stopPropertySequence",
+        "stopSLMSequence", "stopSecondaryLogFile", "stopStageSequence", "stopXYStageSequence", "supportsDeviceDetection", "systemBusy", "unloadDevice",
+        "unloadLibrary", "updateCoreProperties", "updateSystemStateCache", "usesDeviceDelay", "volumetricPumpHome", "volumetricPumpRequiresHoming",
+        "volumetricPumpStop", "waitForConfig", "waitForDevice", "waitForDeviceType", "waitForSystem", "writeToSerialPort"
+    }
+
     def __init__(self, mmc: CMMCorePlus | UniMMCore) -> None:
         self._mmc = mmc
         # each item: (function_name, args, kwargs, predicate_fn_or_None, cmd_hash)
@@ -40,12 +68,15 @@ class GatekeeperCore:
         # Allowed functions
         if callable(attr):
             # For example: mmc.getConfigData()
-            if name.startswith(('get', 'is')): # add more functions
+            if name.startswith(('get', 'is')) or name in self.OTHER_FUNCTIONS: # add more functions
                 return attr
             
-
-            # Any other function add into the pending changing list
-            return self._create_intercept(name)
+            if name in self.NON_IDEMPOTENT_OPS:
+                return self._create_intercept(name)
+            
+            else:
+                # Any other function add into the pending changing list
+                return self._create_intercept(name)
         
         return attr
     
@@ -156,26 +187,6 @@ class GatekeeperCore:
                     return True
                 
             return pred_xy
-
-
-        # Example: setExposure -> getExposure
-        if function_name.startswith("set") and len(function_name) > 3:
-            get_name = "get" + function_name[3:]
-            if hasattr(self._mmc, get_name):
-                desired = args[0] if args else kwargs.get("value")
-
-                def pred():
-                    try:
-                        current = getattr(self._mmc, get_name)()
-                        # numeric tolerance for floats
-                        try:
-                            return float(current) != float(desired)
-                        except Exception:
-                            return current != desired
-                    except Exception:
-                        return True
-                    
-                return pred
         
         # default: unknown -> always apply
         return None
@@ -191,7 +202,7 @@ class GatekeeperCore:
             self.pending_changes.append((function_name, args, kwargs, pred, cmd_hash, is_non_idempotent))
             print(f"Shadow: Intercepted {function_name}{args}")
 
-            # If we have a cahed result for this command (non-idempotent executed earlier), return it
+            # If we have a cached result for this command (non-idempotent executed earlier), return it
             return self._result_cache.get(cmd_hash)
         
         return wrapper
