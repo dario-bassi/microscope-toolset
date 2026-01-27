@@ -1,4 +1,4 @@
-from typing import Any, Annotated
+from typing import Any, Annotated, Literal
 from mcp.server.fastmcp import FastMCP, Context
 from pydantic import Field, BeforeValidator, PlainSerializer, WithJsonSchema
 from src.local.prepare_code import prepare_code
@@ -278,8 +278,9 @@ def create_mcp_server(
                 - **Print each result**, and if a value is None, print a human-readable message.
                 - Include **minimal but meaningful comments** when needed.
                 - We are using a GUI called napari-micromanager that displays images captured by mmc automatically.
-            """)
-    ) -> dict[str, Any]:
+            """),
+            execution_mode: Annotated[Literal["buffered", "live"], Field(description="Execution mode: 'buffered' (batch operations, safe from redundant commands) or 'live' (real-time I/O loops, tracking)") ]= "buffered"
+            ) -> dict[str, Any]:
         """
         Prepares and executes Python code using the Execute agent.
         Returns a dictionary with 'output' (the execution result) and 'error' (if any).

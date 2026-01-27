@@ -125,4 +125,75 @@ The microscope interact with the Main Agent thanks to the pymmcore-plus API that
 **Best Practice**: For experiments requiring precise timing or repeated image captures, always use the microscope's native sequence acquisition features rather than Python loops with delays.
 
 
+### Execution Modes
+
+The `execute_code` tool has two execution modes. **You must specify which mode** based on the task:
+
+#### **Mode 1: `execution_mode="buffered"` (Default - Safe)**
+
+Use for batch/analytical tasks where operations can be grouped together.
+
+**Characteristics:**
+- All hardware commands are buffered until execution completes
+- Redundant commands are automatically deduplicated (safe from mistakes)
+- Best for image analysis, segmentation, measurements
+- Slightly slower due to buffering overhead
+
+**When to use:**
+- Image processing and analysis
+- Measurements and statistics
+- Any task that reads data, processes it, returns results
+
+**Example:**
+```python
+execute_code("""
+img = mmc.snapImage()
+processed = apply_filter(img)
+result = measure(processed)
+print(result)
+""", execution_mode="buffered")
+```
+
+#### **Mode 2: `execution_mode="live"` (Real-time)**
+
+Use for interactive/looping tasks requiring immediate hardware feedback.
+
+**Characteristics:**
+- Each hardware command executes immediately (no buffering)
+- Enables real-time decision making based on sensor feedback
+- Required for tracking loops and sequential I/O operations
+- Full control flow: snapImage() → getImage() → process → move
+
+**When to use:**
+- Cell tracking and following
+- Adaptive focusing loops
+- Any task with: snapImage() → analyze → move stage → repeat
+
+**Example:**
+```python
+execute_code("""
+for i in range(300):
+    mmc.snapImage()
+    img = mmc.getImage()
+    
+    cell_pos = detect_cell(img)
+    if cell_pos:
+        offset = calculate_offset(cell_pos)
+        mmc.setXYPosition(new_x, new_y)
+""", execution_mode="live")
+```
+
+#### **How to Choose:**
+
+| Task | Mode |
+|------|------|
+| Snap image → analyze → return results | `buffered` |
+| Loop: snap → detect → move → repeat | `live` |
+| Batch processing multiple images | `buffered` |
+| Real-time interactive control | `live` |
+| Simple sequences of operations | `buffered` |
+| Any loop with I/O dependency | `live` |
+
+**Default:** If you don't specify, mode defaults to `buffered` (safest).
+
 

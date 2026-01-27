@@ -112,8 +112,12 @@ class Execute:
 
     
 
-    def run_code_new(self, code: str):
+    def run_code_new(self, code: str, execution_mode: str = "buffered"):
         """Execute code after pre-importing deps. Use GatekeeperCore to buffer hardware calls and commit on succession"""
+
+        # validate mode
+        if execution_mode not in ["buffered", "live"]:
+            return f"Invalid execution mode: {execution_mode}. Must be 'buffered' or 'live'. "
 
         # Check code before running it
         if not self.is_safe_viewer(code):
@@ -127,6 +131,18 @@ class Execute:
         
         except Exception as e:
             return f"Dependency parsing error: {e}"
+        
+        # Execute code in specif mode
+        if execution_mode == "live":
+            logger.info(f"Executing code in live mode")
+            return self._run_code_live(code)
+        else:
+            logger.info(f"Exeecuting code in buffer mode")
+            return self._run_code_buffered(code)
+        
+
+    def _run_code_buffered(self, code: str):
+        """Execute code after pre-importing deps. Use GatekeeperCore to buffer hardware calls and commit on succession"""
         
         # Static analysis of mmc usage (convervatives because LLM Agent makes mistakes!)
         mmc_obj = self.namespace["mmc"]
@@ -176,6 +192,47 @@ class Execute:
             logger.error(error_msg)
             mmc_obj.clear_pending()
             return error_msg
+        
+    def _run_code_live(self, code: str):
+        """Execute code after pre-importing deps. Use GatekeeperCore to buffer hardware calls and commit on succession"""
+
+        # Static analysis of mmc usage (convervatives because LLM Agent makes mistakes!)
+        shadow_mmc_obj = self.namespace["mmc"]
+
+        self.namespace["mmc"] = shadow_mmc_obj._mmc
+
+        # Execute user code once
+        try:
+            out_f = StringIO()
+            err_f = StringIO()
+            # code execution
+            with redirect_stdout(out_f), redirect_stderr(err_f):
+                exec(code, self.namespace)
+            # reading output+errors
+            stdout_text = out_f.getvalue().strip()
+            stderr_text = err_f.getvalue().strip()
+            read_output = stdout_text
+
+            if stderr_text:
+                read_output = (read_output + "\nWarnings/Errors: " + stderr_text).strip()
+
+            logger.info("Code executed successfully.")
+            return read_output if read_output else "Code executed successfully (no output)"
+        
+        except ModuleNotFoundError as e:
+
+            module_name = str(e).split("'")[1] if "'" in str(e) else str(e)
+            logger.error(f"Module not found during execution (unexpected): {module_name}")
+            return f"Module not found during execution: {module_name}"
+        
+        except Exception as e:
+
+            error_msg = f"Execution error: {type(e).__name__}: {str(e)}"
+            logger.error(error_msg)
+            return error_msg
+        
+        finally:
+            self.namespace["mmc"] = shadow_mmc_obj
 
 
     def run_code_old(self, code: str):
