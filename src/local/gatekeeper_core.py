@@ -80,8 +80,8 @@ class GatekeeperCore:
         
         return attr
     
-    def _cmd_hash(self, function_name: str, args, kwargs) -> str:
-        payload = {"fn": function_name, "args": args, "kwargs": kwargs}
+    def _cmd_hash(self, function_name: str, args, kwargs, seq_num: int = 0) -> str:
+        payload = {"fn": function_name, "args": args, "kwargs": kwargs, "seq": seq_num}
         raw = json.dumps(payload, default=str, sort_keys=True)
         return hashlib.sha256(raw.encode()).hexdigest()
     
@@ -194,7 +194,9 @@ class GatekeeperCore:
 
     def _create_intercept(self, function_name):
         def wrapper(*args, **kwargs):
-            cmd_hash = self._cmd_hash(function_name, args, kwargs)
+            # Include sequence number to differentiate repated identical calls
+            seq_num = len(self.pending_changes)
+            cmd_hash = self._cmd_hash(function_name, args, kwargs, seq_num)
             pred = self._default_predicate(function_name, args, kwargs)
             is_non_idempotent = function_name in self.NON_IDEMPOTENT_OPS
             # store predicate so commit will call function only if predicate() is True

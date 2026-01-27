@@ -58,7 +58,7 @@ The microscope interact with the Main Agent thanks to the pymmcore-plus API that
 - Before running any image analysis, always check what is currently contained in the different napari layers.
 - Never use fake synthetic data to apply some image analysis, but INSTEAD always access the image data from within a python script from the pymmcore-plus API.
 
-### Image Capture Efficiency
+#### Image Capture Efficiency
 
 - **Capture images only once**: After the first successful snapImage() call, store the image data and reuse it for subsequent operations in the same request.
 - **When fixing errors in Python scripts**: If a script fails (e.g., file format issues, visualization errors, import problems), identify and fix ONLY the problematic code section WITHOUT recapturing the image using snapImage().
@@ -72,6 +72,57 @@ The microscope interact with the Main Agent thanks to the pymmcore-plus API that
   3. **Never recapture** unless explicitly requested by user or necessary for acquiring new experimental data
 - **Critical reason**: Live biological samples (cells, tissues, organisms) move and change over time. Multiple snapImage() calls in sequence capture different timepoints and compromise experimental data integrity. Each snapshot represents a different state of the sample.
 - **Best practice**: When an error occurs, always ask yourself: "Does this require a new image capture, or can I fix it with the existing data?" - almost always the answer is the latter.
+
+#### Time Semantics and Command Buffering
+
+**Important Understanding**: The `execute_python_code` tool uses a two-phase execution model with command buffering:
+
+**Phase 1 - Code Execution**: 
+- Your Python code runs immediately and in order
+- `time.sleep()` delays execute during this phase
+- Hardware commands like `setExposure()`, `setXYPosition()`, `snapImage()` are **buffered** (not executed yet)
+- Read/query commands like `getExposure()`, `deviceBusy()` execute immediately on real hardware
+
+**Phase 2 - Commit**:
+- After your code finishes, all buffered hardware commands execute sequentially
+- This happens AFTER all `time.sleep()` calls have already completed
+- Timing between buffered commands is NOT preserved
+
+**Critical Implications**:
+
+1. **Loops with delays** - Do NOT use for time-critical image capture:
+   ```python
+   # ❌ WRONG - All 3 snapImage() calls execute at once (no 2-second spacing)
+   for i in range(3):
+       mmc.snapImage()
+       time.sleep(2)
+   ```
+
+2. **Time-critical acquisition** - Use sequence acquisition instead:
+   ```python
+   # ✅ CORRECT - Images captured with proper 2-second intervals
+   mmc.startSequenceAcquisition(num_images=3, interval_ms=2000)
+   time.sleep(8)  # Wait for acquisition to complete
+   img1 = mmc.popNextImageAndMD()
+   img2 = mmc.popNextImageAndMD()
+   img3 = mmc.popNextImageAndMD()
+   ```
+
+3. **Repeated identical commands** - Each loop iteration creates a separate buffered command:
+   ```python
+   # Each snapImage() is buffered separately and will execute
+   for i in range(3):
+       mmc.snapImage()  # Creates 3 separate buffered commands
+   ```
+
+4. **State changes between commands** - Predicates optimize away redundant operations:
+   ```python
+   # If exposure is already 100ms, this will be skipped (optimization)
+   current = mmc.getExposure()  # Query executes now
+   mmc.setExposure(100.0)        # Buffered, predicate may skip it
+   ```
+
+**Best Practice**: For experiments requiring precise timing or repeated image captures, always use the microscope's native sequence acquisition features rather than Python loops with delays.
 
 
 
