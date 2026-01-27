@@ -594,7 +594,8 @@ def create_mcp_server(
         description="Load and display an image file in the napari viewer as a new layer. Provide the file path (supports common image formats), optional layer name, and visualization parameters like colormap (e.g., 'viridis', 'magma'), blending mode ('additive', 'translucent'), and channel_axis for multi-channel images. Use this to add microscopy images, fluorescence channels, or processed image data to the viewer for analysis and visualization."
     )
     def viewer_add_image(
-        path: str = Field(..., description="File path to the image file (TIFF, PNG, JPEG, etc.) to load into the viewer."),
+        data: NDArray | list[NDArray] | None = Field(None, description="An array or list of array with the image data to add to napari."),
+        path: str | None = Field(..., description="File path to the image file (TIFF, PNG, JPEG, etc.) to load into the viewer."),
         name: str | None = Field(None, description="Optional name for the image layer. If not provided, the filename will be used."),
         colormap: str | None = Field(None, description="Colormap to apply to the image (e.g., 'gray', 'viridis', 'magma', 'red', 'green', 'blue'). Default is 'gray' for grayscale images."),
         blending: str | None = Field(None, description="Blending mode for layer compositing: 'translucent' (default), 'additive', or 'opaque'."),
@@ -604,9 +605,9 @@ def create_mcp_server(
         Add an image layer from a file path
         """
         if viewer_proxy is not None:
-            return viewer_proxy.call_on_main_thread('add_image', path=path, name=name, colormap=colormap, blending=blending, channel_axis=channel_axis)
+            return viewer_proxy.call_on_main_thread('add_image', img_data=data, path=path, name=name, colormap=colormap, blending=blending, channel_axis=channel_axis)
         else:
-            return viewer.add_image(path=path, name=name, colormap=colormap, blending=blending, channel_axis=channel_axis)
+            return viewer.add_image(img_data=data,path=path, name=name, colormap=colormap, blending=blending, channel_axis=channel_axis)
     
     @mcp.tool(
         name="viewer_add_labels",

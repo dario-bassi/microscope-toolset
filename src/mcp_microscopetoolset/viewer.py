@@ -172,7 +172,8 @@ class NapariViewerMC:
     
     def add_image(
             self,
-            path: str,
+            path: str | None = None,
+            img_data: np.ndarray | list[np.ndarray] | None = None,
             name: str | None = None,
             colormap: str | None = None,
             blending: str | None = None,
@@ -183,8 +184,10 @@ class NapariViewerMC:
         """
         try:
             
-
-            img_data = iio.imread(path)
+            if path is not None:
+                img_data = iio.imread(path)
+            else:
+                img_data = img_data
 
             # add image
             layer = self._viewer.add_image(
