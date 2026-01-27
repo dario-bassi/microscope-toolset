@@ -288,7 +288,7 @@ def create_mcp_server(
         #code_string = code
         try:
             prepare_code_to_run = prepare_code(code)#code_string.strip("```")
-            execution_output = executor.run_code_new(prepare_code_to_run)
+            execution_output = executor.run_code_new(prepare_code_to_run, execution_mode)
             if "Error" in execution_output:
                 logger.error({
                     "tool": "execute_python_code",
