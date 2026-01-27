@@ -538,3 +538,43 @@ class NapariViewerMC:
             "status": "success",
             "message": f"The grid view was set to {enabled}"
         }
+    
+
+    def add_tracks(self, 
+                   track_data: np.ndarray,
+                   features: dict[str, Any] | None = None, 
+                   tail_width: float | None = None, 
+                   tail_length: float | None = None):
+        """
+        This function add a tracks layer to layer list.
+
+        Parameters:
+            track_data: NxD+1 NumPy Array or list containig the coordinates of N vertices with a 
+                track ID and coordinats in D dimensions. The ordering of these dimensions is the same 
+                as the ordering of the dimensions for image layers. This array is always accessible through the 
+                layer.data property and will grow or shrink as new tracks are either added or deleted.
+                The Tracks layer assumes the first column is the track_id, the second column is the time axis, 
+                and columns 3-5 are Z, Y, and X, respectively. Other feature can be added in other coloumns. 
+                Each row is one vertex in a track. All vertices with the same track_id are joined into a single track.
+
+            features: Features table where each row corresponds to a point and each column is a feature.
+
+            tail_width: Float value representing the width of the track tails in pixels.
+
+            tail_length: Float value representing the length of the positive (backward in time) tails in units of time.
+
+        """
+
+        try:
+            self._viewer.add_tracks(data=track_data, features=features, tail_width=tail_width, tail_length=tail_length)
+
+            return {
+                "status": "success",
+                "message": "The tracks data was susccessfully added."
+            }
+
+        except Exception as e:
+            return {
+                "status": "error",
+                "message": f"Failed to add tracks: {e}"
+            }

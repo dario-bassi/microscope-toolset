@@ -787,6 +787,30 @@ def create_mcp_server(
             return viewer_proxy.call_on_main_thread('set_grid', enabled=enabled)
         else:
             return viewer.set_grid(enabled=enabled)
+        
+
+    @mcp.tool(
+            name="viewer_add_tracks",
+            description=""
+    )
+    def viewer_add_tracks(
+        track_data: NDArray = Field(description="""NxD+1 NumPy Array or list containig the coordinates of N vertices with a 
+                track ID and coordinats in D dimensions. The ordering of these dimensions is the same 
+                as the ordering of the dimensions for image layers. This array is always accessible through the 
+                layer.data property and will grow or shrink as new tracks are either added or deleted.
+                The Tracks layer assumes the first column is the track_id, the second column is the time axis, 
+                and columns 3-5 are Z, Y, and X, respectively. Other feature can be added in other coloumns. 
+                Each row is one vertex in a track. All vertices with the same track_id are joined into a single track."""),
+        features: dict[str, Any] | None = Field(None, description="Features table where each row corresponds to a point and each column is a feature."),
+        tail_width: float | None = Field(None, description="Float value representing the width of the track tails in pixels."), 
+        tail_length: float | None = Field(None, description="Float value representing the length of the positive (backward in time) tails in units of time.") 
+    ) -> dict[str, Any]:
+        """It add a Track layer to the layer List."""
+
+        if viewer_proxy is not None:
+            return viewer_proxy.call_on_main_thread('add_tracks', track_data=track_data, features=features, tail_width=tail_width, tail_length= tail_length)
+        else:
+            return viewer.add_tracks(data=track_data, features=features, tail_width=tail_width, tail_length=tail_length)
     
     # TODO: add timelapse_screenshot later
 
