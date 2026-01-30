@@ -8,6 +8,7 @@ from src.virtual_microscope.renderer import Renderer
 from src.virtual_microscope.spatial_grid import SpatialGrid
 from src.virtual_microscope.cell_base import CellBase, update_all_cells_parallel, check_collision
 from src.virtual_microscope.cell_normal import NormalCell
+from src.virtual_microscope.cell_cycle import CellCycleNormal
 import cv2
 
 
@@ -54,7 +55,7 @@ class MicroscopeSimOptmized:
         self.current_objectiv: int = 10 
 
 
-    def _create_cells(self) -> List[Union[OptogeneticCell, DrugResponseCell, NormalCell]]:
+    def _create_cells(self) -> List[Union[OptogeneticCell, DrugResponseCell, NormalCell, CellCycleNormal]]:
         """Create cells of specific type."""
         cells = []
         if self.cell_mix is None:
@@ -82,13 +83,15 @@ class MicroscopeSimOptmized:
                                 self.width, self.height, self.base_radius,
                                 vertices=24, seed=seed
                             )
+                elif self.cell_type == "cycle":
+                    cell = CellCycleNormal(self.width, self.height, self.base_radius, vertices=24, seed=seed)
                 else:
                     raise ValueError(f"Unknow celly type: {self.cell_type}")
                 
                 cells.append(cell)
         else:
             # cell_mix = {"normal": 60, "optogenetic": 40, "drug": 20}
-            total = sum(self.cell_mix.values())
+            #total = sum(self.cell_mix.values())
             for cell_type, count in self.cell_mix.items():
                 for _ in range(count):
                     seed = self._rng.randint(0, 10000)
@@ -115,7 +118,7 @@ class MicroscopeSimOptmized:
             
             # Shuffle cells for random positioning
             self._rng.shuffle(cells)
-            self.nb_cells = len(cells)
+            #self.nb_cells = len(cells)
 
         return cells
     
@@ -182,8 +185,8 @@ class MicroscopeSimOptmized:
                         # Additional collision response for normal cells
                         if isinstance(cell, NormalCell):
                             cell.respond_to_collision(self._cells[j])
-                        if isinstance(self._cells[j], NormalCell):
-                            self._cells[j].respond_to_collision(cell)
+                        #if isinstance(self._cells[j], NormalCell):
+                        #    self._cells[j].respond_to_collision(cell)
                     
                     checked_pairs.add((i, j))
 

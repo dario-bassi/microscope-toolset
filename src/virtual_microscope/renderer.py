@@ -3,6 +3,7 @@ import numpy as np
 import cv2
 from typing import List, Tuple, Optional
 from .cell_base import CellBase
+from .cell_cycle import CellCycleNormal
 
 
 class Renderer:
@@ -27,6 +28,8 @@ class Renderer:
 
         # render image according to the objective used
         self.crop_dim = 512 # by default 10x crop
+        # create master shape for the chromosome
+        self.master_shape = np.array([[-5,-20], [0,-5], [5,-20], [5,20], [0,5], [-5,20]], dtype=np.float32)
 
     
     def render_cells(self, cells: List[CellBase], mode: int = 0,
@@ -41,6 +44,30 @@ class Renderer:
 
         for cell in visible_cells:
             self._draw_cell(img, cell, mode, camera_offset, focal_plane)
+
+        # apply microscope filters
+        img = self._apply_filters(img, mode)
+
+        # crop and rescale base on the objective used
+        img = self._crop_and_rescale(img)
+
+        return img
+    
+    def render_cell_cycle(self, cells: List[CellBase], mode: int = 0,
+                          camera_offset: Tuple[float, float] = (0,0),
+                          focal_plane: float = 0.0):
+        """Render cell cycle to image array using OpenCV"""
+        # Create base image (white)
+        img = np.full((self.height, self.width, 3), 0, dtype=np.uint8)
+
+        # Get visibile cells
+        visible_cells = self._get_visible_cells(cells, camera_offset)
+
+        for cell in visible_cells:
+            self._draw_cell(img, cell, mode, camera_offset, focal_plane)
+            # draw uncondensed chromatin
+            self._draw_smooth_chromatin(img, cell.chromatin_pts, num_strands=46)
+            # add here other phases of mitosis
 
         # apply microscope filters
         img = self._apply_filters(img, mode)
@@ -318,5 +345,48 @@ class Renderer:
         rescaled_img = cv2.resize(crop_img, (self.width, self.height), interpolation=cv2.INTER_CUBIC)
 
         return rescaled_img
+    
+
+    def _draw_smooth_chromatin(self, img: np.ndarray, control_points: list[tuple[float, float]], num_strands: int = 46):
+        """Draw uncondensed chromatin"""
+        for _ in range(num_strands):
+            # 2. Generate smooth points between them (Quadratic Bezier)
+            # Formula: B(t) = (1-t)^2*P0 + 2(1-t)t*P1 + t^2*P2
+            curve_pts = []
+            for t in np.linspace(0, 1, 30): # 30 points per strand for smoothness
+                res = (1-t)**2 * np.array(control_points[0]) + \
+                    2*(1-t)*t * np.array(control_points[1]) + \
+                    t**2 * np.array(control_points[2])
+                curve_pts.append(res.astype(np.int32))
+
+            # 3. Draw the strand
+            curve_pts = np.array(curve_pts).reshape((-1, 1, 2))
+            cv2.polylines(img, [curve_pts], isClosed=False, 
+                        color=(180, 100, 255), thickness=1, 
+                        lineType=cv2.LINE_AA) # LINE_AA is crucial for smoothness
+            
 
     
+    def _get_transformed_point(self,center, angle: float, scale: float):
+        """Draw chondensed chromatin, forming a X shape."""
+        # Create trasnformation matrix (Rotation + scale + translation)
+        M = cv2.getRotationMatrix2D((0,0), angle, scale)
+
+        # Apply the rotation to the chromosome
+        rotated_pts = cv2.transform(np.array([self.master_shape]), M)[0]
+
+        # Shit to the actual position in the cell
+        final_pts = (rotated_pts + center).astype(np.int32)
+
+        return final_pts
+        
+
+    def _draw_condensed_chromatin(self, img: np.ndarray, cell: CellCycleNormal, num_chromosome: int = 46):
+        """Draw chondensed chromatin, forming a X shape."""
+        for _ in range(num_chromosome):
+            global_pos = cell.center
+
+            # Apply transformation
+            shifted_pts = self._get_transformed_point(global_pos, 45, scale=1.0)
+
+            cv2.fillPoly(img, [shifted_pts], (255, 150, 255))
