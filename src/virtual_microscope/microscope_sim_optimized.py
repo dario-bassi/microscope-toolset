@@ -1,7 +1,7 @@
 # Optimized microscope simulation based on the nwe opto-loop implmentation
 import numpy as np
 import time
-from typing import Optional, List, Union, Literal
+from typing import Optional, List, Union, Literal, Sequence
 from src.virtual_microscope.cell_optogenetic import OptogeneticCell
 from src.virtual_microscope.cell_drug import DrugResponseCell
 from src.virtual_microscope.renderer import Renderer
@@ -9,6 +9,7 @@ from src.virtual_microscope.spatial_grid import SpatialGrid
 from src.virtual_microscope.cell_base import CellBase, update_all_cells_parallel, check_collision
 from src.virtual_microscope.cell_normal import NormalCell
 from src.virtual_microscope.cell_cycle import CellCycleNormal
+from src.virtual_microscope.state_manager import CellCycleManager
 import cv2
 
 
@@ -50,6 +51,11 @@ class MicroscopeSimOptmized:
         # Create cell objects
         self._cells = self._create_cells()
         self._init_numpy_arrays()
+
+        # Initialize cell cycle manager if using cell cycle cells
+        self.cycle_manager: Optional[CellCycleManager] = None
+        if self.cell_type == "cycle":
+            self.cycle_manager = CellCycleManager(max_divisions=10, track_stats=True)
 
         # Add objective property
         self.current_objectiv: int = 10 
@@ -146,6 +152,30 @@ class MicroscopeSimOptmized:
             cell.vel = self.velocities[i].copy()
             cell.r = self.radii[i].copy()
     
+    def _resync_arrays_after_division(self):
+        """Rebuild numpy arrays when cell count changes due to divisions/apoptosis."""
+        n_cells = len(self._cells)
+        
+        # Only rebuild if size changed
+        if n_cells != len(self.centers):
+            # Create new arrays with new size
+            self.centers = np.zeros((n_cells, 2), dtype=np.float64)
+            self.velocities = np.zeros((n_cells, 2), dtype=np.float64)
+            self.radii = np.zeros((n_cells, 24), dtype=np.float64)
+            self.base_radii = np.zeros(n_cells, dtype=np.float64)
+            self.areas = np.zeros(n_cells, dtype=np.float64)
+            
+            # Copy data from all cells
+            for i, cell in enumerate(self._cells):
+                self.centers[i] = cell.center
+                self.velocities[i] = cell.vel
+                self.radii[i] = cell.r
+                self.base_radii[i] = cell.base_r
+                self.areas[i] = cell.area0
+            
+            # Update tracking variable
+            self.nb_cells = n_cells
+    
 
     def update(self, dt: float = 0.016) -> None:
         """Update simulation using BOTH fast physics AND cell objects."""
@@ -165,6 +195,12 @@ class MicroscopeSimOptmized:
 
         # Handle collisions
         self._handle_collisions_with_spatial_grid()
+        
+        # Update cell cycle dynamics (divisions, apoptosis)
+        if self.cycle_manager is not None:
+            self.cycle_manager.update(self._cells, self)
+            # Resync numpy arrays after cell list changes
+            self._resync_arrays_after_division()
 
     def _handle_collisions_with_spatial_grid(self) -> None:
         """Use SpatialGrid for collision detection."""
@@ -248,11 +284,17 @@ class MicroscopeSimOptmized:
         for cell in self._cells:
             self._update_cell_fluorescence(cell, self.mode)
 
-        # Render frame
-        img = self.renderer.render_cells(
-            self._cells, self.mode, 
-            tuple(self.camera_offset), 
-            self.focal_plane)
+        # Render frame based on cell type
+        if self.cell_type == "cycle":
+            img = self.renderer.render_cell_cycle(
+                self._cells, self.mode,  # type: ignore
+                tuple(self.camera_offset), 
+                self.focal_plane)
+        else:
+            img = self.renderer.render_cells(
+                self._cells, self.mode, 
+                tuple(self.camera_offset), 
+                self.focal_plane)
 
         # Apply intensity and exposure
         img = (img.astype(np.float32) * intensity * exposure).clip(0,255).astype(np.uint8)
@@ -325,7 +367,7 @@ class MicroscopeSimOptmized:
             cell.membrane_fluorescence[:] = 1.0
 
 
-    def get_visible_cells(self) -> List[CellBase]:
+    def get_visible_cells(self) -> Sequence[CellBase | CellCycleNormal]:
         """Get cells visible in current viewport."""
         return self.renderer._get_visible_cells(self._cells, tuple(self.camera_offset))
     

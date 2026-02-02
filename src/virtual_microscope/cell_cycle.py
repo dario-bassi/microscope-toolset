@@ -6,9 +6,10 @@ import random
 class CellCycleNormal(NormalCell):
     """Cell that loops through a cell cycle indefinitely"""
 
-    def __init__(self, *args, **kwargs):
+    def __init__(self, *args, initial_state: Optional[Literal['G1', 'S', 'G2', 'M']] = None,
+                 initial_time: Optional[int] = None, initial_divisions: Optional[int] = None,
+                 copy_chromatin_from: Optional['CellCycleNormal'] = None, **kwargs):
         super().__init__(*args, **kwargs)
-
 
         # This cell has no fluorescence
         self.nucleus_fluorescence = 0.0
@@ -17,21 +18,38 @@ class CellCycleNormal(NormalCell):
         # G1, S, G2 -> interphase
         # M -> prophase, metaphase, anaphase, telophase
         # M -> cytokinesis
-        self.cell_cycle_state: Literal['M', 'G1', 'G2', 'S'] = self._initial_cycle_state()
+        if initial_state is not None:
+            self.cell_cycle_state: Literal['M', 'G1', 'G2', 'S'] = initial_state  # type: ignore
+        else:
+            self.cell_cycle_state: Literal['M', 'G1', 'G2', 'S'] = self._initial_cycle_state()
+            
         self.cell_mitosis_state: Literal['Cytokinesis', 'Interphase', 'Prophase', 'Metaphase', 'Anaphase', 'Telophase'] = self._initial_mitosis_state()
-        self.n_div: int = self._initial_number_division()
+        
+        if initial_divisions is not None:
+            self.n_div: int = initial_divisions
+        else:
+            self.n_div: int = self._initial_number_division()
+            
         self.is_dying: bool = self._initialization_apoptosis()
         self.max_nb_div: int = 10
         self.time_tot_cycle: int = 660 # in seconds
         self.time_table_cycle: dict[str, int] = {'G1': 240, 'S': 360, 'G2': 480} # in seconds - if its too long halb this time.
         self.time_table_mitosis: dict[str, int] = {'P': 516, 'Met': 552, 'A': 588, 'T': 624, 'C': 660}
         # add random start time point for each cell
-        self.current_time_life: int = self._initial_random_time_life()
+        if initial_time is not None:
+            self.current_time_life: int = initial_time
+        else:
+            self.current_time_life: int = self._initial_random_time_life()
         # chromatin pts - store as offsets from center
-        self.chromatin_offset = self._initial_chromatin_offsets()
+        if copy_chromatin_from is not None:
+            self.chromatin_offset = copy_chromatin_from.chromatin_offset.copy()
+        else:
+            self.chromatin_offset = self._initial_chromatin_offsets()
         self.chromatin_pts = self._update_chromatin_pts()
         # Physics state for telophase
         self.base_r_at_telophase = None
+        # Death tracking
+        self.death_timer: float = 0.0
 
 
     def _initial_chromatin_offsets(self) -> list[tuple[float, float]]:
@@ -158,6 +176,11 @@ class CellCycleNormal(NormalCell):
     def update_behavior(self, dt: float) -> None:
         """Update cell cycle state and chromatin positions."""
         super().update_behavior(dt)
+        
+        # Update death timer if dying
+        if self.is_dying:
+            self.death_timer += dt
+        
         # Update state cycle (G1 -> S -> G2 -> M)
         self._change_state()
         self.current_time_life += int(dt)
@@ -182,5 +205,28 @@ class CellCycleNormal(NormalCell):
                 growth_factor = 1.0 + 0.41 * progress
                 self.base_r = self.base_r_at_telophase * growth_factor
 
-    # add function if needed
+    def copy_with_reset(self) -> 'CellCycleNormal':
+        """Create a sister cell with reset cycle state but copied chromatin.
+        
+        Used during cell division to create a daughter cell that:
+        - Starts in G1 phase (timer=0)
+        - Has 0 divisions completed
+        - Inherits mother's chromatin pattern
+        - Inherits velocity but position wraps naturally
+        """
+        sister = CellCycleNormal(
+            width=self.width,
+            height=self.height,
+            base_radius=self.base_r,
+            vertices=self.vertices,
+            seed=self.seed + 1000,  # Different seed for variation
+            initial_state='G1',
+            initial_time=0,
+            initial_divisions=0,
+            copy_chromatin_from=self
+        )
+        # Copy position and velocity from mother
+        sister.center = self.center.copy()
+        sister.vel = self.vel.copy()
+        return sister
     
