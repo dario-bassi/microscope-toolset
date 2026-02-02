@@ -162,14 +162,20 @@ class Renderer:
         if cell.cell_mitosis_state == 'Interphase' and cell.cell_cycle_state == 'G1':
             # Nucleus is intact with uncondesed chromatin
             cv2.circle(cell_img, nucleus_pos, nucleus_radius, (150, 60, 60), -1, lineType=cv2.LINE_AA)
-            self._draw_smooth_chromatin(cell_img, cell.chromatin_pts, num_strands=46) # 2n = 46, here is double after S phase
+            chromatin_pts = [(pt[0] + center_screen[0], pt[1] + center_screen[1]) for pt in cell.chromatin_pts] 
+            self._draw_smooth_chromatin(cell_img, chromatin_pts, num_strands=46) # 2n = 46, here is double after S phase
+
         elif cell.cell_mitosis_state == 'Interphase' and cell.cell_cycle_state == 'S':
             # S phase: DNA replication, uncondensed chromosome
             cv2.circle(cell_img, nucleus_pos, nucleus_radius, (150, 60, 60), -1, lineType=cv2.LINE_AA)
-            self._draw_smooth_chromatin(cell_img, cell.chromatin_pts, num_strands=92) # 2n = 46, here is double after S phase
+            chromatin_pts = [(pt[0] + center_screen[0], pt[1] + center_screen[1]) for pt in cell.chromatin_pts]
+            self._draw_smooth_chromatin(cell_img, chromatin_pts, num_strands=92) # 2n = 46, here is double after S phase
+
         elif cell.cell_mitosis_state == 'Interphase' and cell.cell_cycle_state == 'G2':
             cv2.circle(cell_img, nucleus_pos, nucleus_radius, (150, 60, 60), -1, lineType=cv2.LINE_AA)
-            self._draw_smooth_chromatin(cell_img, cell.chromatin_pts, num_strands=92) # 2n = 46, here is double after S phase
+            chromatin_pts = [(pt[0] + center_screen[0], pt[1] + center_screen[1]) for pt in cell.chromatin_pts]
+            self._draw_smooth_chromatin(cell_img, chromatin_pts, num_strands=92) # 2n = 46, here is double after S phase
+
         elif cell.cell_mitosis_state == 'Prophase' and cell.cell_cycle_state == 'M':
             # Nucleus dissolve, chromatin condenses into sister chromatine shape
             # Draw condensed chromatin (for simplicity use X shape) without nucleus border
