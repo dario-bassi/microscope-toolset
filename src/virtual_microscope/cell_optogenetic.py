@@ -35,7 +35,7 @@ class OptogeneticCell(CellBase):
         ix = vertices[inside, 0].astype(int)
         iy = vertices[inside, 1].astype(int)
 
-        # Check masl at vertex position
+        # Check mask at vertex position
         hit = mask[iy, ix]
 
         if not hit.any():

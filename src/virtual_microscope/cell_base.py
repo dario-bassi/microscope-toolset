@@ -80,7 +80,7 @@ def update_cell_physics(center: np.ndarray, vel: np.ndarray, r: np.ndarray,
 def check_collision(center1: np.ndarray, center2: np.ndarray,
                     r1: np.ndarray, r2: np.ndarray,
                     width: float, height: float) -> tuple:
-    """Fast colliision detection and resolution"""
+    """Fast collision detection and resolution"""
     # Calculate wrapped distance
     dvec = center2 - center1
     dvec[0] -= width * np.round(dvec[0] / width)
