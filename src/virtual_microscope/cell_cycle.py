@@ -141,7 +141,15 @@ class CellCycleNormal(NormalCell):
                 if self.cell_mitosis_state == 'Interphase':
                     self.current_time_life = 0
                     self.base_r_at_telophase = None
+                    self._update_cell_div_count_and_flag_apoptotic_cell() # update cell count
 
+    def _update_cell_div_count_and_flag_apoptotic_cell(self) -> None:
+        """Check the division count for the cell"""
+        # Division complete - increment division count
+        self.n_div += 1
+        # Flag as apoptotic if reached max divisions
+        if self.n_div >= self.max_nb_div:
+            self.is_dying = True
 
     def _start_apoptosis(self):
         """Start signal for apoptosis."""
@@ -160,11 +168,6 @@ class CellCycleNormal(NormalCell):
         # Update cell cycle physics
         self._physic_cell_cycle()
 
-
-    def _physic_cell_division(self):
-        pass
-
-
     def _physic_cell_cycle(self):
         """Update physics based on cell cycle state."""
         if self.cell_mitosis_state == 'Telophase':
@@ -178,9 +181,6 @@ class CellCycleNormal(NormalCell):
                 # Linear growth: start at 1x, end at sqrt(2) ~ 1.41x (doubled area)
                 growth_factor = 1.0 + 0.41 * progress
                 self.base_r = self.base_r_at_telophase * growth_factor
-
-    def update_cell_state(self):
-        pass
 
     # add function if needed
     
