@@ -23,7 +23,7 @@ class CellCycleNormal(NormalCell):
         self.is_dying: bool = self._initialization_apoptosis()
         self.max_nb_div: int = 10
         self.time_tot_cycle: int = 660 # in seconds
-        self.time_table_cycle: dict[str, int] = {'G1': 240, 'S': 360, 'G2': 480} # in seconds
+        self.time_table_cycle: dict[str, int] = {'G1': 240, 'S': 360, 'G2': 480} # in seconds - if its too long halb this time.
         self.time_table_mitosis: dict[str, int] = {'P': 516, 'Met': 552, 'A': 588, 'T': 624, 'C': 660}
         # add random start time point for each cell
         self.current_time_life: int = self._initial_random_time_life()

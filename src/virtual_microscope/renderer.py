@@ -24,7 +24,7 @@ class Renderer:
 
         # Visual Limits
         self.max_blur_radius = 25 # max Gaussian kernel radius, test if visually looks fine
-        self.min_opacity = 0.2 # min visbility when far out focus test if visually looks fine
+        self.min_opacity = 0.2 # min visibility when far out focus test if visually looks fine
 
         # render image according to the objective used
         self.crop_dim = 512 # by default 10x crop
@@ -64,7 +64,7 @@ class Renderer:
         visible_cells = self._get_visible_cells(cells, camera_offset)
 
         for cell in visible_cells:
-            self._draw_cell_cycle(img, cell, camera_offset, focal_plane, mode)
+            self._draw_cell_cycle(img, cell, camera_offset, focal_plane, mode)  # type: ignore
 
         # apply microscope filters
         img = self._apply_filters(img, mode)
@@ -124,9 +124,12 @@ class Renderer:
         # compute blur and opacity depth of field and z-distance
         kernel_size, opacity = self._compute_blur_and_opacity(cell.z_position, focal_plane)
 
-        # Get vertex position adjusted for camera
+        # Get vertex position adjusted for camera (convert to screen space)
         vertices = (cell.vertices_positions - camera_offset)
         center_screen = (cell.center - camera_offset)
+        
+        # Convert chromatin points to screen space (consistent with vertices)
+        chromatin_pts_screen = [(pt[0] - camera_offset[0], pt[1] - camera_offset[1]) for pt in cell.chromatin_pts]
 
         # Adjust cell radius for zoom
         cell_radius = cell.base_r
@@ -162,19 +165,16 @@ class Renderer:
         if cell.cell_mitosis_state == 'Interphase' and cell.cell_cycle_state == 'G1':
             # Nucleus is intact with uncondesed chromatin
             cv2.circle(cell_img, nucleus_pos, nucleus_radius, (150, 60, 60), -1, lineType=cv2.LINE_AA)
-            chromatin_pts = [(pt[0] + center_screen[0], pt[1] + center_screen[1]) for pt in cell.chromatin_pts] 
-            self._draw_smooth_chromatin(cell_img, chromatin_pts, num_strands=46) # 2n = 46, here is double after S phase
+            self._draw_smooth_chromatin(cell_img, chromatin_pts_screen, num_strands=46) # 2n = 46, here is double after S phase
 
         elif cell.cell_mitosis_state == 'Interphase' and cell.cell_cycle_state == 'S':
             # S phase: DNA replication, uncondensed chromosome
             cv2.circle(cell_img, nucleus_pos, nucleus_radius, (150, 60, 60), -1, lineType=cv2.LINE_AA)
-            chromatin_pts = [(pt[0] + center_screen[0], pt[1] + center_screen[1]) for pt in cell.chromatin_pts]
-            self._draw_smooth_chromatin(cell_img, chromatin_pts, num_strands=92) # 2n = 46, here is double after S phase
+            self._draw_smooth_chromatin(cell_img, chromatin_pts_screen, num_strands=92) # 2n = 46, here is double after S phase
 
         elif cell.cell_mitosis_state == 'Interphase' and cell.cell_cycle_state == 'G2':
             cv2.circle(cell_img, nucleus_pos, nucleus_radius, (150, 60, 60), -1, lineType=cv2.LINE_AA)
-            chromatin_pts = [(pt[0] + center_screen[0], pt[1] + center_screen[1]) for pt in cell.chromatin_pts]
-            self._draw_smooth_chromatin(cell_img, chromatin_pts, num_strands=92) # 2n = 46, here is double after S phase
+            self._draw_smooth_chromatin(cell_img, chromatin_pts_screen, num_strands=92) # 2n = 46, here is double after S phase
 
         elif cell.cell_mitosis_state == 'Prophase' and cell.cell_cycle_state == 'M':
             # Nucleus dissolve, chromatin condenses into sister chromatine shape
@@ -210,7 +210,7 @@ class Renderer:
 
             progress = min(progress, 1.0)
 
-            self._draw_separating_cells(cell_img, cell, center_screen, vertices, progress)
+            self._draw_separating_cells(cell_img, cell, center_screen, vertices, progress, camera_offset)
         
         # Apply blur based on focal plane
         if kernel_size > 0:
@@ -646,7 +646,7 @@ class Renderer:
     
     def _draw_separating_cells(self, img: np.ndarray, cell: CellCycleNormal,
                                center: np.ndarray, vertices: np.ndarray,
-                               separation_progress: float = 0.5) -> None:
+                               separation_progress: float = 0.5, camera_offset: Tuple[float, float] = (0, 0)) -> None:
         """Draw two separating cells during cytokenesis with connection bridge."""
         # separation_progress: 0.0 = fully connected, 1.0 = fully separated
 
@@ -676,19 +676,19 @@ class Renderer:
         # draw nuclei with uncondensed chromatin
         nucleus_radius = int(0.4 * cell_radius * scale_factor)
 
-        # Scale and position chromatin control points for daughter cells
-        chromatin_scaled = cell.chromatin_pts * scale_factor
+        # Scale chromatin offsets (not absolute pts) for daughter cells
+        chromatin_offset_scaled = [offset * scale_factor for offset in cell.chromatin_offset]
 
         # Top nucleus
         cv2.circle(img, tuple(center_top.astype(int)), nucleus_radius,
                    (150, 60, 60), -1, lineType=cv2.LINE_AA)
-        chromatin_top = [(pt[0] + center_top[0], pt[1] + center_top[1]) for pt in chromatin_scaled]
+        chromatin_top = [(center_top[0] + offset[0] - camera_offset[0], center_top[1] + offset[1] - camera_offset[1]) for offset in chromatin_offset_scaled]
         self._draw_smooth_chromatin(img, chromatin_top, num_strands=46)
 
         # Bottom nucleus
         cv2.circle(img, tuple(center_bottom.astype(int)), nucleus_radius,
                    (150, 60, 60), -1, lineType=cv2.LINE_AA)
-        chromatin_bottom = [(pt[0] + center_bottom[0], pt[1] + center_bottom[1]) for pt in chromatin_scaled]
+        chromatin_bottom = [(center_bottom[0] + offset[0] - camera_offset[0], center_bottom[1] + offset[1] - camera_offset[1]) for offset in chromatin_offset_scaled]
         self._draw_smooth_chromatin(img, chromatin_bottom, num_strands=46)
         
         # Draw connecting bridge (narrowing as separation progresses)
