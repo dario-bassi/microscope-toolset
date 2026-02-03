@@ -207,12 +207,13 @@ class Renderer:
                        int(nucleus_radius * 0.7), (150, 60, 60), lineType=cv2.LINE_AA)
             
             # Draw cleavage furrow
-            progress = (cell.current_time_life % cell.time_table_mitosis['T']) / (cell.time_table_mitosis['C'] - cell.time_table_mitosis['T'])
+            progress = (cell.current_time_life % cell.time_table_mitosis['Telophase']) / (cell.time_table_mitosis['Cytokinesis'] - cell.time_table_mitosis['Telophase'])
             self._draw_cytokenesis_furrow(cell_img, cell, center_screen, vertices, furrow_depth=0.2 + 0.1 * progress)
             
         elif cell.cell_mitosis_state == 'Cytokinesis'and cell.cell_cycle_state == 'M':
             # Draw two separating cells with uncondensed chromatin in nuclei
-            progress = (cell.current_time_life % cell.time_table_mitosis['C']) / (cell.time_tot_cycle - cell.time_table_mitosis['C'])
+            # Cytokinesis starts at Telophase end (624s) and ends at total cycle (660s)
+            progress = (cell.current_time_life - cell.time_table_mitosis['Telophase']) / (cell.time_tot_cycle - cell.time_table_mitosis['Telophase'])
 
             progress = min(progress, 1.0)
 
@@ -480,7 +481,7 @@ class Renderer:
             # 3. Draw the strand
             curve_pts = np.array(curve_pts).reshape((-1, 1, 2))
             cv2.polylines(img, [curve_pts], isClosed=False, 
-                        color=(180, 100, 255), thickness=1, # color (100, 80, 150)
+                        color=(200, 0, 200), thickness=2, # Purple - visible over red nucleus
                         lineType=cv2.LINE_AA) # LINE_AA is crucial for smoothness
             
 
@@ -515,10 +516,10 @@ class Renderer:
         pts = transformed_points.astype(np.int32)
 
         # Draw as filled polygon
-        cv2.fillPoly(img, [pts], (255, 150, 255), lineType=cv2.LINE_AA)
+        cv2.fillPoly(img, [pts], (200, 0, 200), lineType=cv2.LINE_AA)  # Purple - visible over red nucleus
 
         # Draw outline
-        cv2.polylines(img, [pts], True, (150, 70, 150), 1, lineType=cv2.LINE_AA)
+        cv2.polylines(img, [pts], True, (150, 0, 150), 1, lineType=cv2.LINE_AA)  # Darker purple outline
         
 
     def _draw_condensed_chromatin(self, img: np.ndarray, cell: CellCycleNormal, num_chromosome: int = 46):
@@ -668,45 +669,60 @@ class Renderer:
         scale_factor = np.sqrt(0.5)  # Each daughter cell has ~half the area
         vertices_scaled = (vertices - center) * scale_factor
         
-        # Draw top cell
+        # Draw top cell with blue gradient layers
         vertices_top = vertices_scaled + center_top
-        self._draw_smooth_cell(img, center_top, vertices_top, (100, 100, 200), thickness=-1)
+        layers = 10
+        for i in range(layers, 0, -1):
+            s = i / layers
+            shade = 80 + int(100 * s)
+            color = (shade, shade, 255)
+            scaled_verts_top = (vertices_scaled - center_top) * (i / layers) + center_top
+            self._draw_smooth_cell(img, center_top, scaled_verts_top, color, thickness=-1)
         self._draw_smooth_cell(img, center_top, vertices_top, (0, 0, 0), thickness=2)
         
-        # Draw bottom cell
-        vertices_bottom = vertices_scaled + center_bottom
-        self._draw_smooth_cell(img, center_bottom, vertices_bottom, (100, 100, 200), thickness=-1)
-        self._draw_smooth_cell(img, center_bottom, vertices_bottom, (0, 0, 0), thickness=2)
-
         # draw nuclei with uncondensed chromatin
         nucleus_radius = int(0.4 * cell_radius * scale_factor)
 
         # Scale chromatin offsets (not absolute pts) for daughter cells
         chromatin_offset_scaled = [offset * scale_factor for offset in cell.chromatin_offset]
 
-        # Top nucleus
+        # Top nucleus (always drawn - it's in viewport)
         cv2.circle(img, tuple(center_top.astype(int)), nucleus_radius,
                    (150, 60, 60), -1, lineType=cv2.LINE_AA)
-        chromatin_top = [(center_top[0] + offset[0] - camera_offset[0], center_top[1] + offset[1] - camera_offset[1]) for offset in chromatin_offset_scaled]
+        # center_top is already in screen space, so don't subtract camera_offset again
+        chromatin_top = [(center_top[0] + offset[0], center_top[1] + offset[1]) for offset in chromatin_offset_scaled]
         self._draw_smooth_chromatin(img, chromatin_top, num_strands=46)
 
-        # Bottom nucleus
-        cv2.circle(img, tuple(center_bottom.astype(int)), nucleus_radius,
-                   (150, 60, 60), -1, lineType=cv2.LINE_AA)
-        chromatin_bottom = [(center_bottom[0] + offset[0] - camera_offset[0], center_bottom[1] + offset[1] - camera_offset[1]) for offset in chromatin_offset_scaled]
-        self._draw_smooth_chromatin(img, chromatin_bottom, num_strands=46)
-        
-        # Draw connecting bridge (narrowing as separation progresses)
-        if separation_progress < 0.95:
-            bridge_width = int(cell_radius * 0.3 * (1.0 - separation_progress))
-            bridge_color = (120, 120, 180)
+        # Only draw bottom cell if it's within visible viewport bounds
+        # Skip if center_bottom is outside viewport to avoid shadow artifacts
+        if not (center_bottom[1] < -self.margins or center_bottom[1] > self.height + self.margins):
+            vertices_bottom = vertices_scaled + center_bottom
+            for i in range(layers, 0, -1):
+                s = i / layers
+                shade = 80 + int(100 * s)
+                color = (shade, shade, 255)
+                scaled_verts_bottom = (vertices_scaled - center_bottom) * (i / layers) + center_bottom
+                self._draw_smooth_cell(img, center_bottom, scaled_verts_bottom, color, thickness=-1)
+            self._draw_smooth_cell(img, center_bottom, vertices_bottom, (0, 0, 0), thickness=2)
+
+            # Bottom nucleus
+            cv2.circle(img, tuple(center_bottom.astype(int)), nucleus_radius,
+                       (150, 60, 60), -1, lineType=cv2.LINE_AA)
+            # center_bottom is already in screen space, so don't subtract camera_offset again
+            chromatin_bottom = [(center_bottom[0] + offset[0], center_bottom[1] + offset[1]) for offset in chromatin_offset_scaled]
+            self._draw_smooth_chromatin(img, chromatin_bottom, num_strands=46)
             
-            top_connect = center_top + np.array([0, cell_radius * scale_factor])
-            bottom_connect = center_bottom + np.array([0, -cell_radius * scale_factor])
-            
-            cv2.line(img, tuple(top_connect.astype(int)), 
-                    tuple(bottom_connect.astype(int)),
-                    bridge_color, max(1, bridge_width), lineType=cv2.LINE_AA)
+            # Draw connecting bridge (narrowing as separation progresses)
+            if separation_progress < 0.95:
+                bridge_width = int(cell_radius * 0.3 * (1.0 - separation_progress))
+                bridge_color = (120, 120, 180)
+                
+                top_connect = center_top + np.array([0, cell_radius * scale_factor])
+                bottom_connect = center_bottom + np.array([0, -cell_radius * scale_factor])
+                
+                cv2.line(img, tuple(top_connect.astype(int)), 
+                        tuple(bottom_connect.astype(int)),
+                        bridge_color, max(1, bridge_width), lineType=cv2.LINE_AA)
             
 
     def _draw_apoptosis_phase(self, img: np.ndarray, cell: CellCycleNormal, 
@@ -740,8 +756,15 @@ class Renderer:
         shrinkage_factor = cell._get_current_shrinkage_factor()
         vertices_shrunk = center_screen + (vertices - center_screen) * shrinkage_factor
         
-        # Draw shrinking cell membrane
-        self._draw_smooth_cell(img, center_screen, vertices_shrunk, (80, 80, 150), thickness=-1)
+        # Draw shrinking cell membrane with blue gradient layers (same as normal cell cycle)
+        layers = 10
+        for i in range(layers, 0, -1):
+            s = i / layers * shrinkage_factor
+            shade = 80 + int(100 * s / shrinkage_factor) if shrinkage_factor > 0 else 80
+            color = (shade, shade, 255)
+            scaled_verts = center_screen + (vertices_shrunk - center_screen) * (i / layers)
+            self._draw_smooth_cell(img, center_screen, scaled_verts, color, thickness=-1)
+        
         self._draw_smooth_cell(img, center_screen, vertices_shrunk, (0, 0, 0), thickness=2)
         
         # Draw shrinking nucleus
@@ -763,14 +786,22 @@ class Renderer:
         shrinkage_factor = 0.7  # End of shrinkage phase
         vertices_blebbed = center_screen + (vertices - center_screen) * shrinkage_factor
         
-        self._draw_smooth_cell(img, center_screen, vertices_blebbed, (70, 70, 140), thickness=-1)
+        # Draw cell with blue gradient layers (same as normal cell cycle)
+        layers = 10
+        for i in range(layers, 0, -1):
+            s = i / layers * shrinkage_factor
+            shade = 80 + int(100 * s / shrinkage_factor) if shrinkage_factor > 0 else 80
+            color = (shade, shade, 255)
+            scaled_verts = center_screen + (vertices_blebbed - center_screen) * (i / layers)
+            self._draw_smooth_cell(img, center_screen, scaled_verts, color, thickness=-1)
         
-        # Generate and draw blebs (8-10)
+        # Generate and draw blebs (8-10) in blue color from gradient
         bleb_positions = self._generate_bleb_points(center_screen, vertices_blebbed, 
                                                     num_blebs=int(8 + 2 * blebbing_progress))
         
+        bleb_color = (130, 130, 255)  # Blue from gradient range
         for bleb_pos, bleb_radius in bleb_positions:
-            cv2.circle(img, tuple(bleb_pos.astype(int)), bleb_radius, (90, 90, 160), -1, lineType=cv2.LINE_AA)
+            cv2.circle(img, tuple(bleb_pos.astype(int)), bleb_radius, bleb_color, -1, lineType=cv2.LINE_AA)
         
         # Draw membrane outline
         self._draw_smooth_cell(img, center_screen, vertices_blebbed, (0, 0, 0), thickness=1)
@@ -788,11 +819,12 @@ class Renderer:
             return
         
         body_radius = int(cell.base_r * 0.25)  # Each body is small
+        body_color = (130, 130, 255)  # Blue from gradient range
         
-        # Draw apoptotic bodies
+        # Draw apoptotic bodies in blue
         for body_pos in cell.apoptotic_body_positions:
             body_screen = np.array([body_pos[0] - camera_offset[0], body_pos[1] - camera_offset[1]])
-            cv2.circle(img, tuple(body_screen.astype(int)), body_radius, (100, 80, 150), -1, lineType=cv2.LINE_AA)
+            cv2.circle(img, tuple(body_screen.astype(int)), body_radius, body_color, -1, lineType=cv2.LINE_AA)
             cv2.circle(img, tuple(body_screen.astype(int)), body_radius, (0, 0, 0), 1, lineType=cv2.LINE_AA)
 
     def _draw_phagocytosis_apoptosis(self, img: np.ndarray, cell: CellCycleNormal,
@@ -805,11 +837,15 @@ class Renderer:
                                (cell.max_death_timer - cell.time_table_apoptois['Apoptotic bodies'])
         
         body_radius = int(cell.base_r * 0.25)
-        fade_intensity = int(150 * (1.0 - phagocytosis_progress))  # Fade from 150 to 0
+        # Fade from blue gradient color (130, 130, 255) to black
+        fade_factor = 1.0 - phagocytosis_progress
+        fade_b = int(130 * fade_factor)
+        fade_g = int(130 * fade_factor)
+        fade_r = int(255 * fade_factor)
         
         for body_pos in cell.apoptotic_body_positions:
             cv2.circle(img, tuple(np.array(body_pos).astype(int)), body_radius, 
-                      (fade_intensity, fade_intensity - 50, fade_intensity), -1, lineType=cv2.LINE_AA)
+                      (fade_b, fade_g, fade_r), -1, lineType=cv2.LINE_AA)
 
     def _generate_bleb_points(self, center_screen: np.ndarray,
                              vertices: np.ndarray, num_blebs: int = 8) -> list:

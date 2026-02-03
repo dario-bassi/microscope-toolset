@@ -7,6 +7,7 @@ class CellCycleNormal(NormalCell):
     """Cell that loops through a cell cycle indefinitely"""
 
     def __init__(self, *args, initial_state: Optional[Literal['G1', 'S', 'G2', 'M']] = None,
+                 initial_mitosis: Optional[Literal['Cytokinesis', 'Interphase', 'Prophase', 'Metaphase', 'Anaphase', 'Telophase']] = None,
                  initial_time: Optional[int] = None, initial_divisions: Optional[int] = None,
                  copy_chromatin_from: Optional['CellCycleNormal'] = None, **kwargs):
         super().__init__(*args, **kwargs)
@@ -15,6 +16,9 @@ class CellCycleNormal(NormalCell):
         self.nucleus_fluorescence = 0.0
         self.membrane_fluorescence = np.zeros(self.vertices)
 
+        # Initialize max_nb_div FIRST before using in _initial_number_division()
+        self.max_nb_div: int = 10
+
         # G1, S, G2 -> interphase
         # M -> prophase, metaphase, anaphase, telophase
         # M -> cytokinesis
@@ -22,8 +26,11 @@ class CellCycleNormal(NormalCell):
             self.cell_cycle_state: Literal['M', 'G1', 'G2', 'S'] = initial_state  # type: ignore
         else:
             self.cell_cycle_state: Literal['M', 'G1', 'G2', 'S'] = self._initial_cycle_state()
-            
-        self.cell_mitosis_state: Literal['Cytokinesis', 'Interphase', 'Prophase', 'Metaphase', 'Anaphase', 'Telophase'] = self._initial_mitosis_state()
+
+        if initial_mitosis is not None:
+            self.cell_mitosis_state: Literal['Cytokinesis', 'Interphase', 'Prophase', 'Metaphase', 'Anaphase', 'Telophase'] = initial_mitosis
+        else:
+            self.cell_mitosis_state: Literal['Cytokinesis', 'Interphase', 'Prophase', 'Metaphase', 'Anaphase', 'Telophase'] = self._initial_mitosis_state()
         
         if initial_divisions is not None:
             self.n_div: int = initial_divisions
@@ -31,15 +38,14 @@ class CellCycleNormal(NormalCell):
             self.n_div: int = self._initial_number_division()
             
         self.is_dying: bool = self._initialization_apoptosis()
-        self.max_nb_div: int = 10
-        self.time_tot_cycle: int = 660 # in seconds
-        self.time_table_cycle: dict[str, int] = {'G1': 240, 'S': 360, 'G2': 480} # in seconds - if its too long halb this time.
-        self.time_table_mitosis: dict[str, int] = {'P': 516, 'Met': 552, 'A': 588, 'T': 624, 'C': 660}
+        self.time_tot_cycle: float = 660.0 # in simulation units (seconds)
+        self.time_table_cycle: dict[str, float] = {'G1': 240.0, 'S': 360.0, 'G2': 480.0} # in seconds
+        self.time_table_mitosis: dict[str, float] = {'Prophase': 516.0, 'Metaphase': 552.0, 'Anaphase': 588.0, 'Telophase': 624.0, 'Cytokinesis': 660.0}
         # add random start time point for each cell
         if initial_time is not None:
-            self.current_time_life: int = initial_time
+            self.current_time_life: float = float(initial_time)
         else:
-            self.current_time_life: int = self._initial_random_time_life()
+            self.current_time_life: float = float(self._initial_random_time_life())
         # chromatin pts - store as offsets from center
         if copy_chromatin_from is not None:
             self.chromatin_offset = copy_chromatin_from.chromatin_offset.copy()
@@ -49,21 +55,27 @@ class CellCycleNormal(NormalCell):
         # Physics state for telophase
         self.base_r_at_telophase = None
         # Death tracking
-        self.death_timer: int = 0
+        self.death_timer: float = 0.0
         self.apoptosis_death_phase: Literal['Shrinkage', 'Blebbing', 'Apoptotic bodies', 'Phagocytosis'] = 'Shrinkage'
-        self.time_table_apoptois: dict[str, int] = {'Shrinkage': 20, 'Blebbing': 40, 'Apoptotic bodies': 50, 'Phagocytosis': 60}
-        self.max_death_timer: int = 60
+        self.time_table_apoptois: dict[str, float] = {'Shrinkage': 20.0, 'Blebbing': 40.0, 'Apoptotic bodies': 50.0, 'Phagocytosis': 60.0}
+        self.max_death_timer: float = 60.0
         self.remove_this_cell = False
+        # Transition guards to prevent multiple transitions at same threshold
+        self._last_transitioned_cycle_state: Optional[str] = None
+        self._last_transitioned_mitosis_state: Optional[str] = None
+        self._last_transitioned_apoptosis_phase: Optional[str] = None
 
 
     def _initial_chromatin_offsets(self) -> list[tuple[float, float]]:
         """Creates chromatin control points as offsets from center"""
         # Create 3 random control points relative to center
+        # Nucleus radius = 0.4 * base_r, so keep chromatin within ~0.3 * base_r for safety
         offsets = []
         for _ in range(3):
             # Random angle and distance for circular distribution
             angle = random.uniform(0, 2 * np.pi)
-            r = self.base_r * np.sqrt(random.uniform(0, 0.8))  # Stay away from edges
+            # Constrain chromatin to inside nucleus: max radius is 0.3 * base_r
+            r = self.base_r * 0.3 * np.sqrt(random.uniform(0.2, 1.0))  # Range: 0.06-0.3 × base_r
             x = r * np.cos(angle)  # Offset, not absolute
             y = r * np.sin(angle)  # Offset, not absolute
             offsets.append((x, y))
@@ -110,55 +122,61 @@ class CellCycleNormal(NormalCell):
             return False
         
     def _initial_random_time_life(self) -> int:
-        """Randomly select time life of the cell"""
+        """Randomly select time life of the cell (in seconds)"""
         cell_cycle_state = self.cell_cycle_state
         cell_mitosis_state = self.cell_mitosis_state # not in M, then this is None
 
-        # time range of each state
+        # time range of each state (in seconds)
         # G1(240): 0 -> 240
-        # S(120): 241 -> 360
-        # G2(120): 361 -> 480
-        # M(180): 481 -> 516, 517 -> 552, 553 -> 588, 589 -> 624, 625 -> 660
+        # S(360): 240 -> 360
+        # G2(480): 360 -> 480
+        # M(660): 480 -> 660 (with phases)
         match cell_cycle_state:
             case 'G1':
                 return random.randint(0, 240)
             case 'S':
-                return random.randint(241, 360)
+                return random.randint(240, 360)
             case 'G2':
-                return random.randint(361, 480)
+                return random.randint(360, 480)
             case 'M': # M
                 match cell_mitosis_state:
                     case 'Prophase':
-                        return random.randint(481, 516)
+                        return random.randint(480, 516)
                     case 'Metaphase':
-                        return random.randint(517, 552)
+                        return random.randint(516, 552)
                     case 'Anaphase':
-                        return random.randint(553, 588)
+                        return random.randint(552, 588)
                     case 'Telophase':
-                        return random.randint(589, 624)
+                        return random.randint(588, 624)
                     case 'Cytokinesis':  # Cytokinesis or Interphase
-                        return random.randint(625, 660)
+                        return random.randint(624, 660)
                     case _:
                         return -1 # undefined
             case _:
                 return -1 # undefined
 
     def _change_state(self) -> None:
-        """Change the state of the cell."""
+        """Change the state of the cell. Only transitions once per state."""
         if self.cell_mitosis_state == 'Interphase':
-            if self.current_time_life > self.time_table_cycle[self.cell_cycle_state]:
+            # Only transition if we haven't already transitioned from this cycle state
+            if (self.current_time_life >= self.time_table_cycle[self.cell_cycle_state] and 
+                self._last_transitioned_cycle_state != self.cell_cycle_state):
                 transiction_dict = {'G1': 'S', 'S': 'G2', 'G2': 'M'}
                 # update state
+                self._last_transitioned_cycle_state = self.cell_cycle_state  # Mark this state as transitioned
                 self.cell_cycle_state = transiction_dict[self.cell_cycle_state]  # type: ignore
                 # update immediately from G2  to M
                 if self.cell_cycle_state == 'M':
                     self.cell_mitosis_state = 'Prophase'
 
         else: # M
-            if self.current_time_life > self.time_table_mitosis[self.cell_mitosis_state]:
+            # Only transition if we haven't already transitioned from this mitosis state
+            if (self.current_time_life >= self.time_table_mitosis[self.cell_mitosis_state] and 
+                self._last_transitioned_mitosis_state != self.cell_mitosis_state):
                 transiction_dict = {'Prophase':'Metaphase', 'Metaphase':'Anaphase', 'Anaphase':'Telophase', 'Telophase':'Cytokinesis', 'Cytokinesis':'Interphase'}
 
                 # update mitotic state
+                self._last_transitioned_mitosis_state = self.cell_mitosis_state  # Mark this state as transitioned
                 self.cell_mitosis_state = transiction_dict[self.cell_mitosis_state]  # type: ignore
                 # Reset telophase tracker when entering telophase
                 if self.cell_mitosis_state == 'Telophase':
@@ -166,7 +184,9 @@ class CellCycleNormal(NormalCell):
                 # update time for new starting cycle
                 if self.cell_mitosis_state == 'Interphase':
                     self.current_time_life = 0
+                    self.cell_cycle_state = 'G1'  # Reset to G1 for new cycle
                     self.base_r_at_telophase = None
+                    self._last_transitioned_cycle_state = None  # Reset cycle state guard
                     self._update_cell_div_count_and_flag_apoptotic_cell() # update cell count
 
     def _update_cell_div_count_and_flag_apoptotic_cell(self) -> None:
@@ -192,14 +212,15 @@ class CellCycleNormal(NormalCell):
         
         # Update death timer if dying
         if self.is_dying:
-            self.death_timer += int(dt)
+            self.death_timer += dt
             self._update_apoptosis_phase()
             self._update_apoptotic_physics()
         
         # Update state cycle (G1 -> S -> G2 -> M) only if not dying
         if not self.is_dying:
             self._change_state()
-            self.current_time_life += int(dt)
+            self.current_time_life += dt
+            print("cycle time: ", self.current_time_life)
 
         # Update chromatin positions to follow cell center
         self.chromatin_pts = self._update_chromatin_pts()
@@ -214,8 +235,8 @@ class CellCycleNormal(NormalCell):
             # Gradually grow to 2x area during telophase (sqrt(2) ~ 1.41x radius)
             if self.base_r_at_telophase is not None and hasattr(self, 'time_table_mitosis'):
                 # Calculate progress through telophase
-                time_in_telophase = self.current_time_life - self.time_table_mitosis['T']
-                telophase_duration = self.time_table_mitosis['C'] - self.time_table_mitosis['T']
+                time_in_telophase = self.current_time_life - self.time_table_mitosis['Telophase']
+                telophase_duration = self.time_table_mitosis['Cytokinesis'] - self.time_table_mitosis['Telophase']
                 progress = min(time_in_telophase / telophase_duration, 1.0)
                 
                 # Linear growth: start at 1x, end at sqrt(2) ~ 1.41x (doubled area)
@@ -238,6 +259,7 @@ class CellCycleNormal(NormalCell):
             vertices=self.vertices,
             seed=self.seed + 1000,  # Different seed for variation
             initial_state='G1',
+            initial_mitosis='Interphase',
             initial_time=0,
             initial_divisions=0,
             copy_chromatin_from=self
@@ -249,16 +271,19 @@ class CellCycleNormal(NormalCell):
     
 
     def _update_apoptosis_phase(self) -> None:
-        """Update the current apoptotic phase"""
+        """Update the current apoptotic phase. Only transitions once per phase."""
         
         transiction_dict = {'Shrinkage': 'Blebbing', 'Blebbing': 'Apoptotic bodies', 'Apoptotic bodies': 'Phagocytosis'}
 
-        if self.death_timer > self.time_table_apoptois[self.apoptosis_death_phase]:
+        # Only transition if we haven't already transitioned from this apoptosis phase
+        if (self.death_timer >= self.time_table_apoptois[self.apoptosis_death_phase] and
+            self._last_transitioned_apoptosis_phase != self.apoptosis_death_phase):
 
             if self.apoptosis_death_phase == 'Phagocytosis':
                 # signal cell remove.
                 self.remove_this_cell = True
             else:
+                self._last_transitioned_apoptosis_phase = self.apoptosis_death_phase  # Mark this phase as transitioned
                 self.apoptosis_death_phase = transiction_dict[self.apoptosis_death_phase] # type: ignore
 
 

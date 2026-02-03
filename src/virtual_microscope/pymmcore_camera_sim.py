@@ -42,6 +42,12 @@ class SimCameraDevice(CameraDevice):
         self.set_property_limits("Binning", (0, 20))
         #self.set_property_sequence_max_length(Keyword.Exposure, 10)
 
+    def _get_bridge(self):
+        """Get bridge, updating from global if necessary"""
+        if self.bridge is None:
+            self.bridge = bridge_module.GLOBAL_BRIDGE
+        return self.bridge
+
     def get_exposure(self) -> float:
         return self._exposure
 
@@ -56,7 +62,10 @@ class SimCameraDevice(CameraDevice):
         #     return self._sim.viewport_height, self._sim.viewport_width
         # else:
         #     return self._sim.viewport_height, self._sim.viewport_width, self._sim.n_channel
-        return self.bridge._sim.viewport_height, self.bridge._sim.viewport_width
+        bridge = self._get_bridge()
+        if bridge is None:
+            return 512, 512  # Default fallback dimensions
+        return bridge._sim.viewport_height, bridge._sim.viewport_width
 
     def dtype(self) -> DTypeLike:
         return np.uint8
@@ -90,7 +99,19 @@ class SimCameraDevice(CameraDevice):
             #        print(f"Error getting SLM image: {e}")
             #if mask is None:
             #    mask = np.zeros((self.bridge._sim.viewport_height, self.bridge._sim.viewport_width), dtype=bool)
-            self._mask = self.bridge.get_slm_mask()
+            bridge = self._get_bridge()
+            #if bridge is None:
+                # If bridge not ready, return blank image
+            #    buf = get_buffer(self.shape(), self.dtype())
+            #    buf[:] = 0
+            #    yield {
+            #        "data": buf,
+            #        "timestamp": time.time()
+            #    }
+            #    count += 1
+            #    continue
+
+            self._mask = bridge.get_slm_mask() # type: ignore
             # checking the stage position
             #stage_position = self._get_current_xy_stage_position()
             # update the stage/camera offset
@@ -98,7 +119,8 @@ class SimCameraDevice(CameraDevice):
             # For the moment use one of the function to get the microscope frame
             #surf = self._sim.get_frame(self._mask)
             #surf = self._sim.get_frame_random_gray()
-            surf = self.bridge.snap(brightness=self._brightness, exposure=self._exposure)#self._sim.snap_frame(mask, self._brightness, self._exposure)
+            surf = bridge.snap(brightness=self._brightness, exposure=self._exposure) # type: ignore
+            #self._sim.snap_frame(mask, self._brightness, self._exposure)
             # create buffer
             buf = get_buffer(self.shape(), self.dtype())
             # apply intensity and exposure time
@@ -151,12 +173,12 @@ class SimCameraDevice(CameraDevice):
         self._brightness = value
 
     @brightness.sequence_loader
-    def load_position_sequence(self, sequence: Sequence[float]) -> None:
-        print(f"Loading position sequence: {sequence}")
+    def _load_brightness_sequence(self, sequence: Sequence[float]) -> None:
+        print(f"Loading brightness sequence: {sequence}")
 
     @brightness.sequence_starter
-    def start_position_sequence(self) -> None:
-        print("Starting position sequence")
+    def _start_brightness_sequence(self) -> None:
+        print("Starting brightness sequence")
 
     def get_binning(self) -> int:
         """

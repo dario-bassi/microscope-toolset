@@ -262,7 +262,8 @@ class MicroscopeSimOptmized:
         """Capture a frame with option stimulation"""
         # Update stimulation
         now = time.perf_counter()
-        dt = (now - self._last_time) * 0.3 # scale time for smoother simulation
+        dt = (now - self._last_time) * 0.03 # scale time for smoother simulation, reduced for lower cell velocity
+        print("dt: ", dt)
         self._last_time = now
         self.update(dt)
         

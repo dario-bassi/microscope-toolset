@@ -55,15 +55,9 @@ class FilterWheelDevice(StateDevice):
         """
         Update the states of the virtual microscope simulation
         """
-        # if self._name in self._microscope_sim.state_devices.keys():
-        #     print("Used")
-        #     self._microscope_sim.state_devices[self._name]["state"] = str(self._current_state)
-        #     self._microscope_sim.state_devices[self._name]["label"] = self._current_label
-
-        # self._microscope_sim.state_devices[self._name]["state"] = str(self._current_state)
-        # self._microscope_sim.state_devices[self._name]["label"] = self._current_label
-        #self._microscope_sim.state_devices.update({self._name : {"state": str(self._current_state), "label": self._current_label}})
-        self.bridge.update_state({self._name : {"state": str(self._current_state), "label": self._current_label}})
+        # Only update if bridge is available
+        if self.bridge is not None:
+            self.bridge.update_state({self._name : {"state": str(self._current_state), "label": self._current_label}})
 
 
 
@@ -85,7 +79,9 @@ class LEDDevice(StateDevice):
         self._current_label = self._state_to_label.get(self._current_state)
         self._name = "LED"
 
-        self.update_microscope_simulation()
+        # Only update if bridge is available
+        if self.bridge is not None:
+            self.update_microscope_simulation()
 
     def get_state(self) -> int:
         """
@@ -115,15 +111,9 @@ class LEDDevice(StateDevice):
         """
         Update the states of the virtual microscope simulation
         """
-        # if self._name in self._microscope_sim.state_devices.keys():
-        #     print("Used")
-        #     self._microscope_sim.state_devices[self._name]["state"] = str(self._current_state)
-        #     self._microscope_sim.state_devices[self._name]["label"] = self._current_label
-
-        # self._microscope_sim.state_devices[self._name]["state"] = str(self._current_state)
-        # self._microscope_sim.state_devices[self._name]["label"] = self._current_label
-        #self._microscope_sim.state_devices.update({self._name : {"state": str(self._current_state), "label": self._current_label}})
-        self.bridge.update_state({self._name : {"state": str(self._current_state), "label": self._current_label}})
+        # Only update if bridge is available
+        if self.bridge is not None:
+            self.bridge.update_state({self._name : {"state": str(self._current_state), "label": self._current_label}})
 
 
 
@@ -142,7 +132,9 @@ class ObjectiveDevice(StateDevice):
 
         self.bridge = bridge_module.GLOBAL_BRIDGE
 
-        self.update_microscope_simulation()
+        # Only update if bridge is available
+        if self.bridge is not None:
+            self.update_microscope_simulation()
 
     def get_state(self) -> int:
         """
@@ -180,4 +172,6 @@ class ObjectiveDevice(StateDevice):
         # self._microscope_sim.state_devices[self._name]["state"] = str(self._current_state)
         # self._microscope_sim.state_devices[self._name]["label"] = self._current_label
         #self._microscope_sim.state_devices.update({self._name : {"state": str(self._current_state), "label": self._current_label}})
-        self.bridge.update_state({self._name : {"state": str(self._current_state), "label": self._current_label}})
+        # Only update if bridge is available
+        if self.bridge is not None:
+            self.bridge.update_state({self._name : {"state": str(self._current_state), "label": self._current_label}})
