@@ -1,6 +1,7 @@
 """Optimize rendering using OpenCV"""
 import numpy as np
 import cv2
+import random
 from typing import List, Tuple, Optional, Sequence
 from .cell_base import CellBase
 from .cell_cycle import CellCycleNormal
@@ -137,6 +138,11 @@ class Renderer:
         # Skip if center is outside viewport
         if (center_screen[0] < -self.margins or center_screen[0] > self.width + self.margins or
             center_screen[1] < -self.margins or center_screen[1] > self.height + self.margins):
+            return
+        
+        # Handle apoptosis rendering
+        if cell.is_dying:
+            self._draw_apoptosis_phase(img, cell, center_screen, vertices, chromatin_pts_screen, camera_offset, opacity, kernel_size)
             return
         
         # create temporaly image for the cell
@@ -353,7 +359,6 @@ class Renderer:
             # Final blur realistic appeareance
             kernel_size = 2 * self.blur_radius + 1
             img = cv2.GaussianBlur(img, (kernel_size, kernel_size), 0)
-            #img = cv2.GaussianBlur(img, (3, 3), 1.0)
 
             noise = np.random.normal(0, self.noise_std, img.shape).astype(np.int16)
             img = np.clip(img.astype(np.int16) + noise, 0, 255).astype(np.uint8)
@@ -702,3 +707,150 @@ class Renderer:
             cv2.line(img, tuple(top_connect.astype(int)), 
                     tuple(bottom_connect.astype(int)),
                     bridge_color, max(1, bridge_width), lineType=cv2.LINE_AA)
+            
+
+    def _draw_apoptosis_phase(self, img: np.ndarray, cell: CellCycleNormal, 
+                              center_screen: np.ndarray, vertices: np.ndarray,
+                              chromatin_pts_screen: list, camera_offset: Tuple[float, float],
+                              opacity: float, kernel_size: int) -> None:
+        """Main dispatcher for apoptotic cell rendering based on phase."""
+        cell_img = np.full((self.height, self.width, 3), 0, dtype=np.uint8)
+        
+        if cell.apoptosis_death_phase == 'Shrinkage':
+            self._draw_shrinkage_apoptosis(cell_img, cell, center_screen, vertices, chromatin_pts_screen)
+        elif cell.apoptosis_death_phase == 'Blebbing':
+            self._draw_blebbing_apoptosis(cell_img, cell, center_screen, vertices, chromatin_pts_screen)
+        elif cell.apoptosis_death_phase == 'Apoptotic bodies':
+            self._draw_apoptotic_bodies_phase(cell_img, cell, center_screen, chromatin_pts_screen, camera_offset)
+        elif cell.apoptosis_death_phase == 'Phagocytosis':
+            self._draw_phagocytosis_apoptosis(cell_img, cell, center_screen)
+        
+        # Apply blur and opacity
+        if kernel_size > 0:
+            cell_img = cv2.GaussianBlur(cell_img, (kernel_size, kernel_size), kernel_size / 3.0)
+        
+        apoptosis_opacity = self._get_apoptosis_opacity(cell) * opacity
+        img[:] = cv2.addWeighted(img, 1.0, cell_img, apoptosis_opacity, 0)
+
+    def _draw_shrinkage_apoptosis(self, img: np.ndarray, cell: CellCycleNormal,
+                                  center_screen: np.ndarray, vertices: np.ndarray,
+                                  chromatin_pts_screen: list) -> None:
+        """Draw shrinking cell with condensed chromatin visible inside."""
+        # Get shrinkage factor and apply to vertices
+        shrinkage_factor = cell._get_current_shrinkage_factor()
+        vertices_shrunk = center_screen + (vertices - center_screen) * shrinkage_factor
+        
+        # Draw shrinking cell membrane
+        self._draw_smooth_cell(img, center_screen, vertices_shrunk, (80, 80, 150), thickness=-1)
+        self._draw_smooth_cell(img, center_screen, vertices_shrunk, (0, 0, 0), thickness=2)
+        
+        # Draw shrinking nucleus
+        nucleus_radius = int(0.4 * cell.base_r * shrinkage_factor)
+        nucleus_pos = tuple(center_screen.astype(int))
+        cv2.circle(img, nucleus_pos, nucleus_radius, (150, 60, 60), -1, lineType=cv2.LINE_AA)
+        
+        # Draw condensed chromatin (nuclear material becoming more compact)
+        self._draw_condensed_chromatin(img, cell, num_chromosome=92)
+
+    def _draw_blebbing_apoptosis(self, img: np.ndarray, cell: CellCycleNormal,
+                                 center_screen: np.ndarray, vertices: np.ndarray,
+                                 chromatin_pts_screen: list) -> None:
+        """Draw cell with membrane blebs (8-10 protrusions) forming."""
+        blebbing_progress = (cell.death_timer - cell.time_table_apoptois['Shrinkage']) / \
+                            (cell.time_table_apoptois['Blebbing'] - cell.time_table_apoptois['Shrinkage'])
+        
+        # Draw base cell (slightly smaller than shrinkage end)
+        shrinkage_factor = 0.7  # End of shrinkage phase
+        vertices_blebbed = center_screen + (vertices - center_screen) * shrinkage_factor
+        
+        self._draw_smooth_cell(img, center_screen, vertices_blebbed, (70, 70, 140), thickness=-1)
+        
+        # Generate and draw blebs (8-10)
+        bleb_positions = self._generate_bleb_points(center_screen, vertices_blebbed, 
+                                                    num_blebs=int(8 + 2 * blebbing_progress))
+        
+        for bleb_pos, bleb_radius in bleb_positions:
+            cv2.circle(img, tuple(bleb_pos.astype(int)), bleb_radius, (90, 90, 160), -1, lineType=cv2.LINE_AA)
+        
+        # Draw membrane outline
+        self._draw_smooth_cell(img, center_screen, vertices_blebbed, (0, 0, 0), thickness=1)
+        
+        # Draw nucleus inside (intact but shrinking)
+        nucleus_radius = int(0.35 * cell.base_r * 0.7)
+        nucleus_pos = tuple(center_screen.astype(int))
+        cv2.circle(img, nucleus_pos, nucleus_radius, (150, 60, 60), -1, lineType=cv2.LINE_AA)
+
+    def _draw_apoptotic_bodies_phase(self, img: np.ndarray, cell: CellCycleNormal,
+                                     center_screen: np.ndarray, chromatin_pts_screen: list,
+                                     camera_offset: Tuple[float, float]) -> None:
+        """Draw scattered apoptotic bodies with fragmented nucleus inside."""
+        if not hasattr(cell, 'apoptotic_body_positions'):
+            return
+        
+        body_radius = int(cell.base_r * 0.25)  # Each body is small
+        
+        # Draw apoptotic bodies
+        for body_pos in cell.apoptotic_body_positions:
+            body_screen = np.array([body_pos[0] - camera_offset[0], body_pos[1] - camera_offset[1]])
+            cv2.circle(img, tuple(body_screen.astype(int)), body_radius, (100, 80, 150), -1, lineType=cv2.LINE_AA)
+            cv2.circle(img, tuple(body_screen.astype(int)), body_radius, (0, 0, 0), 1, lineType=cv2.LINE_AA)
+
+    def _draw_phagocytosis_apoptosis(self, img: np.ndarray, cell: CellCycleNormal,
+                                     center_screen: np.ndarray) -> None:
+        """Draw fading apoptotic bodies with decreasing opacity."""
+        if not hasattr(cell, 'apoptotic_body_positions'):
+            return
+        
+        phagocytosis_progress = (cell.death_timer - cell.time_table_apoptois['Apoptotic bodies']) / \
+                               (cell.max_death_timer - cell.time_table_apoptois['Apoptotic bodies'])
+        
+        body_radius = int(cell.base_r * 0.25)
+        fade_intensity = int(150 * (1.0 - phagocytosis_progress))  # Fade from 150 to 0
+        
+        for body_pos in cell.apoptotic_body_positions:
+            cv2.circle(img, tuple(np.array(body_pos).astype(int)), body_radius, 
+                      (fade_intensity, fade_intensity - 50, fade_intensity), -1, lineType=cv2.LINE_AA)
+
+    def _generate_bleb_points(self, center_screen: np.ndarray,
+                             vertices: np.ndarray, num_blebs: int = 8) -> list:
+        """Generate bleb protrusion positions on membrane.
+        
+        Returns list of (position, radius) tuples for each bleb.
+        """
+        blebs = []
+        
+        # Get vertices as angles and distances
+        angles = np.linspace(0, 2 * np.pi, len(vertices), endpoint=False)
+        radii_orig = np.linalg.norm(vertices - center_screen, axis=1)
+        max_radius = np.max(radii_orig)
+        
+        for i in range(num_blebs):
+            # Random position on membrane
+            angle = random.uniform(0, 2 * np.pi)
+            
+            # Bleb extends outward from membrane
+            base_radius = max_radius * 0.9
+            bleb_extension = max_radius * 0.4  # Blebs can extend 40% beyond radius
+            bleb_radius = int(max_radius * 0.15)  # Size of each bleb
+            
+            # Position on membrane + extension
+            bleb_distance = base_radius + bleb_extension * random.uniform(0.3, 1.0)
+            
+            bleb_x = center_screen[0] + bleb_distance * np.cos(angle)
+            bleb_y = center_screen[1] + bleb_distance * np.sin(angle)
+            bleb_pos = np.array([bleb_x, bleb_y])
+            
+            blebs.append((bleb_pos, bleb_radius))
+        
+        return blebs
+
+    def _get_apoptosis_opacity(self, cell: CellCycleNormal) -> float:
+        """Calculate opacity for current apoptosis phase."""
+        if cell.apoptosis_death_phase == 'Phagocytosis':
+            # Fade out during phagocytosis
+            phagocytosis_progress = (cell.death_timer - cell.time_table_apoptois['Apoptotic bodies']) / \
+                                   (cell.max_death_timer - cell.time_table_apoptois['Apoptotic bodies'])
+            return 1.0 - phagocytosis_progress
+        else:
+            # Full opacity for earlier phases
+            return 1.0

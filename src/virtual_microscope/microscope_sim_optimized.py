@@ -20,7 +20,7 @@ class MicroscopeSimOptmized:
                  nb_cells: int = 120, cell_type: str = "optogenetic", 
                  viewport_width: int = 512, viewport_height: int = 512, 
                  base_radius: float = 20.0, rng_seed: int = 0,
-                 cell_mix: dict = None, concentration: float = 0.01, drug_type: Literal["growth", "mobility", "apoptosis"] = "growth"):
+                 cell_mix: Optional[dict] = None, concentration: float = 0.01, drug_type: Literal["growth", "mobility", "apoptosis"] = "growth"):
         self.width = width
         self.height = height
         self.nb_cells = nb_cells
@@ -191,14 +191,14 @@ class MicroscopeSimOptmized:
         # Call cell-specific behaviours
         for cell in self._cells:
             if hasattr(cell, "update_behavior"):
-                cell.update_behavior(dt)
+                cell.update_behavior(dt) # type: ignore
 
         # Handle collisions
         self._handle_collisions_with_spatial_grid()
         
         # Update cell cycle dynamics (divisions, apoptosis)
         if self.cycle_manager is not None:
-            self.cycle_manager.update(self._cells, self)
+            self.cycle_manager.update(self._cells, self) # type: ignore
             # Resync numpy arrays after cell list changes
             self._resync_arrays_after_division()
 
@@ -292,9 +292,9 @@ class MicroscopeSimOptmized:
                 self.focal_plane)
         else:
             img = self.renderer.render_cells(
-                self._cells, self.mode, 
+                self._cells, self.mode, # type: ignore
                 tuple(self.camera_offset), 
-                self.focal_plane)
+                self.focal_plane) 
 
         # Apply intensity and exposure
         img = (img.astype(np.float32) * intensity * exposure).clip(0,255).astype(np.uint8)

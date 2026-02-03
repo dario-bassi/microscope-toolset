@@ -105,8 +105,8 @@ class CellCycleManager:
                 sister = self.create_sister_cell(cell)
                 cells_to_add.append(sister)
             
-            # Check for death removal (after death animation plays)
-            if cell.is_dying and cell.death_timer > 60.0:  # 60 seconds in apoptotic state
+            # Check for death removal (when apoptosis is complete)
+            if hasattr(cell, 'remove_this_cell') and cell.remove_this_cell:
                 cells_to_remove.append(i)
                 if self.track_stats:
                     self.n_deaths += 1

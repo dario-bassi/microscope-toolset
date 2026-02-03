@@ -49,7 +49,11 @@ class CellCycleNormal(NormalCell):
         # Physics state for telophase
         self.base_r_at_telophase = None
         # Death tracking
-        self.death_timer: float = 0.0
+        self.death_timer: int = 0
+        self.apoptosis_death_phase: Literal['Shrinkage', 'Blebbing', 'Apoptotic bodies', 'Phagocytosis'] = 'Shrinkage'
+        self.time_table_apoptois: dict[str, int] = {'Shrinkage': 20, 'Blebbing': 40, 'Apoptotic bodies': 50, 'Phagocytosis': 60}
+        self.max_death_timer: int = 60
+        self.remove_this_cell = False
 
 
     def _initial_chromatin_offsets(self) -> list[tuple[float, float]]:
@@ -114,26 +118,30 @@ class CellCycleNormal(NormalCell):
         # G1(240): 0 -> 240
         # S(120): 241 -> 360
         # G2(120): 361 -> 480
-        # M(180): 481 -> 516, 517 -> 552, 553 -> 588, 589 -> 624, 625 -> 660 
-
-        if cell_cycle_state == 'G1':
-           return random.randint(0, 240)
-        elif cell_cycle_state == 'S':
-            return random.randint(241, 360)
-        elif cell_cycle_state == 'G2':
-            return random.randint(361, 480)
-        else: # M
-            if cell_mitosis_state == 'Prophase':
-                return random.randint(481, 516)
-            elif cell_mitosis_state == 'Metaphase':
-                return random.randint(517, 552)
-            elif cell_mitosis_state == 'Anaphase':
-                return random.randint(553, 588)
-            elif cell_mitosis_state == 'Telophase':
-                return random.randint(589, 624)
-            else:  # Cytokinesis or Interphase
-                return random.randint(625, 660)
-
+        # M(180): 481 -> 516, 517 -> 552, 553 -> 588, 589 -> 624, 625 -> 660
+        match cell_cycle_state:
+            case 'G1':
+                return random.randint(0, 240)
+            case 'S':
+                return random.randint(241, 360)
+            case 'G2':
+                return random.randint(361, 480)
+            case 'M': # M
+                match cell_mitosis_state:
+                    case 'Prophase':
+                        return random.randint(481, 516)
+                    case 'Metaphase':
+                        return random.randint(517, 552)
+                    case 'Anaphase':
+                        return random.randint(553, 588)
+                    case 'Telophase':
+                        return random.randint(589, 624)
+                    case 'Cytokinesis':  # Cytokinesis or Interphase
+                        return random.randint(625, 660)
+                    case _:
+                        return -1 # undefined
+            case _:
+                return -1 # undefined
 
     def _change_state(self) -> None:
         """Change the state of the cell."""
@@ -169,27 +177,36 @@ class CellCycleNormal(NormalCell):
         if self.n_div >= self.max_nb_div:
             self.is_dying = True
 
-    def _start_apoptosis(self):
+    def _start_apoptosis(self) -> bool:
         """Start signal for apoptosis."""
-        raise NotImplementedError()
+        if self.is_dying:
+            return True
+        
+        return False
     
     def update_behavior(self, dt: float) -> None:
         """Update cell cycle state and chromatin positions."""
-        super().update_behavior(dt)
+        # Skip normal physics if dying
+        if not self.is_dying:
+            super().update_behavior(dt)
         
         # Update death timer if dying
         if self.is_dying:
-            self.death_timer += dt
+            self.death_timer += int(dt)
+            self._update_apoptosis_phase()
+            self._update_apoptotic_physics()
         
-        # Update state cycle (G1 -> S -> G2 -> M)
-        self._change_state()
-        self.current_time_life += int(dt)
+        # Update state cycle (G1 -> S -> G2 -> M) only if not dying
+        if not self.is_dying:
+            self._change_state()
+            self.current_time_life += int(dt)
 
         # Update chromatin positions to follow cell center
         self.chromatin_pts = self._update_chromatin_pts()
 
         # Update cell cycle physics
-        self._physic_cell_cycle()
+        if not self.is_dying:
+            self._physic_cell_cycle()
 
     def _physic_cell_cycle(self):
         """Update physics based on cell cycle state."""
@@ -230,3 +247,83 @@ class CellCycleNormal(NormalCell):
         sister.vel = self.vel.copy()
         return sister
     
+
+    def _update_apoptosis_phase(self) -> None:
+        """Update the current apoptotic phase"""
+        
+        transiction_dict = {'Shrinkage': 'Blebbing', 'Blebbing': 'Apoptotic bodies', 'Apoptotic bodies': 'Phagocytosis'}
+
+        if self.death_timer > self.time_table_apoptois[self.apoptosis_death_phase]:
+
+            if self.apoptosis_death_phase == 'Phagocytosis':
+                # signal cell remove.
+                self.remove_this_cell = True
+            else:
+                self.apoptosis_death_phase = transiction_dict[self.apoptosis_death_phase] # type: ignore
+
+
+    def _get_shrinkage_progess(self) -> float:
+        """Returns the progress through 'Shrinkage' phase (0-1)."""
+        shrinkage_duration = self.time_table_apoptois['Shrinkage']
+        progress = min(self.death_timer / shrinkage_duration, 1.0)
+        return progress
+
+    def _get_current_shrinkage_factor(self) -> float:
+        """Returns radius multiplier of cell shrinkage (1.0 -> 0.7)."""
+        progress = self._get_shrinkage_progess()
+        # Linear shrinkage: start at 1.0, end at 0.7 (30% shrinkage)
+        shrinkage_factor = 1.0 - (0.3 * progress)
+        return shrinkage_factor
+
+    def _get_apoptotic_body_positions(self) -> list[tuple[float, float]]:
+        """Generate 3-5 body positions scattered linearly from center.
+        
+        Bodies scatter within 0.5 of the original cell radius from center.
+        """
+        num_bodies = random.randint(3, 5)
+        original_radius = self.base_r
+        max_scatter_radius = original_radius * 0.5
+        
+        positions = []
+        for i in range(num_bodies):
+            # Spread linearly around center
+            angle = (i / num_bodies) * 2 * np.pi + random.uniform(-0.2, 0.2)
+            radius = random.uniform(0, max_scatter_radius)
+            
+            x = self.center[0] + radius * np.cos(angle)
+            y = self.center[1] + radius * np.sin(angle)
+            positions.append((x, y))
+        
+        return positions
+
+    def _initialize_apoptotic_bodies(self) -> None:
+        """Initialize 'Apoptotic Bodies' phase to set up nucleus fragments.
+        
+        Store original radius and generate body positions.
+        """
+        if not hasattr(self, 'apoptotic_body_positions'):
+            self.apoptotic_body_positions = self._get_apoptotic_body_positions()
+        if not hasattr(self, 'original_base_r_for_apoptosis'):
+            self.original_base_r_for_apoptosis = self.base_r
+    
+    def _update_apoptotic_physics(self) -> None:
+        """Disable physics for apoptotic cells.
+        
+        - Stop velocity
+        - Disable brownian motion
+        - Initialize apoptotic bodies when entering that phase
+        """
+        # Stop all movement
+        self.vel[:] = 0.0
+        
+        # Apply shrinkage factor during Shrinkage phase
+        if self.apoptosis_death_phase == 'Shrinkage':
+            shrinkage_factor = self._get_current_shrinkage_factor()
+            # Scale base_r for shrinkage (will affect nucleus size proportionally)
+            if not hasattr(self, 'original_base_r_for_apoptosis'):
+                self.original_base_r_for_apoptosis = self.base_r
+            self.base_r = self.original_base_r_for_apoptosis * shrinkage_factor
+        
+        # Initialize apoptotic bodies when entering that phase
+        if self.apoptosis_death_phase == 'Apoptotic bodies':
+            self._initialize_apoptotic_bodies()
