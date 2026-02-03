@@ -39,6 +39,7 @@ class CellCycleManager:
         
         A cell is ready to divide when:
         - Cytokinesis is complete (entering G1 state from M phase)
+        - Division hasn't already occurred for this cycle
         
         Args:
             cell: Cell to check for division readiness
@@ -51,9 +52,11 @@ class CellCycleManager:
         is_in_g1 = cell.cell_cycle_state == 'G1'
         is_interphase = cell.cell_mitosis_state == 'Interphase'
         is_early_g1 = cell.current_time_life < 10  # Within first 10 seconds of G1
+        # Prevent re-division: only allow if we haven't already divided this cycle
+        has_not_divided_yet = not getattr(cell, '_division_occurred_this_cycle', False)
         is_post_cytokinesis = (
             is_in_g1 and is_interphase and is_early_g1 and
-            cell.n_div < self.max_divisions
+            cell.n_div < self.max_divisions and has_not_divided_yet
         )
         
         return is_post_cytokinesis
@@ -64,6 +67,8 @@ class CellCycleManager:
         The mother cell is reset to G1 state. The daughter (sister) cell is created
         with identical initial conditions.
         
+        Note: Division count is already incremented in cell_cycle._update_cell_div_count_and_flag_apoptotic_cell()
+        
         Args:
             mother: The mother cell that is dividing
             
@@ -73,10 +78,7 @@ class CellCycleManager:
         # Create sister cell using the convenience method
         sister = mother.copy_with_reset()
         
-        # Increment mother's division count (she's now divided)
-        mother.n_div += 1
-        
-        # Track statistics
+        # Track statistics (division count already incremented by cell cycle logic)
         if self.track_stats:
             self.total_divisions += 1
             self.n_births += 1

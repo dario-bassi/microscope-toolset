@@ -30,7 +30,7 @@ class Renderer:
         # render image according to the objective used
         self.crop_dim = 512 # by default 10x crop
         # create master shape for the chromosome
-        self.master_shape = np.array([[-5,-20], [0,-5], [5,-20], [5,20], [0,5], [-5,20]], dtype=np.float32)
+        self.master_shape = np.array([[-1.25,-5], [0,-1.25], [1.25,-5], [1.25,5], [0,1.25], [-1.25,5]], dtype=np.float32)
 
     
     def render_cells(self, cells: List[CellBase], mode: int = 0,
@@ -171,43 +171,46 @@ class Renderer:
         if cell.cell_mitosis_state == 'Interphase' and cell.cell_cycle_state == 'G1':
             # Nucleus is intact with uncondesed chromatin
             cv2.circle(cell_img, nucleus_pos, nucleus_radius, (150, 60, 60), -1, lineType=cv2.LINE_AA)
-            self._draw_smooth_chromatin(cell_img, chromatin_pts_screen, num_strands=46) # 2n = 46, here is double after S phase
+            self._draw_smooth_chromatin(cell_img, chromatin_pts_screen, num_strands=20) # 2n = 46, here is double after S phase
 
         elif cell.cell_mitosis_state == 'Interphase' and cell.cell_cycle_state == 'S':
             # S phase: DNA replication, uncondensed chromosome
             cv2.circle(cell_img, nucleus_pos, nucleus_radius, (150, 60, 60), -1, lineType=cv2.LINE_AA)
-            self._draw_smooth_chromatin(cell_img, chromatin_pts_screen, num_strands=92) # 2n = 46, here is double after S phase
+            self._draw_smooth_chromatin(cell_img, chromatin_pts_screen, num_strands=40) # 2n = 46, here is double after S phase
 
         elif cell.cell_mitosis_state == 'Interphase' and cell.cell_cycle_state == 'G2':
             cv2.circle(cell_img, nucleus_pos, nucleus_radius, (150, 60, 60), -1, lineType=cv2.LINE_AA)
-            self._draw_smooth_chromatin(cell_img, chromatin_pts_screen, num_strands=92) # 2n = 46, here is double after S phase
+            self._draw_smooth_chromatin(cell_img, chromatin_pts_screen, num_strands=40) # 2n = 46, here is double after S phase
 
         elif cell.cell_mitosis_state == 'Prophase' and cell.cell_cycle_state == 'M':
             # Nucleus dissolve, chromatin condenses into sister chromatine shape
             # Draw condensed chromatin (for simplicity use X shape) without nucleus border
-            self._draw_condensed_chromatin(cell_img, cell, num_chromosome=92)
+            self._draw_condensed_chromatin(cell_img, cell, camera_offset, num_chromosome=10)
 
         elif cell.cell_mitosis_state == 'Metaphase'and cell.cell_cycle_state == 'M':
             # Chromatin alignes at cell equator
-            self._draw_condensed_chromatin_equator(cell_img, cell, num_chromosome=92)
+            self._draw_condensed_chromatin_equator(cell_img, cell, camera_offset, num_chromosome=10)
 
         elif cell.cell_mitosis_state == 'Anaphase'and cell.cell_cycle_state == 'M':
             # Sister chromatin separate toward cell's poles
-            self._draw_condensed_chromatin_polar(cell_img, cell, num_chromosome=92)
+            self._draw_condensed_chromatin_polar(cell_img, cell, camera_offset, num_chromosome=10)
 
         elif cell.cell_mitosis_state == 'Telophase'and cell.cell_cycle_state == 'M':
             # Two nuclei forming at the cell's poles
             # Cell membrane growing, starting to separate
-            self._draw_condensed_chromatin_polar(cell_img, cell, num_chromosome=92)
+            self._draw_condensed_chromatin_polar(cell_img, cell, camera_offset, num_chromosome=10)
             # Draw two new nuclei
             pole_offset = int(cell_radius * 0.3)
             cv2.circle(cell_img, (nucleus_pos[0] - pole_offset, nucleus_pos[1]),
                        int(nucleus_radius * 0.7), (150, 60, 60), -1, lineType=cv2.LINE_AA)
             cv2.circle(cell_img, (nucleus_pos[0] + pole_offset, nucleus_pos[1]),
-                       int(nucleus_radius * 0.7), (150, 60, 60), lineType=cv2.LINE_AA)
+                       int(nucleus_radius * 0.7), (150, 60, 60), -1, lineType=cv2.LINE_AA)
             
             # Draw cleavage furrow
-            progress = (cell.current_time_life % cell.time_table_mitosis['Telophase']) / (cell.time_table_mitosis['Cytokinesis'] - cell.time_table_mitosis['Telophase'])
+            telophase_start = cell.time_table_mitosis['Telophase']
+            telophase_end = cell.time_table_mitosis['Cytokinesis']
+            progress = (cell.current_time_life - telophase_start) / (telophase_end - telophase_start)
+            progress = min(max(progress, 0.0), 1.0)  # Clamp to [0, 1]
             self._draw_cytokenesis_furrow(cell_img, cell, center_screen, vertices, furrow_depth=0.2 + 0.1 * progress)
             
         elif cell.cell_mitosis_state == 'Cytokinesis'and cell.cell_cycle_state == 'M':
@@ -481,7 +484,7 @@ class Renderer:
             # 3. Draw the strand
             curve_pts = np.array(curve_pts).reshape((-1, 1, 2))
             cv2.polylines(img, [curve_pts], isClosed=False, 
-                        color=(200, 0, 200), thickness=2, # Purple - visible over red nucleus
+                        color=(63, 0, 0), thickness=1,  # Thin chromatin strands
                         lineType=cv2.LINE_AA) # LINE_AA is crucial for smoothness
             
 
@@ -522,10 +525,10 @@ class Renderer:
         cv2.polylines(img, [pts], True, (150, 0, 150), 1, lineType=cv2.LINE_AA)  # Darker purple outline
         
 
-    def _draw_condensed_chromatin(self, img: np.ndarray, cell: CellCycleNormal, num_chromosome: int = 46):
+    def _draw_condensed_chromatin(self, img: np.ndarray, cell: CellCycleNormal, camera_offset: Tuple[float, float], num_chromosome: int = 46):
         """Draw condensed chromatin, forming a X shape inside the nucleus area."""
 
-        center = np.array(cell.center)
+        center = np.array(cell.center) - np.array(camera_offset)
         nucleus_radius = int(0.4 * cell.base_r)
 
         # Draw chromosomes scattered throught the nucleus
@@ -545,9 +548,9 @@ class Renderer:
 
 
     # move condensed chromatin to the center along an axis
-    def _draw_condensed_chromatin_equator(self, img: np.ndarray, cell: CellCycleNormal, num_chromosome: int = 46):
+    def _draw_condensed_chromatin_equator(self, img: np.ndarray, cell: CellCycleNormal, camera_offset: Tuple[float, float], num_chromosome: int = 46):
         """Draw condensed chromatin at the equator of the cell."""
-        center = np.array(cell.center)
+        center = np.array(cell.center) - np.array(camera_offset)
         cell_radius = cell.base_r
 
         # Metaphase plate thickness
@@ -580,10 +583,10 @@ class Renderer:
 
     # separate half of the condensed chromatin towards the polar pos in the cell
     # and increase the cell size to double (two alonged cell)
-    def _draw_condensed_chromatin_polar(self, img: np.ndarray, cell: CellCycleNormal, num_chromosome: int = 46):
+    def _draw_condensed_chromatin_polar(self, img: np.ndarray, cell: CellCycleNormal, camera_offset: Tuple[float, float], num_chromosome: int = 46):
         """Draw condensed chromatin at the polar pos of the cell."""
         
-        center = np.array(cell.center)
+        center = np.array(cell.center) - np.array(camera_offset)
         cell_radius = cell.base_r
 
         # Distance of poles from center
@@ -684,7 +687,7 @@ class Renderer:
         nucleus_radius = int(0.4 * cell_radius * scale_factor)
 
         # Scale chromatin offsets (not absolute pts) for daughter cells
-        chromatin_offset_scaled = [offset * scale_factor for offset in cell.chromatin_offset]
+        chromatin_offset_scaled = [(offset[0] * scale_factor, offset[1] * scale_factor) for offset in cell.chromatin_offset]
 
         # Top nucleus (always drawn - it's in viewport)
         cv2.circle(img, tuple(center_top.astype(int)), nucleus_radius,
@@ -733,7 +736,7 @@ class Renderer:
         cell_img = np.full((self.height, self.width, 3), 0, dtype=np.uint8)
         
         if cell.apoptosis_death_phase == 'Shrinkage':
-            self._draw_shrinkage_apoptosis(cell_img, cell, center_screen, vertices, chromatin_pts_screen)
+            self._draw_shrinkage_apoptosis(cell_img, cell, center_screen, vertices, chromatin_pts_screen, camera_offset)
         elif cell.apoptosis_death_phase == 'Blebbing':
             self._draw_blebbing_apoptosis(cell_img, cell, center_screen, vertices, chromatin_pts_screen)
         elif cell.apoptosis_death_phase == 'Apoptotic bodies':
@@ -750,7 +753,7 @@ class Renderer:
 
     def _draw_shrinkage_apoptosis(self, img: np.ndarray, cell: CellCycleNormal,
                                   center_screen: np.ndarray, vertices: np.ndarray,
-                                  chromatin_pts_screen: list) -> None:
+                                  chromatin_pts_screen: list, camera_offset: Tuple[float, float]) -> None:
         """Draw shrinking cell with condensed chromatin visible inside."""
         # Get shrinkage factor and apply to vertices
         shrinkage_factor = cell._get_current_shrinkage_factor()
@@ -773,7 +776,7 @@ class Renderer:
         cv2.circle(img, nucleus_pos, nucleus_radius, (150, 60, 60), -1, lineType=cv2.LINE_AA)
         
         # Draw condensed chromatin (nuclear material becoming more compact)
-        self._draw_condensed_chromatin(img, cell, num_chromosome=92)
+        self._draw_condensed_chromatin(img, cell, camera_offset, num_chromosome=92)
 
     def _draw_blebbing_apoptosis(self, img: np.ndarray, cell: CellCycleNormal,
                                  center_screen: np.ndarray, vertices: np.ndarray,

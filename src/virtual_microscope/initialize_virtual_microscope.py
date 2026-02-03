@@ -130,7 +130,7 @@ def initialize_virtual_microscope_from_configuration(core: UniMMCore) -> None:
         logger.info("Initialized UniMMCore")
         #microscope_simulation = MicroscopeSim() # old simulation to uncomment!
         #microscope_simulation = MicroscopeSimOptmized(cell_type="normal", nb_cells=100)
-        microscope_simulation = MicroscopeSimOptmized(cell_type="cycle", nb_cells=10)
+        microscope_simulation = MicroscopeSimOptmized(cell_type="cycle", nb_cells=20)
         # Initialize global Singleton
         bridge_module.GLOBAL_BRIDGE = SimulationBridge(microscope_simulation)
         logger.info("Initialized MicroscopeSim")

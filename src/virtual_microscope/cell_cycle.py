@@ -18,7 +18,8 @@ class CellCycleNormal(NormalCell):
 
         # Initialize max_nb_div FIRST before using in _initial_number_division()
         self.max_nb_div: int = 10
-
+        # Store original base_r before any cycle changes to restore after division
+        self.original_base_r = self.base_r
         # G1, S, G2 -> interphase
         # M -> prophase, metaphase, anaphase, telophase
         # M -> cytokinesis
@@ -39,7 +40,11 @@ class CellCycleNormal(NormalCell):
             
         self.is_dying: bool = self._initialization_apoptosis()
         self.time_tot_cycle: float = 660.0 # in simulation units (seconds)
+        # Time table defines END times for each phase (cumulative)
+        # G1: 0-240, S: 240-360, G2: 360-480, M: 480-660
         self.time_table_cycle: dict[str, float] = {'G1': 240.0, 'S': 360.0, 'G2': 480.0} # in seconds
+        # Mitosis phases: cumulative times from start of M phase (480s)
+        # Prophase: 480-516, Metaphase: 516-552, Anaphase: 552-588, Telophase: 588-624, Cytokinesis: 624-660
         self.time_table_mitosis: dict[str, float] = {'Prophase': 516.0, 'Metaphase': 552.0, 'Anaphase': 588.0, 'Telophase': 624.0, 'Cytokinesis': 660.0}
         # add random start time point for each cell
         if initial_time is not None:
@@ -54,6 +59,7 @@ class CellCycleNormal(NormalCell):
         self.chromatin_pts = self._update_chromatin_pts()
         # Physics state for telophase
         self.base_r_at_telophase = None
+        
         # Death tracking
         self.death_timer: float = 0.0
         self.apoptosis_death_phase: Literal['Shrinkage', 'Blebbing', 'Apoptotic bodies', 'Phagocytosis'] = 'Shrinkage'
@@ -64,6 +70,7 @@ class CellCycleNormal(NormalCell):
         self._last_transitioned_cycle_state: Optional[str] = None
         self._last_transitioned_mitosis_state: Optional[str] = None
         self._last_transitioned_apoptosis_phase: Optional[str] = None
+        self._division_occurred_this_cycle: bool = False  # Prevent re-division in same cycle
 
 
     def _initial_chromatin_offsets(self) -> list[tuple[float, float]]:
@@ -83,9 +90,11 @@ class CellCycleNormal(NormalCell):
         return offsets
     
     def _update_chromatin_pts(self) -> list[tuple[float, float]]:
-        """Update chromatin points based on current center position"""
+        """Update chromatin points based on current center position and cell size"""
+        # Scale chromatin offsets proportionally with cell size changes
+        size_ratio = self.base_r / self.original_base_r if self.original_base_r > 0 else 1.0
         return [
-            (self.center[0] + offset[0], self.center[1] + offset[1])
+            (self.center[0] + offset[0] * size_ratio, self.center[1] + offset[1] * size_ratio)
             for offset in self.chromatin_offset
         ]
     
@@ -185,17 +194,25 @@ class CellCycleNormal(NormalCell):
                 if self.cell_mitosis_state == 'Interphase':
                     self.current_time_life = 0
                     self.cell_cycle_state = 'G1'  # Reset to G1 for new cycle
+                    # Restore base_r to original value (undo telophase growth)
+                    self.base_r = self.original_base_r
                     self.base_r_at_telophase = None
-                    self._last_transitioned_cycle_state = None  # Reset cycle state guard
+                    self._last_transitioned_cycle_state = None  # Reset cycle state guard for new cycle
+                    self._last_transitioned_mitosis_state = None  # Reset mitosis guard for next M phase cycle
+                    self._division_occurred_this_cycle = False  # Reset division flag for new cycle
                     self._update_cell_div_count_and_flag_apoptotic_cell() # update cell count
 
     def _update_cell_div_count_and_flag_apoptotic_cell(self) -> None:
         """Check the division count for the cell"""
-        # Division complete - increment division count
-        self.n_div += 1
-        # Flag as apoptotic if reached max divisions
-        if self.n_div >= self.max_nb_div:
-            self.is_dying = True
+        # Only increment if division hasn't already occurred in this cycle
+        if not self._division_occurred_this_cycle:
+            # Division complete - increment division count
+            self.n_div += 1
+            # Mark that division occurred to prevent re-division
+            self._division_occurred_this_cycle = True
+            # Flag as apoptotic if reached max divisions
+            if self.n_div >= self.max_nb_div:
+                self.is_dying = True
 
     def _start_apoptosis(self) -> bool:
         """Start signal for apoptosis."""
@@ -220,7 +237,6 @@ class CellCycleNormal(NormalCell):
         if not self.is_dying:
             self._change_state()
             self.current_time_life += dt
-            print("cycle time: ", self.current_time_life)
 
         # Update chromatin positions to follow cell center
         self.chromatin_pts = self._update_chromatin_pts()
@@ -242,6 +258,11 @@ class CellCycleNormal(NormalCell):
                 # Linear growth: start at 1x, end at sqrt(2) ~ 1.41x (doubled area)
                 growth_factor = 1.0 + 0.41 * progress
                 self.base_r = self.base_r_at_telophase * growth_factor
+        else:
+            # Restore base_r to original when NOT in telophase (ready for next cycle)
+            if self.base_r_at_telophase is not None and self.cell_mitosis_state != 'Telophase':
+                # Will be reset to original when entering G1
+                pass
 
     def copy_with_reset(self) -> 'CellCycleNormal':
         """Create a sister cell with reset cycle state but copied chromatin.
@@ -251,6 +272,7 @@ class CellCycleNormal(NormalCell):
         - Has 0 divisions completed
         - Inherits mother's chromatin pattern
         - Inherits velocity but position wraps naturally
+        - Positioned offset from mother cell to simulate cytokinesis separation
         """
         sister = CellCycleNormal(
             width=self.width,
@@ -264,9 +286,23 @@ class CellCycleNormal(NormalCell):
             initial_divisions=0,
             copy_chromatin_from=self
         )
-        # Copy position and velocity from mother
+        # Copy position and velocity from mother, then offset sister cell
         sister.center = self.center.copy()
         sister.vel = self.vel.copy()
+        
+        # Separate sister and mother cells: move sister away from mother
+        # Use velocity direction or a random direction if velocity is near zero
+        separation_distance = self.base_r * 0.8  # Separate by ~80% of cell radius
+        if np.linalg.norm(self.vel) > 0.1:
+            # Move along velocity direction
+            direction = self.vel / np.linalg.norm(self.vel)
+        else:
+            # Random direction if not moving
+            angle = np.random.uniform(0, 2 * np.pi)
+            direction = np.array([np.cos(angle), np.sin(angle)])
+        
+        sister.center = (sister.center + direction * separation_distance) % np.array([self.width, self.height])
+        
         return sister
     
 
@@ -279,11 +315,12 @@ class CellCycleNormal(NormalCell):
         if (self.death_timer >= self.time_table_apoptois[self.apoptosis_death_phase] and
             self._last_transitioned_apoptosis_phase != self.apoptosis_death_phase):
 
+            self._last_transitioned_apoptosis_phase = self.apoptosis_death_phase  # Mark this phase as transitioned
+            
             if self.apoptosis_death_phase == 'Phagocytosis':
                 # signal cell remove.
                 self.remove_this_cell = True
             else:
-                self._last_transitioned_apoptosis_phase = self.apoptosis_death_phase  # Mark this phase as transitioned
                 self.apoptosis_death_phase = transiction_dict[self.apoptosis_death_phase] # type: ignore
 
 

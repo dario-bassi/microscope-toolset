@@ -90,7 +90,7 @@ class MicroscopeSimOptmized:
                                 vertices=24, seed=seed
                             )
                 elif self.cell_type == "cycle":
-                    cell = CellCycleNormal(self.width, self.height, self.base_radius, vertices=24, seed=seed)
+                    cell = CellCycleNormal(self.width, self.height, self.base_radius, vertices=24, seed=seed, initial_state='S', initial_mitosis='Interphase', initial_divisions=2, initial_time=250)
                 else:
                     raise ValueError(f"Unknow celly type: {self.cell_type}")
                 
@@ -188,7 +188,7 @@ class MicroscopeSimOptmized:
         # Sync back to cell objects
         self._sync_arrays_to_cells()
 
-        # Call cell-specific behaviours
+        # Call cell-specific behaviours (safe - no list modification during iteration)
         for cell in self._cells:
             if hasattr(cell, "update_behavior"):
                 cell.update_behavior(dt) # type: ignore
@@ -197,9 +197,11 @@ class MicroscopeSimOptmized:
         self._handle_collisions_with_spatial_grid()
         
         # Update cell cycle dynamics (divisions, apoptosis)
+        # This modifies self._cells (adds/removes cells), so do it last
         if self.cycle_manager is not None:
             self.cycle_manager.update(self._cells, self) # type: ignore
             # Resync numpy arrays after cell list changes
+            # This protects against index misalignment by rebuilding arrays completely
             self._resync_arrays_after_division()
 
     def _handle_collisions_with_spatial_grid(self) -> None:
@@ -262,7 +264,7 @@ class MicroscopeSimOptmized:
         """Capture a frame with option stimulation"""
         # Update stimulation
         now = time.perf_counter()
-        dt = (now - self._last_time) * 0.03 # scale time for smoother simulation, reduced for lower cell velocity
+        dt = (now - self._last_time) * 0.3 # scale time for smoother simulation, reduced for lower cell velocity
         print("dt: ", dt)
         self._last_time = now
         self.update(dt)
