@@ -9,7 +9,9 @@ class CellCycleNormal(NormalCell):
     def __init__(self, *args, initial_state: Optional[Literal['G1', 'S', 'G2', 'M']] = None,
                  initial_mitosis: Optional[Literal['Cytokinesis', 'Interphase', 'Prophase', 'Metaphase', 'Anaphase', 'Telophase']] = None,
                  initial_time: Optional[int] = None, initial_divisions: Optional[int] = None,
-                 copy_chromatin_from: Optional['CellCycleNormal'] = None, **kwargs):
+                 copy_chromatin_from: Optional['CellCycleNormal'] = None,
+                 initial_apoptosis: Optional[Literal['Shrinkage', 'Blebbing', 'Apoptotic bodies', 'Phagocytosis']] = None,
+                 death_time: Optional[float] = None, **kwargs):
         super().__init__(*args, **kwargs)
 
         # This cell has no fluorescence
@@ -61,8 +63,16 @@ class CellCycleNormal(NormalCell):
         self.base_r_at_telophase = None
         
         # Death tracking
-        self.death_timer: float = 0.0
-        self.apoptosis_death_phase: Literal['Shrinkage', 'Blebbing', 'Apoptotic bodies', 'Phagocytosis'] = 'Shrinkage'
+        if death_time is not None:
+            self.death_timer: float = death_time
+        else:
+            self.death_timer: float = 0.0
+            
+        if initial_apoptosis is not None:
+            self.apoptosis_death_phase: Literal['Shrinkage', 'Blebbing', 'Apoptotic bodies', 'Phagocytosis'] = initial_apoptosis
+        else:
+            self.apoptosis_death_phase: Literal['Shrinkage', 'Blebbing', 'Apoptotic bodies', 'Phagocytosis'] = 'Shrinkage'
+
         self.time_table_apoptois: dict[str, float] = {'Shrinkage': 20.0, 'Blebbing': 40.0, 'Apoptotic bodies': 50.0, 'Phagocytosis': 60.0}
         self.max_death_timer: float = 60.0
         self.remove_this_cell = False
