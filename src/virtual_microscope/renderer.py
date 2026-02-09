@@ -68,7 +68,7 @@ class Renderer:
             self._draw_cell_cycle(img, cell, camera_offset, focal_plane, mode)  # type: ignore
 
         # apply microscope filters
-        img = self._apply_filters(img, mode)
+        #img = self._apply_filters(img, mode)
 
         # crop and rescale base on the objective used
         img = self._crop_and_rescale(img)
@@ -96,14 +96,25 @@ class Renderer:
     def _draw_smooth_cell(self, img: np.ndarray, center: np.ndarray, 
                          vertices: np.ndarray,color: tuple, 
                          thickness: int = -1) -> None:
-        """Draw a smooth cell shape using bezier curves or ellipse fitting."""
-        n_interp = 100  # More points for smoother appearance
+        """Draw a smooth cell shape using cubic spline interpolation for rounder borders."""
+        n_interp = 200  # Increased for even smoother appearance
         angles_interp = np.linspace(0, 2 * np.pi, n_interp, endpoint=False)
         
-        # Interpolate radii to get smooth transitions
+        # Get original angles and radii
         angles_orig = np.linspace(0, 2 * np.pi, len(vertices), endpoint=False)
         radii_orig = np.linalg.norm(vertices - center, axis=1)
-        radii_interp = np.interp(angles_interp, angles_orig, radii_orig, period=2*np.pi)
+        
+        # Duplicate first point at the end to handle periodic boundary for spline
+        angles_extended = np.append(angles_orig, angles_orig[0] + 2 * np.pi)
+        radii_extended = np.append(radii_orig, radii_orig[0])
+        
+        # Use cubic spline interpolation for much rounder, smoother curves
+        from scipy.interpolate import CubicSpline
+        cs = CubicSpline(angles_extended, radii_extended, bc_type='periodic')
+        radii_interp = cs(angles_interp)
+        
+        # Ensure radii stay positive
+        radii_interp = np.maximum(radii_interp, 0.01)
         
         # Generate smooth vertices
         smooth_verts = np.zeros((n_interp, 2))
@@ -193,34 +204,28 @@ class Renderer:
 
         elif cell.cell_mitosis_state == 'Anaphase'and cell.cell_cycle_state == 'M':
             # Sister chromatin separate toward cell's poles
+            # Cell membrane starts pinching at equator (constriction_progress: 0% → 50%)
             self._draw_condensed_chromatin_polar(cell_img, cell, camera_offset, num_chromosome=10)
 
         elif cell.cell_mitosis_state == 'Telophase'and cell.cell_cycle_state == 'M':
             # Two nuclei forming at the cell's poles
-            # Cell membrane growing, starting to separate
+            # Cell membrane constriction complete (constriction_progress: 50% → 100%)
+            # The cell is now deeply pinched with dumbbell/hourglass shape
             self._draw_condensed_chromatin_polar(cell_img, cell, camera_offset, num_chromosome=10)
-            # Draw two new nuclei
-            pole_offset = int(cell_radius * 0.3)
-            cv2.circle(cell_img, (nucleus_pos[0] - pole_offset, nucleus_pos[1]),
+            # Draw two new nuclei at poles (TOP and BOTTOM along division axis)
+            pole_offset = int(cell_radius * 0.5)
+            cv2.circle(cell_img, (nucleus_pos[0], nucleus_pos[1] - pole_offset),
                        int(nucleus_radius * 0.7), (150, 60, 60), -1, lineType=cv2.LINE_AA)
-            cv2.circle(cell_img, (nucleus_pos[0] + pole_offset, nucleus_pos[1]),
+            cv2.circle(cell_img, (nucleus_pos[0], nucleus_pos[1] + pole_offset),
                        int(nucleus_radius * 0.7), (150, 60, 60), -1, lineType=cv2.LINE_AA)
-            
-            # Draw cleavage furrow
-            telophase_start = cell.time_table_mitosis['Telophase']
-            telophase_end = cell.time_table_mitosis['Cytokinesis']
-            progress = (cell.current_time_life - telophase_start) / (telophase_end - telophase_start)
-            progress = min(max(progress, 0.0), 1.0)  # Clamp to [0, 1]
-            self._draw_cytokenesis_furrow(cell_img, cell, center_screen, vertices, furrow_depth=0.2 + 0.1 * progress)
             
         elif cell.cell_mitosis_state == 'Cytokinesis'and cell.cell_cycle_state == 'M':
-            # Draw two separating cells with uncondensed chromatin in nuclei
-            # Cytokinesis starts at Telophase end (624s) and ends at total cycle (660s)
-            progress = (cell.current_time_life - cell.time_table_mitosis['Telophase']) / (cell.time_tot_cycle - cell.time_table_mitosis['Telophase'])
-
-            progress = min(progress, 1.0)
-
-            self._draw_separating_cells(cell_img, cell, center_screen, vertices, progress, camera_offset)
+            # Draw pinched cell during cytokinesis
+            # Constriction continues beyond 100% as the bridge narrows
+            # As constriction_progress increases from 1.0 → 1.3, the bridge decreases in size
+            # Once bridge disappears (constriction >= 1.2), division is triggered and
+            # sister cell is created in the next state_manager update
+            self._draw_condensed_chromatin_polar(cell_img, cell, camera_offset, num_chromosome=10)
         
         # Apply blur based on focal plane
         if kernel_size > 0:
@@ -658,8 +663,10 @@ class Renderer:
                                separation_progress: float = 0.5, camera_offset: Tuple[float, float] = (0, 0)) -> None:
         """Draw two separating cells during cytokenesis with connection bridge."""
         # separation_progress: 0.0 = fully connected, 1.0 = fully separated
-
-        cell_radius = cell.base_r
+        
+        # Use original radius (unconstricted) to calculate proper daughter cell size
+        # This avoids issues from cytokinesis constriction deforming the cells
+        cell_radius = cell.original_base_r if hasattr(cell, 'original_base_r') else cell.base_r
         separation_distance = cell_radius * separation_progress
         
         # Top daughter cell center
@@ -668,17 +675,32 @@ class Renderer:
         # Bottom daughter cell center
         center_bottom = center + np.array([0, separation_distance])
         
-        # Scale vertices for separated cells (slightly smaller)
+        # Reconstruct vertices from original radius (avoid using constricted vertices)
+        # This ensures daughter cells have proper circular shape, not pinched/deformed
         scale_factor = np.sqrt(0.5)  # Each daughter cell has ~half the area
-        vertices_scaled = (vertices - center) * scale_factor
+        if hasattr(cell, 'original_r'):
+            # Use original radii to get proper unconstricted shape
+            angles = np.linspace(0, 2 * np.pi, len(vertices), endpoint=False)
+            reconstructed_radii = cell.original_r * scale_factor
+            vertices_scaled = np.zeros_like(vertices)
+            for i, angle in enumerate(angles):
+                vertices_scaled[i] = np.array([
+                    reconstructed_radii[i] * np.cos(angle),
+                    reconstructed_radii[i] * np.sin(angle)
+                ])
+        else:
+            # Fallback: use current vertices but scaled
+            vertices_scaled = (vertices - center) * scale_factor
         
         # Draw top cell with blue gradient layers
+        # Reduce brightness for daughter cells (two cells rendered = reduce to ~half brightness each)
         vertices_top = vertices_scaled + center_top
         layers = 10
+        brightness_reduction = 0.6  # Reduce to 60% brightness to compensate for two cells
         for i in range(layers, 0, -1):
             s = i / layers
-            shade = 80 + int(100 * s)
-            color = (shade, shade, 255)
+            shade = int((80 + int(100 * s)) * brightness_reduction)
+            color = (shade, shade, int(255 * brightness_reduction))
             scaled_verts_top = (vertices_scaled - center_top) * (i / layers) + center_top
             self._draw_smooth_cell(img, center_top, scaled_verts_top, color, thickness=-1)
         self._draw_smooth_cell(img, center_top, vertices_top, (0, 0, 0), thickness=2)
@@ -702,8 +724,8 @@ class Renderer:
             vertices_bottom = vertices_scaled + center_bottom
             for i in range(layers, 0, -1):
                 s = i / layers
-                shade = 80 + int(100 * s)
-                color = (shade, shade, 255)
+                shade = int((80 + int(100 * s)) * brightness_reduction)
+                color = (shade, shade, int(255 * brightness_reduction))
                 scaled_verts_bottom = (vertices_scaled - center_bottom) * (i / layers) + center_bottom
                 self._draw_smooth_cell(img, center_bottom, scaled_verts_bottom, color, thickness=-1)
             self._draw_smooth_cell(img, center_bottom, vertices_bottom, (0, 0, 0), thickness=2)

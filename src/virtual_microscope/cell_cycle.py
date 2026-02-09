@@ -46,8 +46,8 @@ class CellCycleNormal(NormalCell):
         # G1: 0-240, S: 240-360, G2: 360-480, M: 480-660
         self.time_table_cycle: dict[str, float] = {'G1': 240.0, 'S': 360.0, 'G2': 480.0} # in seconds
         # Mitosis phases: cumulative times from start of M phase (480s)
-        # Prophase: 480-516, Metaphase: 516-552, Anaphase: 552-588, Telophase: 588-624, Cytokinesis: 624-660
-        self.time_table_mitosis: dict[str, float] = {'Prophase': 516.0, 'Metaphase': 552.0, 'Anaphase': 588.0, 'Telophase': 624.0, 'Cytokinesis': 660.0}
+        # Prophase: 480-516, Metaphase: 516-552, Anaphase: 552-588, Telophase: 588-624, Cytokinesis: 624-634 (10 seconds)
+        self.time_table_mitosis: dict[str, float] = {'Prophase': 516.0, 'Metaphase': 552.0, 'Anaphase': 588.0, 'Telophase': 624.0, 'Cytokinesis': 634.0}
         # add random start time point for each cell
         if initial_time is not None:
             self.current_time_life: float = float(initial_time)
@@ -58,9 +58,10 @@ class CellCycleNormal(NormalCell):
             self.chromatin_offset = copy_chromatin_from.chromatin_offset.copy()
         else:
             self.chromatin_offset = self._initial_chromatin_offsets()
+        # Physics state for cell constriction (anaphase/telophase)
+        self.constriction_progress: float = 0.0  # 0.0 = no constriction, 1.0 = complete    
         self.chromatin_pts = self._update_chromatin_pts()
-        # Physics state for telophase
-        self.base_r_at_telophase = None
+        self.original_r = self.r.copy()  # Store original radii for constriction calculations
         
         # Death tracking
         if death_time is not None:
@@ -81,6 +82,7 @@ class CellCycleNormal(NormalCell):
         self._last_transitioned_mitosis_state: Optional[str] = None
         self._last_transitioned_apoptosis_phase: Optional[str] = None
         self._division_occurred_this_cycle: bool = False  # Prevent re-division in same cycle
+        self._ready_to_separate: bool = False  # Flag set when bridge disappears during cytokinesis
 
 
     def _initial_chromatin_offsets(self) -> list[tuple[float, float]]:
@@ -100,13 +102,35 @@ class CellCycleNormal(NormalCell):
         return offsets
     
     def _update_chromatin_pts(self) -> list[tuple[float, float]]:
-        """Update chromatin points based on current center position and cell size"""
+        """Update chromatin points based on current center position and cell size
+        
+        During telophase/cytokinesis, chromatin moves towards the poles
+        and is constrained to stay within the cell bounds.
+        """
         # Scale chromatin offsets proportionally with cell size changes
         size_ratio = self.base_r / self.original_base_r if self.original_base_r > 0 else 1.0
-        return [
-            (self.center[0] + offset[0] * size_ratio, self.center[1] + offset[1] * size_ratio)
-            for offset in self.chromatin_offset
-        ]
+        
+        # During heavy pinching (constriction > 0.3), move chromatin towards poles (Y-axis)
+        # This keeps it inside the narrowing cell
+        if self.constriction_progress > 0.3:
+            # Move chromatin towards top and bottom poles as pinching increases
+            pole_shift = self.center[1] * 0.3 * self.constriction_progress  # Shift along Y-axis
+            
+            chromatin_pts = []
+            for i, offset in enumerate(self.chromatin_offset):
+                # Alternate between top and bottom poles for each chromatin point
+                direction = 1 if i % 2 == 0 else -1
+                
+                # Scale offset and shift towards pole
+                new_x = self.center[0] + offset[0] * size_ratio
+                new_y = self.center[1] + offset[1] * size_ratio + (pole_shift * direction)
+                chromatin_pts.append((new_x, new_y))
+            return chromatin_pts
+        else:
+            return [
+                (self.center[0] + offset[0] * size_ratio, self.center[1] + offset[1] * size_ratio)
+                for offset in self.chromatin_offset
+            ]
     
     def _initial_cycle_state(self) -> Literal['M', 'G1', 'G2', 'S']:
         """Randomly selecte a state for a cell."""
@@ -204,12 +228,15 @@ class CellCycleNormal(NormalCell):
                 if self.cell_mitosis_state == 'Interphase':
                     self.current_time_life = 0
                     self.cell_cycle_state = 'G1'  # Reset to G1 for new cycle
-                    # Restore base_r to original value (undo telophase growth)
-                    self.base_r = self.original_base_r
-                    self.base_r_at_telophase = None
+                    # Reset constriction and radii for fresh new cycle
+                    self.constriction_progress = 0.0
+                    self.r = self.original_r.copy()  # Reset to baseline (once per cycle at G1 entry)
+                    # Update original_r to capture any permanent changes to cell shape
+                    self.original_r = self.r.copy()
                     self._last_transitioned_cycle_state = None  # Reset cycle state guard for new cycle
                     self._last_transitioned_mitosis_state = None  # Reset mitosis guard for next M phase cycle
                     self._division_occurred_this_cycle = False  # Reset division flag for new cycle
+                    self._ready_to_separate = False  # Reset separation flag for new cycle
                     self._update_cell_div_count_and_flag_apoptotic_cell() # update cell count
 
     def _update_cell_div_count_and_flag_apoptotic_cell(self) -> None:
@@ -255,24 +282,158 @@ class CellCycleNormal(NormalCell):
         if not self.is_dying:
             self._physic_cell_cycle()
 
-    def _physic_cell_cycle(self):
-        """Update physics based on cell cycle state."""
-        if self.cell_mitosis_state == 'Telophase':
-            # Gradually grow to 2x area during telophase (sqrt(2) ~ 1.41x radius)
-            if self.base_r_at_telophase is not None and hasattr(self, 'time_table_mitosis'):
-                # Calculate progress through telophase
-                time_in_telophase = self.current_time_life - self.time_table_mitosis['Telophase']
-                telophase_duration = self.time_table_mitosis['Cytokinesis'] - self.time_table_mitosis['Telophase']
-                progress = min(time_in_telophase / telophase_duration, 1.0)
-                
-                # Linear growth: start at 1x, end at sqrt(2) ~ 1.41x (doubled area)
-                growth_factor = 1.0 + 0.41 * progress
-                self.base_r = self.base_r_at_telophase * growth_factor
+    def _apply_constriction_to_radius(self) -> None:
+        """Apply constriction to cell membrane based on constriction progress.
+        
+        Equatorial vertices pinch inward while polar vertices expand strongly.
+        Creates dumbbell/hourglass shape during anaphase/telophase/cytokinesis.
+        Poles maintain circular shape with larger expansion.
+        
+        Constriction progress interpretation:
+        - 0.0 to 0.3: Anaphase (gentle pinching, 30%)
+        - 0.3 to 0.8: Telophase (strong pinching, 80%)
+        - 0.8 to 1.0: Cytokinesis (completion, 100%)
+        - > 1.0: Complete separation (bridge disappears)
+        """
+        if self.constriction_progress <= 0.0:
+            self.r = self.original_r.copy()
+            return
+        
+        # Get angles relative to Y-axis (vertical division axis)
+        # Poles are at 90° and 270° (top and bottom)
+        # Equator is at 0° and 180° (sides)
+        angles = self.angles
+        
+        # Store pole radii for circular shape maintenance
+        pole_radii = []
+        pole_indices = []
+        
+        for i, angle in enumerate(angles):
+            # Normalize angle to [0, 180] to handle symmetry
+            norm_angle = angle % np.pi
+            
+            # Distance from equator (0 = equator, 90° = pole)
+            equator_distance = np.abs(norm_angle - np.pi/2)
+            
+            # Calculate position factor (0 = equator, 1 = pole)
+            # FIXED: was inverted - equator at 0°/180° should be 0, poles at 90°/270° should be 1
+            position_factor = 1.0 - (equator_distance / (np.pi/2))
+            
+            # Apply constriction: equatorial vertices shrink, polar vertices expand
+            # Increased pinch strength with higher constriction_progress
+            # At 0.3: equator to ~0.7x, poles to ~1.15x
+            # At 0.8: equator to ~0.2x, poles to ~1.4x
+            # At 1.0+: equator to near 0, poles expand more
+            
+            equator_reduction = 0.9 * self.constriction_progress  # Equator shrinks more
+            pole_expansion_factor = 1.6 * self.constriction_progress  # Poles expand even more strongly
+            
+            constriction_factor = 1.0 - (equator_reduction * (1.0 - position_factor))
+            pole_expansion = 1.0 + (pole_expansion_factor * position_factor)
+            
+            # Combine factors
+            total_factor = constriction_factor * pole_expansion
+            
+            # Clamp to prevent negative radii at extreme constriction levels
+            # Minimum radius is 1% of original to maintain visible bridge
+            total_factor = max(total_factor, 0.01)
+            
+            self.r[i] = self.original_r[i] * total_factor
+            
+            # Track pole vertices for circular shape maintenance
+            # Lower threshold to 0.5 to include more vertices and create rounder bulges
+            if position_factor > 0.5:  # Include more vertices for rounder shape
+                pole_radii.append(self.r[i])
+                pole_indices.append(i)
+        
+        # Maintain circular shape at poles by averaging pole vertices
+        # This ensures poles don't become distorted and stay round
+        if pole_radii and len(pole_radii) >= 2:
+            avg_pole_radius = np.mean(pole_radii)
+            for idx in pole_indices:
+                self.r[idx] = avg_pole_radius
+        
+        # Area compensation: as bridge narrows, increase base_r to maintain bulge volume
+        # This ensures the two daughter cell bulges stay roughly the same size
+        # as the bridge decreases
+        if self.constriction_progress > 0.5:
+            # After midway through pinching, start compensating for area loss
+            # Scale up the overall cell to compensate for bridge volume loss
+            # Increased coefficient from 1.25 to 1.6 for even larger bulges
+            area_compensation = 1.0 + (1.25 * (self.constriction_progress - 0.5))
+            self.base_r = self.original_base_r * area_compensation
         else:
-            # Restore base_r to original when NOT in telophase (ready for next cycle)
-            if self.base_r_at_telophase is not None and self.cell_mitosis_state != 'Telophase':
-                # Will be reset to original when entering G1
-                pass
+            self.base_r = self.original_base_r
+    
+    def _physic_cell_cycle(self) -> None:
+        """Update physics based on cell cycle state.
+        
+        Progressive constriction across three mitotic phases:
+        - Anaphase (36s):   0.0 → 0.3 (gentle pinching, 30%)
+        - Telophase (36s):  0.3 → 0.8 (strong pinching, 80%)
+        - Cytokinesis (10s): 0.8 → 1.2+ (completion and separation)
+        """
+        # Continuous constriction from anaphase through cytokinesis
+        anaphase_start = self.time_table_mitosis['Anaphase']  # 552s
+        cytokinesis_end = self.time_table_mitosis['Cytokinesis']  # 634s
+        time_since_anaphase = self.current_time_life - anaphase_start
+        total_division_duration = cytokinesis_end - anaphase_start  # 82 seconds total
+        
+        # Global progress through all three phases
+        global_progress = time_since_anaphase / total_division_duration  # 0 to 1
+        
+        if self.cell_mitosis_state == 'Anaphase':
+            # Anaphase: first 36s, constriction 0.0 → 0.3 (30%)
+            # Gentle pinching while chromosomes move
+            local_progress = (self.current_time_life - anaphase_start) / (self.time_table_mitosis['Telophase'] - anaphase_start)
+            self.constriction_progress = local_progress * 0.3  # 0 to 0.3
+            self._apply_constriction_to_radius()
+            
+        elif self.cell_mitosis_state == 'Telophase':
+            # Telophase: next 36s, constriction 0.3 → 0.8 (strong pinching)
+            # Continue from where anaphase left off
+            anaphase_duration = self.time_table_mitosis['Telophase'] - self.time_table_mitosis['Anaphase']
+            telophase_start = self.time_table_mitosis['Telophase']
+            telophase_duration = self.time_table_mitosis['Cytokinesis'] - telophase_start
+            time_in_telophase = self.current_time_life - telophase_start
+            local_progress = time_in_telophase / telophase_duration
+            
+            # Ramp from 0.3 to 0.8 during telophase
+            self.constriction_progress = 0.3 + (local_progress * 0.5)  # 0.3 to 0.8
+            self.constriction_progress = min(self.constriction_progress, 0.8)
+            self._apply_constriction_to_radius()
+            
+        elif self.cell_mitosis_state == 'Cytokinesis':
+            # Cytokinesis: final 10s, constriction 0.8 → 1.2+ (completion)
+            cytokinesis_start = self.time_table_mitosis['Telophase']  # 624s
+            cytokinesis_end = self.time_table_mitosis['Cytokinesis']  # 634s
+            time_in_cytokinesis = self.current_time_life - cytokinesis_start
+            cytokinesis_duration = cytokinesis_end - cytokinesis_start
+            
+            local_progress = min(time_in_cytokinesis / cytokinesis_duration, 1.0)  # 0 to 1
+            
+            # Ramp from 0.8 to 1.3 during cytokinesis
+            self.constriction_progress = 0.8 + (local_progress * 0.5)  # 0.8 to 1.3
+            self._apply_constriction_to_radius()
+            
+            # Mark ready to separate when bridge width reaches ~10% of original cell width
+            # Check equatorial vertices (at angles 0° and π) where constriction is strongest
+            if not self._ready_to_separate:
+                # Find vertices near equator (angles close to 0 or π)
+                equator_indices = [i for i, angle in enumerate(self.angles) 
+                                 if abs(angle) < 0.3 or abs(angle - np.pi) < 0.3]
+                if equator_indices:
+                    equator_radii = [self.r[i] for i in equator_indices]
+                    avg_equator_radius = np.mean(equator_radii)
+                    bridge_ratio = avg_equator_radius / np.mean(self.original_r[equator_indices])
+                    
+                    # Flag when bridge is narrower than 10% of original width
+                    if bridge_ratio < 0.1:
+                        self._ready_to_separate = True
+        else:
+            # No constriction in other phases - just reset progress
+            # DO NOT reset r here - let physics handle deformations
+            self.constriction_progress = 0.0
 
     def copy_with_reset(self) -> 'CellCycleNormal':
         """Create a sister cell with reset cycle state but copied chromatin.
@@ -287,7 +448,7 @@ class CellCycleNormal(NormalCell):
         sister = CellCycleNormal(
             width=self.width,
             height=self.height,
-            base_radius=self.base_r,
+            base_radius=self.original_base_r,  # Use original radius, not compensated base_r
             vertices=self.vertices,
             seed=self.seed + 1000,  # Different seed for variation
             initial_state='G1',

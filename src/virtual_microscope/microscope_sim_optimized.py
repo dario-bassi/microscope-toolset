@@ -90,7 +90,7 @@ class MicroscopeSimOptmized:
                                 vertices=24, seed=seed
                             )
                 elif self.cell_type == "cycle":
-                    cell = CellCycleNormal(self.width, self.height, self.base_radius, vertices=24, seed=seed, initial_state='S', initial_mitosis='Interphase', initial_divisions=2, initial_time=250)
+                    cell = CellCycleNormal(self.width, self.height, self.base_radius, vertices=24, seed=seed, initial_state='M', initial_mitosis='Anaphase', initial_divisions=5, initial_time=570)
                 else:
                     raise ValueError(f"Unknow celly type: {self.cell_type}")
                 
