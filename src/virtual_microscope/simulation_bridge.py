@@ -12,12 +12,16 @@ class SimulationBridge:
     change in the simulation, will directly change in the SimulationBridge, without
     modifing the pyDevice.
     """
+    # Half-width of the base 10x render in µm (512 px at 1 µm/px).
+    _BASE_HALF = 256
+
     def __init__(self, microscope_sim : MicroscopeSimOptmized) -> None:
 
         if microscope_sim is None:
             raise ValueError("The microscope simulation must be initialized.")
         self._sim = microscope_sim
         self._current_slm_mask = None
+        self._stage_position = (0.0, 0.0)
 
     
     def snap(self, exposure: float, brightness: float, **kwargs) -> np.ndarray:
@@ -25,7 +29,9 @@ class SimulationBridge:
         return self._sim.snap_frame(mask=mask, exposure=exposure, intensity=brightness, *kwargs)
     
     def set_stage(self, x: float, y: float) -> None:
-        self._sim.camera_offset = (x, y)
+        """Stage position is the FOV center; convert to rendering origin (top-left of base 10x image)."""
+        self._stage_position = (x, y)
+        self._sim.camera_offset = np.array([x - self._BASE_HALF, y - self._BASE_HALF])
 
     def set_focus(self, z: float) -> None:
         self._sim.set_focal_plane(z)

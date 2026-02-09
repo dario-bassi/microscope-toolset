@@ -431,33 +431,29 @@ class Renderer:
     
     def _crop_and_rescale(self, img: np.ndarray) -> np.ndarray:
         """
-        It render the image according to the current objective selected
+        Render the image according to the current objective selected.
 
-        10x -> base image, from the start
-        20x -> new image based on 10x image, cropped and rescaled to mantain the dim of the image
-        40x -> new image based on 10x image, cropped and rescaled to mantain the dim of the image
+        Higher magnification objectives crop a smaller region from the center
+        of the base render and rescale to the full viewport size.
+
+        The stage position represents the center of the FOV (parcentric):
+            world = stage + (pixel - 256) * pixel_size_um
+        where pixel_size_um = 10 / objective_mag.
         """
-        # Compute crop final dim of the image
+        # Compute crop size: higher mag → smaller crop
         if self.objective == 10:
-            self.crop_dim = 512 # set default value
-            # return original array. No need to change
+            self.crop_dim = 512
             return img
-        elif self.objective == 20:
-            self.crop_dim = 512 * (10 / self.objective)
-        else: # 40x case
-            self.crop_dim = 512 * (10 / self.objective)
 
-        # Compute coordinates of top left vertice of the image
-        x_start = int((self.width - self.crop_dim) / 2)
-        y_start = int((self.height - self.crop_dim) / 2)
+        self.crop_dim = int(512 * (10 / self.objective))
 
-        
-        # slice new image
-        crop_img = img[x_start:-x_start, y_start:-y_start]
+        # Crop from center so switching objectives keeps the same FOV center
+        mid = 256
+        half = self.crop_dim // 2
+        crop_img = img[mid - half:mid + half, mid - half:mid + half]
 
-
-        # rescale the image to have same dimensions of width and height
-        rescaled_img = cv2.resize(crop_img, (self.width, self.height), interpolation=cv2.INTER_CUBIC)
+        # Rescale back to full viewport dimensions
+        rescaled_img = cv2.resize(crop_img, (self.width, self.height), interpolation=cv2.INTER_LINEAR)
 
         return rescaled_img
     
