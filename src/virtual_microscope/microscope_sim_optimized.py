@@ -17,7 +17,7 @@ class MicroscopeSimOptmized:
     """Optmized microscope simulation with modular cell types."""
 
     def __init__(self, width: int = 1500, height: int = 1500, 
-                 nb_cells: int = 120, cell_type: str = "optogenetic", 
+                 nb_cells: int = 240, cell_type: str = "optogenetic", 
                  viewport_width: int = 512, viewport_height: int = 512, 
                  base_radius: float = 20.0, rng_seed: int = 0,
                  cell_mix: Optional[dict] = None, concentration: float = 0.01, drug_type: Literal["growth", "mobility", "apoptosis"] = "growth"):
@@ -229,15 +229,21 @@ class MicroscopeSimOptmized:
                     checked_pairs.add((i, j))
 
     def apply_optogenetic_stimulator(self, mask: np.ndarray) -> None:
-        """Apply optogenetic stimulation to cells."""
+        """Apply optogenetic stimulation to cells.
+
+        The mask is in viewport/camera space.  Cell vertex positions are
+        converted from world to viewport coordinates using camera_offset
+        so the mask always corresponds to what the camera sees.
+        """
         if self.cell_type != "optogenetic":
             return
-        
-        # Use the actual OptogeneticCell.stimulate() method!
+
+        offset = tuple(self.camera_offset)
+
         for cell in self._cells:
             if isinstance(cell, OptogeneticCell):
-                cell.stimulate(mask)
-                
+                cell.stimulate(mask, camera_offset=offset)
+
         # Sync changes back to arrays
         for i, cell in enumerate(self._cells):
             self.radii[i] = cell.r
@@ -265,7 +271,7 @@ class MicroscopeSimOptmized:
         # Update stimulation
         now = time.perf_counter()
         dt = (now - self._last_time) * 0.3 # scale time for smoother simulation, reduced for lower cell velocity
-        print("dt: ", dt)
+
         self._last_time = now
         self.update(dt)
         
@@ -300,7 +306,8 @@ class MicroscopeSimOptmized:
                 self.focal_plane) 
 
         # Apply intensity and exposure
-        img = (img.astype(np.float32) * intensity * exposure).clip(0,255).astype(np.uint8)
+        # Brightness is normalized: 1.0 = normal brightness (scaled by 0.01 internally)
+        img = (img.astype(np.float32) * intensity * 0.01 * exposure).clip(0,255).astype(np.uint8)
 
         # return grayscale for compatibility
         return cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)

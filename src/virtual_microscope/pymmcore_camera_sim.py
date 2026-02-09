@@ -15,8 +15,8 @@ class SimCameraDevice(CameraDevice):
 
     A virtual camera device for pymmcore that generates images using the microscope_sim.py simulation.
     """
-    _exposure: float = 10.0
-    _brightness: float = 100.0
+    _exposure: float = 50.0
+    _brightness: float = 1.0
     _binning: int = 2 # default 2x2
     _mask: Optional[np.ndarray] = None
     _led_channel: str = None
@@ -28,15 +28,6 @@ class SimCameraDevice(CameraDevice):
         #if microscope_sim is None:
         #    raise RuntimeError('microscope_sim must be provided')
         self.bridge = bridge_module.GLOBAL_BRIDGE
-        # if microscope_sim is not None:
-        #     self._sim = microscope_sim
-        # else:
-        #     # Create a new instance of the microscope simulation with default parameters
-        #     self._sim = MicroscopeSim() # to change
-
-        #if self is None:
-        #    print("Note: Provide core to the SimCameraDevice constructor to use SLM features")
-        #self._core = core
         self._mask = None
         # change limits of binning
         self.set_property_limits("Binning", (0, 20))
@@ -73,6 +64,10 @@ class SimCameraDevice(CameraDevice):
     def set_mask(self, mask: Optional[np.ndarray]) -> None:
         self._mask = mask
 
+    # Minimum interval between frames (seconds) to avoid starving the Qt main
+    # thread.  The rendering holds the GIL, so without a gap the UI freezes.
+    _MIN_FRAME_INTERVAL: float = 0.08  # ~12 FPS max
+
     def start_sequence(
         self,
         n: int | None,
@@ -81,66 +76,25 @@ class SimCameraDevice(CameraDevice):
 
         count = 0
         while n is None or count < n:
-            time.sleep(self._exposure / 100.0)
-            # Try to read the mask from the core SLM device, if available.
-            #mask = None
-            #if self.core is not None:
-            #    try:
-            #        slm_device = self.core._core_proxy_.getSLMDevice()
-            #        if slm_device:
-            #            mask = self.core._core_proxy_.getSLMImage(slm_device)
-            #            if mask is not None:
-            #                mask = mask.astype(bool)
-            #            else:
-            #                print("SLM device returned no image, using default mask.")
-            #        else:
-            #            print("No SLM device found in core.")
-            #    except Exception as e:
-            #        print(f"Error getting SLM image: {e}")
-            #if mask is None:
-            #    mask = np.zeros((self.bridge._sim.viewport_height, self.bridge._sim.viewport_width), dtype=bool)
+            t0 = time.perf_counter()
             bridge = self._get_bridge()
-            #if bridge is None:
-                # If bridge not ready, return blank image
-            #    buf = get_buffer(self.shape(), self.dtype())
-            #    buf[:] = 0
-            #    yield {
-            #        "data": buf,
-            #        "timestamp": time.time()
-            #    }
-            #    count += 1
-            #    continue
-
             self._mask = bridge.get_slm_mask() # type: ignore
-            # checking the stage position
-            #stage_position = self._get_current_xy_stage_position()
-            # update the stage/camera offset
-            #self._sim.camera_offset = np.array([stage_position[0], stage_position[1]])
-            # For the moment use one of the function to get the microscope frame
-            #surf = self._sim.get_frame(self._mask)
-            #surf = self._sim.get_frame_random_gray()
             surf = bridge.snap(brightness=self._brightness, exposure=self._exposure) # type: ignore
-            #self._sim.snap_frame(mask, self._brightness, self._exposure)
-            # create buffer
+
             buf = get_buffer(self.shape(), self.dtype())
-            # apply intensity and exposure time
-            #surf = self._sim.apply_intensity(surface=surf, intensity=self._brightness, exposure=self._exposure)
-            # convert to array
-            #arr = pygame.surfarray.array3d(surf)
-            # Convert to grayscale (take one channel)
-            # BGR -> RGB
-            #arr = surf[..., 0].astype(np.uint8)
-            #buf[:] = surf.T  # Transpose to (height, width)
             buf[:] = surf
-            #print("image before ", buf)
-            #buf[:] = self._apply_current_brightness(brightness=self._brightness, current_image=buf) ## apply current values of brightness
-            #print("image after ", buf)
+
             yield {
                 "data": buf,
                 "timestamp": time.time()
                 }
-            # update count
             count += 1
+
+            # Throttle: ensure minimum interval so the main thread gets GIL time
+            elapsed = time.perf_counter() - t0
+            remaining = self._MIN_FRAME_INTERVAL - elapsed
+            if remaining > 0:
+                time.sleep(remaining)
 
     # define property brightness
     @pymm_property(

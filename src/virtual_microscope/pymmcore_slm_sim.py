@@ -9,6 +9,7 @@ from typing import ClassVar
 
 from pymmcore_plus.experimental.unicore import UniMMCore
 from pymmcore_plus.experimental.unicore.devices._slm import SLMDevice
+import src.virtual_microscope.simulation_bridge as bridge_module
 
 class SimSLMDevice(SLMDevice):
     """Virtual SLM device for simulation."""
@@ -86,6 +87,10 @@ class SimSLMDevice(SLMDevice):
         if self._current_image is None:
             raise RuntimeError("No image loaded")
         self._image_displayed = True
+        # Propagate mask to bridge so camera snap picks it up
+        bridge = bridge_module.GLOBAL_BRIDGE
+        if bridge is not None:
+            bridge.set_slm_mask(self._current_image)
 
     def set_exposure(self, interval_ms: float) -> None:
         """Command the SLM to turn off after a specified interval."""

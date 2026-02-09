@@ -13,38 +13,48 @@ class OptogeneticCell(CellBase):
         self.is_stimulated = False
 
 
-    def stimulate(self, mask: np.ndarray) -> None:
-        """Apply optogenetic stimulation based on mask."""
+    def stimulate(self, mask: np.ndarray, camera_offset: tuple[float, float] = (0.0, 0.0)) -> None:
+        """Apply optogenetic stimulation based on mask.
+
+        The mask is in camera/viewport space (matching the rendered image).
+        Vertex world positions are converted to viewport coordinates using
+        *camera_offset* before being checked against the mask.
+        """
         if mask is None or not mask.any():
             self.is_stimulated = False
             return
-        
 
-        # Get vertex position
+        # Convert vertex world positions to viewport (camera-relative) coords
         vertices = self.vertices_positions
+        vx = vertices[:, 0] - camera_offset[0]
+        vy = vertices[:, 1] - camera_offset[1]
 
-        # Check which vertices fall on stimulated pixels
-        inside = ((vertices[:, 0] >= 0) & (vertices[:, 0] < mask.shape[1]) & 
-                  (vertices[:, 1] >= 0) & (vertices[:, 1] < mask.shape[0]))
-        
+        # Check which vertices fall within the mask bounds
+        inside = ((vx >= 0) & (vx < mask.shape[1]) &
+                  (vy >= 0) & (vy < mask.shape[0]))
+
         if not inside.any():
             self.is_stimulated = False
             return
-        
-        # Get pixels indices for vertices inside bounds
-        ix = vertices[inside, 0].astype(int)
-        iy = vertices[inside, 1].astype(int)
+
+        # Get pixel indices for vertices inside bounds (round, not truncate,
+        # to avoid systematic sub-pixel bias that skews the force direction)
+        ix = np.round(vx[inside]).astype(int)
+        iy = np.round(vy[inside]).astype(int)
+        # Clamp after rounding (a vertex at 511.6 rounds to 512 which is out of bounds)
+        ix = np.clip(ix, 0, mask.shape[1] - 1)
+        iy = np.clip(iy, 0, mask.shape[0] - 1)
 
         # Check mask at vertex position
-        hit = mask[iy, ix]
+        hit = mask[iy, ix] > 0
 
         if not hit.any():
             self.is_stimulated = False
             return
-        
+
         self.is_stimulated = True
 
-        # Find which vertices to protrude
+        # Find which vertices to protrude (boolean index into inside-subset)
         idx = np.where(inside)[0][hit]
 
         # Apply protrusion
@@ -59,4 +69,4 @@ class OptogeneticCell(CellBase):
         norm = np.linalg.norm(direction)
 
         if norm > 0:
-            self.vel += (direction/norm) * self.impulse
+            self.vel += (direction / norm) * self.impulse
