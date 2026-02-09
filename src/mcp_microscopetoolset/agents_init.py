@@ -1,7 +1,6 @@
 import os
 from openai import OpenAI
 from pymmcore_plus import CMMCorePlus
-from pymmcore_plus.experimental.unicore import UniMMCore
 from transformers import AutoTokenizer, AutoModelForSequenceClassification
 from src.agentsNormal.specialized_agent import DatabaseAgent
 from src.databases.elasticsearch_db import ElasticSearchDB
@@ -16,43 +15,30 @@ import sys
 
 #  logger
 logger = logging.getLogger("Initialize Agent")
-logger.setLevel(logging.DEBUG)
-logger.addHandler(logging.StreamHandler(sys.stdout))
-logger.setLevel(logging.INFO)
-fh = logging.FileHandler("microscope_toolset.log", encoding="utf-8")
-fh.setFormatter(logging.Formatter(
-    "%(asctime)s [%(levelname)s] %(name)s: %(message)s",
-    datefmt="%Y-%m-%d %H:%M:%S",
-))
-logger.addHandler(fh)
+if not logger.handlers:
+    logger.setLevel(logging.INFO)
+    logger.addHandler(logging.StreamHandler(sys.stdout))
+    fh = logging.FileHandler("microscope_toolset.log", encoding="utf-8")
+    fh.setFormatter(logging.Formatter(
+        "%(asctime)s [%(levelname)s] %(name)s: %(message)s",
+        datefmt="%Y-%m-%d %H:%M:%S",
+    ))
+    logger.addHandler(fh)
 
 
-def initialize_agents(mmc: CMMCorePlus | UniMMCore, microscope_type: str = "real"):
+def initialize_agents(mmc: CMMCorePlus, cfg_file: str | None = None):
     # Initialize the microscope session object
     logger.info("Initializing Microscope Session")
-    #microscope_session_object = MicroscopeSession()
     logger.info("Microscope Session Initialized")
-    # create the data_dict that will contain the feedback loop information
-    # data_dict = microscope_session_object.get_data_dict()
 
     # Get the information for the user
     logger.info("Getting User Information...")
     system_user_information = get_user_information()
     logger.info("System User Information: {}".format(system_user_information))
-    # Determine configuration file based on executor
-    if microscope_type == "virtual":
-        if system_user_information['cfg_file'] == "":
-            cfg_file = None
-        else:
-            cfg_file = system_user_information['cfg_file'] # in case a configuration file was written.
-        logger.info("Initializing UniCore...")
-    else:
-        cfg_file = system_user_information['cfg_file']
-        logger.info(cfg_file)
-        logger.info(f"Initializing real microscope with config: {cfg_file}")
+
     # start executor and tracking of the microscope status
     logger.info("Initializing Executor...")
-    executor = Execute(filename=cfg_file, mmc=mmc, microscope_type=microscope_type)
+    executor = Execute(mmc=mmc, filename=cfg_file)
     logger.info("Executor Initialized")
     logger.info("Initializing Microscope Status...")
     microscope_status = MicroscopeStatus(executor=executor)
@@ -70,50 +56,60 @@ def initialize_agents(mmc: CMMCorePlus | UniMMCore, microscope_type: str = "real
     #    db_log.create_collection(system_user_information['log_collection'])
     #    logger.info(f"A new collection named {system_user_information['log_collection']} has been created.")
 
-    es_client = ElasticSearchDB()
-    logger.info("Initialed ElasticSearch Python Client")
-    max_retries = 100
-    retry_delay = 1  # seconds
-
-    for attempt in range(max_retries):
-        logger.info(f"Trying connection to Elasticsearch (attempt {attempt + 1}/{max_retries})...")
-        if es_client.is_connected():
-            logger.info("Connected to Elasticsearch!")
-            break
-        time.sleep(retry_delay)
-        retry_delay *= 2
-        es_client = ElasticSearchDB()
+    # Try to connect to Elasticsearch (optional — skip entirely when not configured)
+    es_client = None
+    database_agent = None
+    es_path = system_user_information.get('elastic_search_path_home')
+    if not es_path:
+        logger.info("ELASTICSEARCH not set in .env — skipping database tools.")
     else:
-        logger.error("Could not connect to Elasticsearch after 100 attempts. Please make sure the server is running.")
-        raise RuntimeError(
-            "Could not connect to Elasticsearch after 100 attempts. Please make sure the server is running.")
+        try:
+            es_client = ElasticSearchDB()
+            logger.info("Initialed ElasticSearch Python Client")
+            max_retries = 5
+            retry_delay = 1  # seconds
 
-    # get relevant information for the db
-    # --NEW-- for the moment comment this part for testing
-    pdf_publication = system_user_information['pdf_collection_name']
-    micromanager_collection = system_user_information['micromanager_devices_collection']
-    api_collection = system_user_information['collection_name']
-    logger.info(f"Database Name: {pdf_publication}")
-    logger.info(f"Micromanager Collection: {micromanager_collection}")
-    logger.info(f"API Collection: {api_collection}")
+            for attempt in range(max_retries):
+                logger.info(f"Trying connection to Elasticsearch (attempt {attempt + 1}/{max_retries})...")
+                if es_client.is_connected():
+                    logger.info("Connected to Elasticsearch!")
+                    break
+                time.sleep(retry_delay)
+                retry_delay = min(retry_delay * 2, 8)
+                es_client = ElasticSearchDB()
+            else:
+                logger.warning("Could not connect to Elasticsearch. Database tools will be unavailable.")
+                es_client = None
 
-    # Load the cross-encoder for re-ranking
-    # Load model directly
-    model_name = "cross-encoder/ms-marco-MiniLM-L6-v2"
-    tokenizer = AutoTokenizer.from_pretrained(model_name)
-    model = AutoModelForSequenceClassification.from_pretrained(model_name)
-    logger.info(f"Cross-encoder Model {model_name} loaded")
+            if es_client is not None:
+                # get relevant information for the db
+                pdf_publication = system_user_information.get('pdf_collection_name', '')
+                micromanager_collection = system_user_information.get('micromanager_devices_collection', '')
+                api_collection = system_user_information.get('collection_name', '')
+                logger.info(f"Database Name: {pdf_publication}")
+                logger.info(f"Micromanager Collection: {micromanager_collection}")
+                logger.info(f"API Collection: {api_collection}")
 
-    # initialize LLM API
-    client_openai = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
-    logger.info("LLM API loaded")
+                # Load the cross-encoder for re-ranking
+                model_name = "cross-encoder/ms-marco-MiniLM-L6-v2"
+                tokenizer = AutoTokenizer.from_pretrained(model_name)
+                model = AutoModelForSequenceClassification.from_pretrained(model_name)
+                logger.info(f"Cross-encoder Model {model_name} loaded")
 
-    # initialize different Agents
-    database_agent = DatabaseAgent(client_openai=client_openai, es_client=es_client, pdf_collection=pdf_publication,#pdf_publication
-                                   micromanager_collection=micromanager_collection, api_collection=api_collection, # micromanager_collection
-                                   db_log=None, db_log_collection_name=system_user_information['log_collection'], # db_log
-                                   tokenizer=tokenizer, model=model)
-    logger.info("Initialed Database Agent")
+                # initialize LLM API
+                client_openai = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
+                logger.info("LLM API loaded")
+
+                # initialize different Agents
+                database_agent = DatabaseAgent(client_openai=client_openai, es_client=es_client, pdf_collection=pdf_publication,
+                                               micromanager_collection=micromanager_collection, api_collection=api_collection,
+                                               db_log=None, db_log_collection_name=system_user_information.get('log_collection', ''),
+                                               tokenizer=tokenizer, model=model)
+                logger.info("Initialed Database Agent")
+        except Exception as e:
+            logger.warning(f"Elasticsearch/Database agent initialization failed: {e}. Continuing without database tools.")
+            es_client = None
+            database_agent = None
 
     #software_agent = SoftwareEngeneeringAgent(client_openai=client_openai)
     #logger.info("Initialed Software Agent")
@@ -134,9 +130,8 @@ def initialize_agents(mmc: CMMCorePlus | UniMMCore, microscope_type: str = "real
         "executor": executor,
         "microscope_status": microscope_status,
         "database_agent": database_agent,
-        "db_log": None,#db_log
+        "db_log": None,
         "es_client": es_client,
-        "client_openai": client_openai,
     }
 #"software_agent": software_agent,
 #"strategy_agent": strategy_agent,

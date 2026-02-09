@@ -9,13 +9,14 @@ import logging
 
 #  logger
 logger = logging.getLogger("EventCache")
-logger.setLevel(logging.INFO)
-fh = logging.FileHandler("microscope_toolset.log", encoding="utf-8")
-fh.setFormatter(logging.Formatter(
-    "%(asctime)s [%(levelname)s] %(name)s: %(message)s",
-    datefmt="%Y-%m-%d %H:%M:%S",
-))
-logger.addHandler(fh)
+if not logger.handlers:
+    logger.setLevel(logging.INFO)
+    fh = logging.FileHandler("microscope_toolset.log", encoding="utf-8")
+    fh.setFormatter(logging.Formatter(
+        "%(asctime)s [%(levelname)s] %(name)s: %(message)s",
+        datefmt="%Y-%m-%d %H:%M:%S",
+    ))
+    logger.addHandler(fh)
 
 class MicroscopeEventCache:
     """
@@ -27,24 +28,31 @@ class MicroscopeEventCache:
         self._cache = deque(maxlen=1000) # if the length its limiting, we will change it
         self._lock = threading.Lock()
 
-        # Connect pymmcore signals
-        self._mmc.events.exposureChanged.connect(self._on_exposure_changed)
-        self._mmc.events.XYStagePositionChanged.connect(self._on_xy_stage_position_changed)
-        self._mmc.events.stagePositionChanged.connect(self._on_stage_position_changed)
-        self._mmc.events.imageSnapped.connect(self._on_image_snapped)
-        self._mmc.events.SLMExposureChanged.connect(self._on_slm_exposure_changed)
-        self._mmc.events.autoShutterSet.connect(self._on_autoshutter_set)
-        self._mmc.events.channelGroupChanged.connect(self._on_channel_group_changed)
-        self._mmc.events.configDefined.connect(self._on_config_defined)
-        self._mmc.events.configDeleted.connect(self._on_config_deleted)
-        self._mmc.events.configGroupChanged.connect(self._on_config_group_changed)
-        self._mmc.events.configGroupDeleted.connect(self._on_config_group_deleted)
-        self._mmc.events.configSet.connect(self._on_config_set)
-        self._mmc.events.propertiesChanged.connect(self._on_properties_changed)
-        self._mmc.events.propertyChanged.connect(self._on_property_changed)
-        self._mmc.events.roiSet.connect(self._on_roi_set)
-        self._mmc.events.shutterOpenChanged.connect(self._on_shutter_open_changed)
-        # TO ADD
+        # Connect pymmcore signals (some may not be available on all backends)
+        signal_map = {
+            "exposureChanged": self._on_exposure_changed,
+            "XYStagePositionChanged": self._on_xy_stage_position_changed,
+            "stagePositionChanged": self._on_stage_position_changed,
+            "imageSnapped": self._on_image_snapped,
+            "SLMExposureChanged": self._on_slm_exposure_changed,
+            "autoShutterSet": self._on_autoshutter_set,
+            "channelGroupChanged": self._on_channel_group_changed,
+            "configDefined": self._on_config_defined,
+            "configDeleted": self._on_config_deleted,
+            "configGroupChanged": self._on_config_group_changed,
+            "configGroupDeleted": self._on_config_group_deleted,
+            "configSet": self._on_config_set,
+            "propertiesChanged": self._on_properties_changed,
+            "propertyChanged": self._on_property_changed,
+            "roiSet": self._on_roi_set,
+            "shutterOpenChanged": self._on_shutter_open_changed,
+        }
+        for signal_name, handler in signal_map.items():
+            signal = getattr(self._mmc.events, signal_name, None)
+            if signal is not None:
+                signal.connect(handler)
+            else:
+                logger.warning(f"Signal '{signal_name}' not available on this microscope backend")
 
         logger.info("Event cache was initialized.")
 
@@ -137,10 +145,16 @@ class MicroscopeEventCache:
 
         return events[-limit:]
     
-    def get_last_event(self):
+    def get_last_event(self, event_type: str | None = None):
         """
-        Get most recent event.
+        Get most recent event, optionally filtered by event_type.
         """
+        if event_type is not None:
+            with self._lock:
+                for event in reversed(self._cache):
+                    if event.get("event_type") == event_type:
+                        return event
+            return None
         events = self.get_recent_events(limit=1)
         # If there is not previous event just return None
         return events[0] if events else None

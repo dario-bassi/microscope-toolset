@@ -9,16 +9,16 @@ import logging
 import sys
 
 #  logger
-logger = logging.getLogger("Specialized Agent")
-logger.setLevel(logging.DEBUG)
-logger.addHandler(logging.StreamHandler(sys.stdout))
-logger.setLevel(logging.INFO)
-fh = logging.FileHandler("microscope_toolset.log", encoding="utf-8")
-fh.setFormatter(logging.Formatter(
-    "%(asctime)s [%(levelname)s] %(name)s: %(message)s",
-    datefmt="%Y-%m-%d %H:%M:%S",
-))
-logger.addHandler(fh)
+logger = logging.getLogger("SpecializedAgent")
+if not logger.handlers:
+    logger.setLevel(logging.INFO)
+    logger.addHandler(logging.StreamHandler(sys.stdout))
+    fh = logging.FileHandler("microscope_toolset.log", encoding="utf-8")
+    fh.setFormatter(logging.Formatter(
+        "%(asctime)s [%(levelname)s] %(name)s: %(message)s",
+        datefmt="%Y-%m-%d %H:%M:%S",
+    ))
+    logger.addHandler(fh)
 
 
 class DatabaseAgent(BaseAgent):

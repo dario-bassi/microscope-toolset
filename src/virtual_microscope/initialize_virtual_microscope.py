@@ -1,6 +1,5 @@
 from pymmcore_plus import CMMCorePlus
 
-from src.virtual_microscope.microscope_sim import MicroscopeSim
 from src.virtual_microscope.microscope_sim_optimized import MicroscopeSimOptmized
 from src.virtual_microscope.pymmcore_camera_sim import SimCameraDevice
 from src.virtual_microscope.pymmcore_stage_sim import SimStageDevice
@@ -15,26 +14,25 @@ import logging
 import sys
 
 #  logger
-logger = logging.getLogger("Execute")
-logger.setLevel(logging.INFO)
-fh = logging.FileHandler("microscope_toolset.log", encoding="utf-8")
-fh.setFormatter(logging.Formatter(
-    "%(asctime)s [%(levelname)s] %(name)s: %(message)s",
-    datefmt="%Y-%m-%d %H:%M:%S",
-))
-logger.addHandler(fh)
+logger = logging.getLogger("VirtualMicroscope")
+if not logger.handlers:
+    logger.setLevel(logging.INFO)
+    fh = logging.FileHandler("microscope_toolset.log", encoding="utf-8")
+    fh.setFormatter(logging.Formatter(
+        "%(asctime)s [%(levelname)s] %(name)s: %(message)s",
+        datefmt="%Y-%m-%d %H:%M:%S",
+    ))
+    logger.addHandler(fh)
 
 
 
-def initialize_virtual_microscope(core: UniMMCore) -> None:
+def initialize_virtual_microscope(core: UniMMCore, cell_type: str = "cycle") -> None:
 
     try:
         # access UniMMCore
         # development python devices
-        logger.info("Initialized UniMMCore")
-        #microscope_simulation = MicroscopeSim() # old simulation to uncomment!
-        #microscope_simulation = MicroscopeSimOptmized(cell_type="normal", nb_cells=100)
-        microscope_simulation = MicroscopeSimOptmized(cell_type='cycle', nb_cells=50)
+        logger.info(f"Initialized UniMMCore with cell_type={cell_type}")
+        microscope_simulation = MicroscopeSimOptmized(cell_type=cell_type, nb_cells=50)
         # Initialize global Singleton
         bridge_module.GLOBAL_BRIDGE = SimulationBridge(microscope_simulation)
         logger.info("Initialized MicroscopeSim")
@@ -122,15 +120,12 @@ def initialize_virtual_microscope(core: UniMMCore) -> None:
         RuntimeError(f"Error: {e}")
 
 
-def initialize_virtual_microscope_from_configuration(core: UniMMCore) -> None:
+def initialize_virtual_microscope_from_configuration(core: UniMMCore, cell_type: str = "cycle") -> None:
 
     try:
         # access UniMMCore
-        # development python devices
-        logger.info("Initialized UniMMCore")
-        #microscope_simulation = MicroscopeSim() # old simulation to uncomment!
-        #microscope_simulation = MicroscopeSimOptmized(cell_type="normal", nb_cells=100)
-        microscope_simulation = MicroscopeSimOptmized(cell_type="cycle", nb_cells=20)
+        logger.info(f"Initialized UniMMCore with cell_type={cell_type}")
+        microscope_simulation = MicroscopeSimOptmized(cell_type=cell_type, nb_cells=20)
         # Initialize global Singleton
         bridge_module.GLOBAL_BRIDGE = SimulationBridge(microscope_simulation)
         logger.info("Initialized MicroscopeSim")

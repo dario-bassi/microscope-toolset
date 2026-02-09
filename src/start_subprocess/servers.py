@@ -6,11 +6,12 @@ from src.databases.elasticsearch_db import ElasticSearchDB
 import logging
 import time
 
-logger = logging.getLogger("Napari-launcher")
-handler = logging.FileHandler("napari_launch.log")
-handler.setFormatter(logging.Formatter("%(asctime)s %(levelname)s %(message)s"))
-logger.addHandler(handler)
-logger.setLevel(logging.INFO)
+logger = logging.getLogger("NapariLauncher")
+if not logger.handlers:
+    handler = logging.FileHandler("napari_launch.log")
+    handler.setFormatter(logging.Formatter("%(asctime)s %(levelname)s %(message)s"))
+    logger.addHandler(handler)
+    logger.setLevel(logging.INFO)
 
 def _start_server(cmd):
 

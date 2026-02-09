@@ -184,6 +184,7 @@ cython_debug/
 
 # ignore database
 chroma_storage/
+vector-database/
 
 # db sqlt3
 *.sqlite3
@@ -211,3 +212,4 @@ elasticsearch-7.17.29/
 
 
 
+vector-database/ca151909-59c6-4a6a-ba00-a2e1652f5669/data_level0.bin
