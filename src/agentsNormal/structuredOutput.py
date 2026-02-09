@@ -8,6 +8,3 @@ class RephraseOutput(BaseModel):
 class ExtractKeywordOutput(BaseModel):
     keyword: list[str]
 
-class NoCodingAgentOutput(BaseModel):
-    intent: str
-    message: str
