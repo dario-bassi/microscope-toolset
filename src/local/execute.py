@@ -5,59 +5,44 @@ import sys
 from io import StringIO
 from contextlib import redirect_stdout,redirect_stderr
 
-from pymmcore_plus.experimental.unicore import UniMMCore
-
-from src.virtual_microscope.initialize_virtual_microscope import initialize_virtual_microscope, initialize_virtual_microscope_from_configuration
-
 from pymmcore_plus import CMMCorePlus
 import logging
 import ast
 
 from src.local.gatekeeper_core import GatekeeperCore
+from src.local.mda_helpers import run_mda_with_feedback
+from src.local.microscopy_utils import (
+    find_bright_centroid, center_on_cell, detect_cells,
+)
 
 #  logger
 logger = logging.getLogger("Execute")
-logger.setLevel(logging.INFO)
-fh = logging.FileHandler("microscope_toolset.log", encoding="utf-8")
-fh.setFormatter(logging.Formatter(
-    "%(asctime)s [%(levelname)s] %(name)s: %(message)s",
-    datefmt="%Y-%m-%d %H:%M:%S",
-))
-logger.addHandler(fh)
+if not logger.handlers:
+    logger.setLevel(logging.INFO)
+    fh = logging.FileHandler("microscope_toolset.log", encoding="utf-8")
+    fh.setFormatter(logging.Formatter(
+        "%(asctime)s [%(levelname)s] %(name)s: %(message)s",
+        datefmt="%Y-%m-%d %H:%M:%S",
+    ))
+    logger.addHandler(fh)
 
 
 class Execute:
 
-    def __init__(self, filename: str, mmc: CMMCorePlus | UniMMCore = None, microscope_type: str = "real"):
+    def __init__(self, mmc: CMMCorePlus, filename: str | None = None):
         self.namespace = {}
-        
-        if microscope_type == "real":
-            if mmc is not None:
-                # Load config file
-                mmc.loadSystemConfiguration(fileName=filename)
-                logger.info("configuration file of the microscope was loaded")
-                self.namespace["mmc"] = GatekeeperCore(mmc)#mmc
-                logger.info("mmc instance is loaded into the namespace")
-            else:
-                real_mmc = CMMCorePlus().instance()
-                real_mmc.loadSystemConfiguration(fileName=filename)
-                self.namespace["mmc"] = GatekeeperCore(real_mmc)#CMMCorePlus().instance()
-                #exec(f"mmc.loadSystemConfiguration(fileName='{filename}')", self.namespace)
-        elif microscope_type == "virtual":
-            logger.info("Initializing virtual microscope...")          
-            if filename is None:
-                initialize_virtual_microscope(core=mmc)
-            elif isinstance(filename, str) and filename != "":
-                initialize_virtual_microscope_from_configuration(core=mmc)
-                mmc.loadSystemConfiguration(fileName=filename)
-            else:
-                raise ValueError(f"The file configuration {filename} doesn't exists. Please checks the name.")
 
-            logger.info("mmc instance is loaded into the namespace")
+        if filename is not None:
+            mmc.loadSystemConfiguration(fileName=filename)
+            logger.info("configuration file of the microscope was loaded")
 
-            self.namespace["mmc"] = GatekeeperCore(mmc)#mmc
-
-        logger.info(f"Execute initialized for {microscope_type} microscope")
+        self.namespace["mmc"] = GatekeeperCore(mmc)
+        self.namespace["run_mda_with_feedback"] = lambda events, on_frame=None: run_mda_with_feedback(mmc, events, on_frame)
+        self.namespace["center_on_cell"] = lambda **kw: center_on_cell(mmc, **kw)
+        self.namespace["find_bright_centroid"] = find_bright_centroid
+        self.namespace["detect_cells"] = detect_cells
+        logger.info("mmc instance is loaded into the namespace")
+        logger.info("Execute initialized")
 
 
     def _install_library(self, module: str):
@@ -235,78 +220,27 @@ class Execute:
             self.namespace["mmc"] = shadow_mmc_obj
 
 
-    def run_code_old(self, code: str):
-        """Execute code with better error handling and output capture"""
-        max_attempts = 3  # Prevent infinite loops
-        attempts = 0
-        read_output = ""
-
-        # Check code before running it
-        if not self.is_safe_viewer(code):
-            return "viewer"
-        
-
-        while attempts < max_attempts:
-            attempts += 1
-            try:
-                f = StringIO()
-                with redirect_stdout(f):
-                    # Also capture stderr
-                    err_f = StringIO()
-                    with redirect_stderr(err_f):
-                        exec(code, self.namespace)
-
-                read_output = f.getvalue().strip()
-                stderr_output = err_f.getvalue().strip()
-
-                if stderr_output:
-                    read_output += f"\nWarnings/Errors: {stderr_output}"
-
-                logger.info("Code executed successfully")
-                return read_output if read_output else "Code executed successfully (no output)"
-
-            except ModuleNotFoundError as e:
-                module_name = str(e).split("'")[1] if "'" in str(e) else str(e)
-                logger.info(f"Attempting to import missing module: {module_name}")
-
-                try:
-                    self.namespace[module_name] = importlib.import_module(module_name)
-                    continue  # Retry execution
-                except ImportError:
-                    # Module not available, try to install
-                    if self._install_library(module_name):
-                        self.namespace[module_name] = importlib.import_module(module_name)
-                        continue
-                    else:
-                        return f"Could not install required module: {module_name}"
-
-            except ImportError as e:
-                import_module = str(e).split("'")[1] if "'" in str(e) else str(e)
-                logger.info(f"Attempting to install missing package: {import_module}")
-
-                if self._install_library(import_module):
-                    continue
-                else:
-                    return f"Could not install the module {import_module}"
-
-            except Exception as e:
-                error_msg = f"Execution error: {type(e).__name__}: {str(e)}"
-                logger.error(error_msg)
-                return error_msg
-
-        return f"Code execution failed after {max_attempts} attempts"
-    
-
     def is_safe_viewer(self, code: str):
         """
-        Checks if in the code there is viewer
+        Checks if the code references 'viewer' or 'napari.current_viewer()'.
+
+        Both are blocked because MCP tools run on a daemon thread while
+        napari/Qt GUI must be accessed from the main thread. All viewer access
+        must go through the ThreadSafeViewerProxy (viewer_* MCP tools).
+        To get layer pixel data, use get_layer_data → TIFF → tifffile.imread.
         """
         tree = ast.parse(code)
 
         for node in ast.walk(tree):
-            # Check if code contains 'viewer'
+            # Block bare 'viewer' name
             if isinstance(node, ast.Name) and node.id == 'viewer':
                 return False
-            
+            # Block napari.current_viewer() pattern
+            if (isinstance(node, ast.Attribute)
+                    and node.attr == 'current_viewer'
+                    and isinstance(node.value, ast.Name)
+                    and node.value.id == 'napari'):
+                return False
+
         return True
 

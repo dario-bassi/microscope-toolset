@@ -1,25 +1,30 @@
 from typing import Any, Annotated, Literal
 from mcp.server.fastmcp import FastMCP, Context
+from mcp.types import ImageContent, TextContent
 from pydantic import Field, BeforeValidator, PlainSerializer, WithJsonSchema
 from src.local.prepare_code import prepare_code
 import logging
 import sys
+import json
+import datetime
 import numpy as np
 import asyncio
+import base64
+from io import BytesIO
 from pydantic import BaseModel
 from src.local.gatekeeper_core import GatekeeperCore
 
 #  logger
-logger = logging.getLogger("Server Setup")
-logger.setLevel(logging.DEBUG)
-logger.addHandler(logging.StreamHandler(sys.stdout))
-logger.setLevel(logging.INFO)
-fh = logging.FileHandler("microscope_toolset.log", encoding="utf-8")
-fh.setFormatter(logging.Formatter(
-    "%(asctime)s [%(levelname)s] %(name)s: %(message)s",
-    datefmt="%Y-%m-%d %H:%M:%S",
-))
-logger.addHandler(fh)
+logger = logging.getLogger("ServerSetup")
+if not logger.handlers:
+    logger.setLevel(logging.INFO)
+    logger.addHandler(logging.StreamHandler(sys.stdout))
+    fh = logging.FileHandler("microscope_toolset.log", encoding="utf-8")
+    fh.setFormatter(logging.Formatter(
+        "%(asctime)s [%(levelname)s] %(name)s: %(message)s",
+        datefmt="%Y-%m-%d %H:%M:%S",
+    ))
+    logger.addHandler(fh)
 
 
 # This ensures the LLM sees a standard list of numbers
@@ -28,9 +33,8 @@ NDArray = Annotated[
     BeforeValidator(lambda v: np.array(v)),
     PlainSerializer(lambda v: v.tolist()),
     WithJsonSchema({
-        "type": "array", 
-        "items": {"type": "number"},
-        "description": "A numerical array/matrix"
+        "type": "array",
+        "description": "Numerical array of any shape (1D, 2D, 3D, etc.) as nested lists."
     })
 ]
 
@@ -62,15 +66,13 @@ def create_mcp_server(
 
     @mcp.tool(
         name="pymmcore_api_database",
-        description="This tool is part of the feedback loop of the Microscope Toolset. It will return the relevant information"
-                    "from the ElasticSeach database of API pymmcore_plus. The relevant information will be searched by an hybrid method using"
-                    "the reformulated query. The hybrid method will use the BM25 text matching and KNN search using embedding"
-                    "vectors. Afterwards, a cross encoder will re-rank the result obtained to match only the most top 25 relevant"
-                    "chunks of information."
+        description="Search the pymmcore-plus API documentation database using hybrid BM25 + KNN retrieval with cross-encoder re-ranking. Returns the top 25 most relevant chunks."
     )
     def pymmcore_api_database(
             user_query: str = Field(..., description="The user original question")
     ) -> dict[str, Any]:
+        if database_agent is None:
+            return {"user_query": user_query, "error": "Database agent not available (Elasticsearch not configured)"}
         try:
             # reformulate user query
             reformulated_question = database_agent.rephrase_query(user_query)
@@ -94,15 +96,13 @@ def create_mcp_server(
             }
     @mcp.tool(
         name="micromanager_device_database",
-        description="This tool is part of the feedback loop of the Microscope Toolset. It will return the relevant information"
-                    "from the micromanager device. The relevant information will be searched by an hybrid method using"
-                    "the reformulated query. The hybrid method will use the BM25 text matching and KNN search using embedding"
-                    "vectors. Afterwards, a cross encoder will re-rank the result obtained to match only the most top 25 relevant"
-                    "chunks of information."
+        description="Search the Micro-Manager device documentation database using hybrid BM25 + KNN retrieval with cross-encoder re-ranking. Returns the top 25 most relevant chunks."
     )
     def micromanager_device_database(
             user_query: str = Field(..., description="The user original question")
     ) -> dict[str, Any]:
+        if database_agent is None:
+            return {"user_query": user_query, "error": "Database agent not available (Elasticsearch not configured)"}
         try:
             # reformulate user query
             reformulated_question = database_agent.rephrase_query(user_query)
@@ -126,15 +126,13 @@ def create_mcp_server(
             }
     @mcp.tool(
         name="pdfs_publication_database",
-        description="This tool is part of the feedback loop of the Microscope Toolset. It will return the relevant information"
-                    "from a collection of scientific publications. The relevant information will be searched by an hybrid method using"
-                    "the reformulated query. The hybrid method will use the BM25 text matching and KNN search using embedding"
-                    "vectors. Afterwards, a cross encoder will re-rank the result obtained to match only the most top 25 relevant"
-                    "chunks of information."
+        description="Search scientific publications using hybrid BM25 + KNN retrieval with cross-encoder re-ranking. Returns the top 25 most relevant chunks."
     )
     def pdfs_publication_database(
             user_query: str = Field(..., description="The user original question")
     ) -> dict[str, Any]:
+        if database_agent is None:
+            return {"user_query": user_query, "error": "Database agent not available (Elasticsearch not configured)"}
         try:
             # reformulate user query
             reformulated_question = database_agent.rephrase_query(user_query)
@@ -158,22 +156,19 @@ def create_mcp_server(
 
     @mcp.tool(
          name="reformulate_user_query",
-         description="This tool is part of the feedback loop of the Microscope Toolset. It is used to rephrase the user question"
-                     "that starts the feedback loop. The reformulated query will be used to search into different databases to retrieve"
-                     "important information using text match with BM25 and embedding vectors."
+         description="Rephrase a user question into an optimized search query for database retrieval via BM25 text matching and embedding vectors."
      )
     def reformulate_user_query(
              user_question: str = Field(..., description="The user original question")
      ) -> dict[str, Any]:
+         if database_agent is None:
+             return {"user_query": user_question, "error": "Database agent not available (Elasticsearch not configured)"}
          # add check that structured response is getting the correct answer
          return database_agent.rephrase_query(user_question)
 
     @mcp.tool(
         name="get_microscope_settings",
-        description="This tool is part of the feedback loop of the Microscope Toolset. It has access to the settings of"
-                    "a microscope. It returns a dictionary with the properties of the microscope, the current properties values "
-                    "selected of each devices and the configuration groups saved into the microscope configuration file."
-                    "This tool is useful to discover the properties and devices of the microscope."
+        description="Return the current microscope state: device property schemas, current values, and configuration groups."
     )
     def get_microscope_settings() -> dict[str, Any]:
         try:
@@ -215,8 +210,7 @@ def create_mcp_server(
 
     @mcp.tool(
         name="answer_no_coding_query",
-        description="This tool is part of the feedback loop of the Microscope Toolset.  It will flags if the main agent"
-                    "will need to make an answer without any coding."
+        description="Flag that the current request can be answered without code execution."
     )
     def answer_no_coding_query(
             user_query: str = Field(..., description="The user original query")
@@ -225,256 +219,216 @@ def create_mcp_server(
             "user_query": user_query,
             "no_coding_query": True
         }
+    def _log_run(code, output, error, execution_mode, user_query, strategy):
+        """Append a run record to microscope_toolset_runs.jsonl"""
+        try:
+            record = {
+                "timestamp": datetime.datetime.now(datetime.timezone.utc).isoformat(),
+                "code": code,
+                "output": output,
+                "error": error,
+                "execution_mode": execution_mode,
+                "user_query": user_query,
+                "strategy": strategy,
+            }
+            with open("microscope_toolset_runs.jsonl", "a", encoding="utf-8") as f:
+                f.write(json.dumps(record, default=str) + "\n")
+        except Exception as log_err:
+            logger.warning(f"Failed to write run log: {log_err}")
+
     @mcp.tool(
         name="execute_python_code",
-        description="""
-        This tool is part of the feedback loop of the Microscope Toolset. It executes a given Python code 
-        string and returns its output or any errors. If not already elaborated, you need to form a strategy and the code
-        to run. Be aware of the precise constraints that these parameters have.
-        """
+        description=(
+            "Execute Python code on the microscope. The code runs in a namespace with a pre-configured `mmc` instance (CMMCorePlus/UniMMCore). Returns execution output or error details. "
+            "IMPORTANT: Choose execution_mode carefully — using the wrong mode is a common source of bugs. "
+            "Use 'live' whenever your code does multiple hardware operations that depend on each other (e.g., move stage then snap, or any loop with snap+analyze+move). "
+            "Use 'buffered' only for simple single-shot operations or pure analysis of already-captured data. "
+            "FEEDBACK WORKFLOWS (tracking, adaptive acquisition, timelapse with analysis): Use `run_mda_with_feedback(events, on_frame)` — a pre-configured helper available in the namespace. "
+            "It runs pymmcore-plus MDA with a generator of MDAEvent objects, calling on_frame(image, event, metadata) synchronously after each frame. "
+            "The generator can read shared state updated by on_frame to adapt subsequent events (e.g., re-center on a moving cell). "
+            "This is the recommended approach over manual time.sleep() loops — it uses the microscope's hardware timing and handles all napari compatibility automatically. "
+            "Requires execution_mode='live'. "
+            "SMART ACQUISITION HELPERS (also available in namespace, require execution_mode='live'): "
+            "- `center_on_cell(pixel_size_um=0.25, threshold_sigma=2.5, min_peak_above_bg=30.0, max_iterations=2)` → snap, find brightest region, re-center stage on it iteratively. Returns dict with image, centered (bool), peak, offset_um, centroid_px. "
+            "- `find_bright_centroid(image, threshold_sigma=2.5)` → returns (cy, cx, area_px, peak) of bright region centroid. "
+            "- `detect_cells(image, threshold_sigma=2.5, min_area_px=50, pixel_size_um=1.0, fill_holes=True, global_stats=None)` → returns list of cell dicts with centroid_px, area_um2, peak, bbox. Use fill_holes=True for brightfield. For multi-frame stacks, compute global (mean, std) once and pass as global_stats to avoid per-frame threshold drift. "
+            "SLM / TARGETED STIMULATION: For optogenetics, FRAP, photoactivation — build pixel-accurate masks from segmentation (NOT bounding boxes). "
+            "The SLM mask is 512x512 uint8 in viewport/camera space. Set via `mmc.setSLMDevice('SLM'); mmc.setSLMImage('SLM', mask); mmc.displaySLMImage('SLM')`. "
+            "For dynamic experiments, update the mask each frame in the on_frame callback using `mmc.setSLMImage('SLM', new_mask); mmc.displaySLMImage('SLM')`. Always use the standard API — never use virtual-microscope internals like bridge.set_slm_mask(). "
+            "Save mask stacks as 3D TIFFs alongside timelapses so the user can verify targeting."
+        )
     )
     def execute_python_code(
-            user_query: str = Field(..., description="The user original query"),
-            strategy: str = Field(..., description="""
-            The strategy elaborated by the Main Agent.
-            Given:
-                - The original user query
-                - The context (e.g., prior knowledge from the database or environment)
-                - The microscope settings   
-            
-            
-            Your main responsibility is to break the user's query into logical, sequenced steps, using available functions if possible.
-            
-            Build response
-                - Based on the information, elaborate a strategy to answer the user query.
-                - Break the query into smaller, logically ordered sub-tasks (if applicable).
-                - Propose a concise, step-by-step strategy to address the user query.
-            Response Style
-                - Maintain a **scientific, concise, and unambiguous** communication style. Avoid redundant or non-technical phrasing.
-            """),
-            code: str = Field(..., description="""
-            The code to be executed generated by the Main Agent.
-            Given:
-                - The original user query
-                - The context (e.g., prior knowledge from the database or environment)
-                - The microscope settings
-                - The strategy of the Strategy Agent
-            
-            Your main responsibility is to generate Python code to answer the user's query using the strategy and all the available context information. Return raw text, don't format as markdown.
-            
-            Responsibilities
-                - Use the strategy and the context to generate code that is:
-                    - **Safe**: no security or hardware risks for the device or microscope.
-                    - **Logical**: appropriate and functional.
-                    - **Clear & Maintainable **: readable, cleanly structured.
-                    - **Optimized**: efficient, minimal, and focused.
-            
-            Constrains
-                - Use mmc (an instance of CMMCorePlus) to interact with the microscope.
-                - Do **not** re-instantiate or reconfigure CMMCorePlus.
-                - Only import essential, safe libraries.
-                - **CRITICAL: Do NOT call viewer methods directly** (e.g., viewer.screenshot(), viewer.add_labels(), etc.) from within this code execution. The code runs in a daemon thread which cannot access Qt/OpenGL objects. Instead, use the dedicated viewer tools (viewer_screenshot, viewer_add_labels, etc.) which are thread-safe.
-                - **Avoid redundant narration** — just return the code in triple backticks.
-                - **Print each result**, and if a value is None, print a human-readable message.
-                - Include **minimal but meaningful comments** when needed.
-                - We are using a GUI called napari-micromanager that displays images captured by mmc automatically.
-            """),
-            execution_mode: Annotated[Literal["buffered", "live"], Field(description="Execution mode: 'buffered' (batch operations, safe from redundant commands) or 'live' (real-time I/O loops, tracking)") ]= "buffered"
+            code: str = Field(..., description=(
+                "Python code to execute. Constraints: "
+                "- Use `mmc` (pre-configured CMMCorePlus instance) for hardware calls; do NOT re-instantiate it. "
+                "- `run_mda_with_feedback(events, on_frame)` is available for MDA-based feedback workflows. "
+                "- `center_on_cell(**kw)`, `find_bright_centroid(image)`, `detect_cells(image)` are available for smart acquisition. "
+                "  events: Iterable[MDAEvent] (list or generator). on_frame: callback(image, event, metadata). "
+                "  Returns list of (image, event, metadata) if on_frame is None. "
+                "  MDAEvent fields: x_pos, y_pos (stage um), exposure (ms), min_start_time (s from MDA start), "
+                "  index (dict e.g. {'t': 0, 'p': 0}), metadata (dict e.g. {'cell_id': 0}). "
+                "  Generator pattern: yield MDAEvent(...) in a loop; on_frame updates shared state; generator reads it for next yield. "
+                "- Do NOT access `viewer` directly (runs in daemon thread, no Qt/OpenGL access); use viewer_* tools instead. "
+                "- Print results so they appear in the output. "
+                "- After mmc.setXYPosition(), always call mmc.waitForDevice(mmc.getXYStageDevice()) before snapping. "
+                "- To save multi-dimensional data (timelapse, multi-position), save as TIFF with tifffile.imwrite() then use viewer_add_image to display."
+            )),
+            execution_mode: Annotated[Literal["buffered", "live"], Field(description=(
+                "Execution mode — CRITICAL choice: "
+                "'buffered': hardware calls are intercepted and replayed atomically after code finishes. Redundant calls are deduplicated. "
+                "WARNING: In buffered mode, all snapImage() calls produce the SAME image because they execute at the same moment. "
+                "Use buffered ONLY for single-snap analysis or non-hardware code. "
+                "'live': direct hardware access, each call executes immediately. "
+                "REQUIRED for: any workflow involving move-then-snap, timelapse, tracking, multi-position imaging, "
+                "run_mda_with_feedback(), or any code where hardware state must change between operations."
+            ))] = "buffered",
+            user_query: str = Field("", description="(Optional) The original user query, used for logging only."),
+            strategy: str = Field("", description="(Optional) The strategy used, for logging only."),
             ) -> dict[str, Any]:
         """
         Prepares and executes Python code using the Execute agent.
         Returns a dictionary with 'output' (the execution result) and 'error' (if any).
         """
-        #code_string = code
         try:
-            prepare_code_to_run = prepare_code(code)#code_string.strip("```")
+            prepare_code_to_run = prepare_code(code)
             execution_output = executor.run_code_new(prepare_code_to_run, execution_mode)
             if "Error" in execution_output:
-                logger.error({
-                    "tool": "execute_python_code",
-                    "user_query": user_query,
-                    "strategy": strategy,
-                    "code": code,
-                    "error": execution_output
-                })
-                return {
-                    "user_query": user_query,
-                    "strategy": strategy,
-                    "code": code,
-                    "error": execution_output
-                }
+                logger.error({"tool": "execute_python_code", "code": code, "error": execution_output})
+                _log_run(code, None, execution_output, execution_mode, user_query, strategy)
+                return {"code": code, "error": execution_output}
             elif 'viewer' in execution_output:
-                logger.info({
-                    "tool": "execute_python_code",
-                    "user_query": user_query,
-                    "strategy": strategy,
-                    "code": code,
-                    "error": "Agent tried to call 'viewer'. You are not allowed because you don't have access and you will crush the GUI."
-                })
-                return {
-                    "tool": "execute_python_code",
-                    "user_query": user_query,
-                    "strategy": strategy,
-                    "code": code,
-                    "error": "Agent tried to call 'viewer'. You are not allowed because you don't have access and you will crush the GUI."
-                }
+                err_msg = "Code references 'viewer' or 'napari.current_viewer()'. These are blocked because MCP tools run on a daemon thread — accessing the napari GUI directly will crash it. Use viewer_* MCP tools instead, or get_layer_data to export layer data to a TIFF file."
+                logger.info({"tool": "execute_python_code", "code": code, "error": err_msg})
+                _log_run(code, None, err_msg, execution_mode, user_query, strategy)
+                return {"code": code, "error": err_msg}
             else:
-                logger.info({
-                    "tool": "execute_python_code",
-                    "user_query": user_query,
-                    "strategy": strategy,
-                    "code": code,
-                    "is_final_output": True,
-                    "output": execution_output
-                })
-                return {
-                    "user_query": user_query,
-                    "strategy": strategy,
-                    "code": code,
-                    "is_final_output": True,
-                    "output": execution_output
-                }
+                logger.info({"tool": "execute_python_code", "code": code, "output": execution_output})
+                _log_run(code, execution_output, None, execution_mode, user_query, strategy)
+                return {"code": code, "output": execution_output}
         except Exception as e:
-            logger.error({
-                "tool": "execute_python_code",
-                "user_query": user_query,
-                "strategy": strategy,
-                "code": code,
-                "error": f"Code preparation/execution failed: {e}"
-            })
-            return {
-                "user_query": user_query,
-                "strategy": strategy,
-                "code": code,
-                "error": f"Code preparation/execution failed: {e}"
-            }
+            err_msg = f"Code preparation/execution failed: {e}"
+            logger.error({"tool": "execute_python_code", "code": code, "error": err_msg})
+            _log_run(code, None, err_msg, execution_mode, user_query, strategy)
+            return {"code": code, "error": err_msg}
+
+    # ------------------------------------------#
+    # Simple microscope tools
+    # ------------------------------------------#
+    def _get_raw_mmc():
+        """Get the raw mmc instance (CMMCorePlus or UniMMCore) from the executor namespace."""
+        mmc_wrapper = executor.namespace["mmc"]
+        return mmc_wrapper._mmc if hasattr(mmc_wrapper, "_mmc") else mmc_wrapper
 
     @mcp.tool(
-        name="save_result",
-        description="Save the final result of the execution of the code",
+        name="snap_image",
+        description=(
+            "Snap a single image with the current camera settings. Returns image metadata only (shape, dtype, min, max, mean) — NOT the pixel data itself. "
+            "The image is also displayed automatically in the napari-micromanager live view. "
+            "To access actual pixel data for analysis, use execute_python_code with mmc.snapImage() + mmc.getImage() instead."
+        )
     )
-    def save_result(
-            chat_summary: str = Field(..., description="This represents a summary of the current conversation that started when the user made a request and ended with the successfully run of the code."),
-            feedback: bool = Field(..., description="This feedback describes if the final output was successful or not. If is not successfully will be False, True otherwise"),
-            category: str = Field(..., description="This represents a one keyword that describe the category of the user request."),
-            code: str = Field(..., description="The code to be executed generated by the SoftwareAgent"),
-    ):
-        """This function saves the final result of the execution of the code."""
-
-        data = {
-            "prompt": chat_summary,
-            "output": code,
-            "feedback": feedback,
-            "category": category
-        }
+    def snap_image() -> dict[str, Any]:
         try:
-
-            # --new-- comment out for testing
-            # add to database
-            #database_agent.add_log(data)
-
-            logger.info({
-                "tool": "save_result",
-            })
+            raw_mmc = _get_raw_mmc()
+            raw_mmc.snapImage()
+            img = raw_mmc.getImage()
             return {
-                "long_memory": "The previous result was successfully saved.",
+                "status": "success",
+                "shape": list(img.shape),
+                "dtype": str(img.dtype),
+                "min": float(np.min(img)),
+                "max": float(np.max(img)),
+                "mean": float(np.mean(img)),
             }
-
         except Exception as e:
-            logger.error({e})
-            return {
-                "error_long_memory": "Unable to save the final result of the execution of the code.",
-            }
-
-
-
-    # @mcp.tool(
-    #     name="save_result",
-    #     description="This tool is part of the feedback loop of the Microscope Toolset. After showing the result to the user, "
-    #                 "it will be asked to the user if the answer obtained was correct. We want to save into a database the "
-    #                 "correct and the wrong answer to help you to answer the future user's questions. After you successfully "
-    #                 "completed this, the user will likely ask you others questions or stop the server."
-    # )
-    # def save_result(
-    #         user_query: str = Field(description="The user's response, typically 'correct' or 'wrong'.")
-    # ):
-    #     """
-    #     Calls the LoggerAgent to save the output of the Agents into a database.
-    #     Returns a json object with 'intent' (save) and a message.
-    #     """
-    #     # Get current data dict
-    #     data_dict = microscope_session_object.get_data_dict()
-    #     # evaluate user's answer
-    #     if user_query == "correct":
-    #         success = True
-    #     elif user_query == "wrong":
-    #         success = False
-    #     else:
-    #         loc_conversation = data_dict['conversation'] + [
-    #             agent_message("Please specify if your query was answered or not using 'correct' or 'wrong'!")]
-    #         microscope_session_object.update_data_dict(conversation=loc_conversation)
-    #         return {"intent": 'error',
-    #                 "message": "Please specify if your query was answered or not using 'correct' or 'wrong'!"}
-    #     # prepare summary of the code
-    #     summary_chat = logger_agent.prepare_summary(data_dict)
-    #     if summary_chat.intent == "summary":
-    #         data = {"prompt": summary_chat.message, "output": data_dict['code'], "feedback": success, "category": ""}
-    #         # add into the db
-    #         database_agent.add_log(data)
-    #     # update the microscope session object
-    #     microscope_session_object.reset_data_dict(old_output=data_dict['output'],
-    #                                               old_microscope_status=data_dict['microscope_status'],
-    #                                               old_microscope_properties=data_dict['microscope_properties'],
-    #                                               old_microscope_presets=data_dict['configuration_presets'])
-    #
-    #     return {"intent": 'save', "message": "The previous result was added to the log database."}
+            return {"status": "error", "message": str(e)}
 
     @mcp.tool(
-        name="show_result",
-        description="This tool is part of the feedback loop of the Microscope Toolset. Once the parameter 'is_final_output' "
-                    "is changed to True, you need to show the user the final output."
+        name="move_stage",
+        description=(
+            "Move the XY stage to an absolute or relative position. Returns the final stage position after the move. "
+            "Coordinate system: stage position defines the center of the camera viewport in world coordinates (micrometers). "
+            "The mapping between pixels and world coordinates: world = stage + (pixel - 256) * pixel_size_um. "
+            "You must determine pixel_size_um for the current setup (e.g., via calibration or get_microscope_settings). "
+            "To center a detected object at pixel (px, py): compute world_x = stage_x + (px - 256) * pixel_size_um, then move directly to (world_x, world_y). "
+            "This tool automatically waits for the stage to finish moving before returning."
+        )
     )
-    def show_result(
-            user_query: str = Field(..., description="The user original query"),
-            strategy: str = Field(..., description="The strategy elaborated by the Strategy Agent"),
-            code: str = Field(..., description="The code to be executed generated by the SoftwareAgent"),
-            error: str = Field(..., description="The error when running the code"),
-            is_final_output: bool = Field(..., description="Whether the code was executed successfully"),
-            output: str = Field(..., description="The output of the code"),
-    ):
-        """
-        Shows the user the final output
-        """
-        # # Get current data dict
-        # data_dict = microscope_session_object.get_data_dict()
-        data_dict = {
-            "user_query": user_query,
-            "strategy": strategy,
-            "code": code,
-            "error": error,
-            "is_final_output": is_final_output,
-            "output": output
-        }
-        # show the final output
-        if data_dict['is_final_output']:
-            final_output = data_dict['output']
-            logger.info({
-                "tool": "show_result",
-                "output": final_output
-            })
-            return final_output
-        else:
-            message = "The final output was not reach yet!"
-            logger.info({
-                "tool": "show_result",
-                "is_final_output": False,
-                "message": message
-            })
-            return {
-                "is_final_output": False,
-                "message": message
-            }
-        
+    def move_stage(
+        x: float = Field(..., description="X coordinate (absolute) or X displacement (relative), in micrometers. Stage X maps to image columns."),
+        y: float = Field(..., description="Y coordinate (absolute) or Y displacement (relative), in micrometers. Stage Y maps to image rows."),
+        relative: bool = Field(False, description="If True, move relative to current position. If False, move to absolute coordinates."),
+    ) -> dict[str, Any]:
+        try:
+            raw_mmc = _get_raw_mmc()
+            if relative:
+                raw_mmc.setRelativeXYPosition(x, y)
+            else:
+                raw_mmc.setXYPosition(x, y)
+            raw_mmc.waitForDevice(raw_mmc.getXYStageDevice())
+            final_x, final_y = raw_mmc.getXPosition(), raw_mmc.getYPosition()
+            return {"status": "success", "x": final_x, "y": final_y}
+        except Exception as e:
+            return {"status": "error", "message": str(e)}
+
+    @mcp.tool(
+        name="set_objective",
+        description="Switch the objective lens by setting the state label on the Objective device. Returns the new current objective."
+    )
+    def set_objective(
+        label: str = Field(..., description="Objective label to switch to (e.g. 'Nikon 10X S Fluor', '20x'). Use get_microscope_settings to discover available labels."),
+    ) -> dict[str, Any]:
+        try:
+            raw_mmc = _get_raw_mmc()
+            # Find the Objective state device
+            obj_device = None
+            for dev in raw_mmc.getLoadedDevices():
+                dev_type = raw_mmc.getDeviceType(dev)
+                # DeviceType 6 = StateDevice
+                if "bjective" in dev or (hasattr(dev_type, 'value') and dev_type.value == 6 and "bjective" in dev):
+                    obj_device = dev
+                    break
+            if obj_device is None:
+                # Fallback: try common names
+                for name in ["Objective", "ObjectiveTurret", "Nosepiece"]:
+                    try:
+                        raw_mmc.getDeviceType(name)
+                        obj_device = name
+                        break
+                    except Exception:
+                        continue
+            if obj_device is None:
+                return {"status": "error", "message": "Could not find an Objective device. Use get_microscope_settings to check available devices."}
+            raw_mmc.setProperty(obj_device, "Label", label)
+            raw_mmc.waitForDevice(obj_device)
+            current = raw_mmc.getProperty(obj_device, "Label")
+            return {"status": "success", "device": obj_device, "objective": current}
+        except Exception as e:
+            return {"status": "error", "message": str(e)}
+
+    @mcp.tool(
+        name="get_stage_position",
+        description=(
+            "Return the current X, Y, and Z stage positions in micrometers. "
+            "The stage position defines the center of the camera viewport in world coordinates. "
+            "An object at pixel (px, py) in an image is at world position (stage_x + (px - 256) * pixel_size_um, stage_y + (py - 256) * pixel_size_um), "
+            "where pixel_size_um depends on the current objective and camera configuration."
+        )
+    )
+    def get_stage_position() -> dict[str, Any]:
+        try:
+            raw_mmc = _get_raw_mmc()
+            x = raw_mmc.getXPosition()
+            y = raw_mmc.getYPosition()
+            try:
+                z = raw_mmc.getZPosition() if hasattr(raw_mmc, 'getZPosition') else raw_mmc.getPosition()
+            except Exception:
+                z = None
+            return {"status": "success", "x": x, "y": y, "z": z}
+        except Exception as e:
+            return {"status": "error", "message": str(e)}
+
     @mcp.tool(
             name="get_microscope_events",
             description="Retrieve recent microscope activity events to check current state and discover user actions. Returns a chronological list of events (image captures, property changes, exposure adjustments, etc.) with timestamps. Use this to: verify that commanded actions completed successfully, discover manual user interactions with the GUI, check current microscope state, or debug timing issues. Each event includes type, timestamp, and relevant data."
@@ -586,16 +540,149 @@ def create_mcp_server(
             return viewer_proxy.call_on_main_thread('layer_screenshot', layer_name=layer_name)
         else:
             return viewer.layer_screenshot(layer_name=layer_name)
-    
+
+    @mcp.tool(
+        name="get_layer_data",
+        description=(
+            "Export raw pixel data from a napari layer to a TIFF file on disk. "
+            "This is the safe data bridge between the viewer and execute_python_code — "
+            "the exported TIFF can be loaded with tifffile.imread() inside executed code. "
+            "Supports Image and Labels layers. Returns metadata including path, shape, dtype, "
+            "and type-specific fields (num_labels/unique_labels for Labels; min/max/mean for Image). "
+            "Use this instead of napari.current_viewer() which is unsafe from the daemon thread."
+        )
+    )
+    def get_layer_data(
+        layer_name: str = Field(..., description="Exact name of the layer to export. Use viewer_list_of_layers to see available names."),
+        save_path: str | None = Field(None, description="Optional file path for the TIFF output. Defaults to /tmp/<sanitized_layer_name>.tif."),
+    ) -> dict[str, Any]:
+        """Export a layer's raw numpy data to a TIFF file."""
+        if viewer_proxy is not None:
+            return viewer_proxy.call_on_main_thread('get_layer_data', layer_name=layer_name, save_path=save_path)
+        else:
+            return viewer.get_layer_data(layer_name=layer_name, save_path=save_path)
+
+    @mcp.tool(
+        name="view_image",
+        description=(
+            "Load an image from disk and return it as visual content that the agent can see directly. "
+            "Supports TIFF (including multi-frame), PNG, and JPEG. Optionally overlay a segmentation mask "
+            "as green contours. Use this to visually verify segmentation, count cells, assess image quality, "
+            "or decide on analysis strategy. Unlike viewer_screenshot (which captures the napari canvas), "
+            "this loads arbitrary image files from disk."
+        ),
+    )
+    def view_image(
+        image_path: str = Field(..., description="Path to the image file (TIFF, PNG, JPEG)."),
+        overlay_path: str | None = Field(None, description="Optional path to a segmentation/label mask. Contours will be drawn as green outlines on the image."),
+        frame_index: int = Field(0, description="For multi-frame TIFFs, which frame to display (0-indexed)."),
+        query: str = Field("", description="Context about what to look for in the image. Returned alongside the image as text."),
+    ):
+        """
+        Load an image from disk, optionally composite a segmentation overlay,
+        and return as ImageContent so the LLM can see it.
+        """
+        import cv2
+        from PIL import Image as PILImage
+        import tifffile
+
+        # Load image
+        path = str(image_path)
+        if path.lower().endswith(('.tif', '.tiff')):
+            img = tifffile.imread(path)
+        else:
+            img = np.array(PILImage.open(path))
+
+        # Handle multi-dimensional arrays: select frame
+        if img.ndim == 3 and img.shape[-1] not in (3, 4):
+            # Shape is (T, H, W) — select frame
+            idx = min(frame_index, img.shape[0] - 1)
+            img = img[idx]
+        elif img.ndim == 4:
+            # Shape is (T, H, W, C) — select frame
+            idx = min(frame_index, img.shape[0] - 1)
+            img = img[idx]
+
+        # Normalize to uint8
+        if img.dtype == np.float32 or img.dtype == np.float64:
+            img = np.clip(img, 0, None)
+            if img.max() > 0:
+                img = (img / img.max() * 255).astype(np.uint8)
+            else:
+                img = img.astype(np.uint8)
+        elif img.dtype == np.uint16:
+            if img.max() > 0:
+                img = (img.astype(np.float32) / img.max() * 255).astype(np.uint8)
+            else:
+                img = img.astype(np.uint8)
+        elif img.dtype != np.uint8:
+            img = img.astype(np.uint8)
+
+        # Convert grayscale to RGB for overlay drawing
+        if img.ndim == 2:
+            img = cv2.cvtColor(img, cv2.COLOR_GRAY2RGB)
+
+        # Overlay segmentation contours if provided
+        if overlay_path is not None:
+            overlay_str = str(overlay_path)
+            if overlay_str.lower().endswith(('.tif', '.tiff')):
+                mask = tifffile.imread(overlay_str)
+            else:
+                mask = np.array(PILImage.open(overlay_str))
+
+            # Handle multi-frame mask
+            if mask.ndim == 3 and mask.shape[-1] not in (3, 4):
+                idx = min(frame_index, mask.shape[0] - 1)
+                mask = mask[idx]
+            elif mask.ndim == 4:
+                idx = min(frame_index, mask.shape[0] - 1)
+                mask = mask[idx]
+
+            # Draw contours for each label
+            binary = (mask > 0).astype(np.uint8)
+            contours, _ = cv2.findContours(binary, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+            cv2.drawContours(img, contours, -1, (0, 255, 0), 1)
+
+        # Resize if any edge exceeds 1568px (API limit)
+        h, w = img.shape[:2]
+        max_edge = 1568
+        if max(h, w) > max_edge:
+            scale = max_edge / max(h, w)
+            new_w, new_h = int(w * scale), int(h * scale)
+            img = cv2.resize(img, (new_w, new_h), interpolation=cv2.INTER_AREA)
+
+        # Encode as PNG base64
+        pil_img = PILImage.fromarray(img)
+        buf = BytesIO()
+        pil_img.save(buf, format="PNG")
+        base64_img = base64.b64encode(buf.getvalue()).decode("utf-8")
+
+        # Build metadata text
+        meta = {"image_path": path, "frame_index": frame_index, "shape": list(img.shape[:2])}
+        if overlay_path is not None:
+            meta["overlay_path"] = str(overlay_path)
+        if query:
+            meta["query"] = query
+
+        return [
+            TextContent(type="text", text=json.dumps(meta)),
+            ImageContent(type="image", data=base64_img, mimeType="image/png"),
+        ]
 
     # tools for open interact with napari viewer
     @mcp.tool(
         name="viewer_add_image",
-        description="Load and display an image file in the napari viewer as a new layer. Provide the file path (supports common image formats), optional layer name, and visualization parameters like colormap (e.g., 'viridis', 'magma'), blending mode ('additive', 'translucent'), and channel_axis for multi-channel images. Use this to add microscopy images, fluorescence channels, or processed image data to the viewer for analysis and visualization."
+        description=(
+            "Display an image in the napari viewer as a new layer. Two input methods: "
+            "(1) Provide a file 'path' to a TIFF/PNG/JPEG — recommended for large or multi-dimensional data generated by execute_python_code (save with tifffile.imwrite(), then pass the path here). "
+            "(2) Provide 'data' as a numpy array directly — works for small arrays but impractical for large image stacks over MCP JSON. "
+            "Supports extra dimensions: shape (T, Z, H, W) creates time+Z sliders, (N, H, W) creates a slider for dimension N. "
+            "Use colormap, blending, and channel_axis for visualization control."
+        )
     )
     def viewer_add_image(
-        data: NDArray | list[NDArray] | None = Field(None, description="An array or list of array with the image data to add to napari."),
-        path: str | None = Field(..., description="File path to the image file (TIFF, PNG, JPEG, etc.) to load into the viewer."),
+        data: NDArray | list[NDArray] | None = Field(None, description="Image data as a numpy array (2D, 3D, or 4D). For large data, prefer saving to TIFF and using 'path' instead."),
+        path: str | None = Field(None, description="File path to load (TIFF, PNG, JPEG, etc.). Recommended for multi-dimensional data from execute_python_code workflows."),
         name: str | None = Field(None, description="Optional name for the image layer. If not provided, the filename will be used."),
         colormap: str | None = Field(None, description="Colormap to apply to the image (e.g., 'gray', 'viridis', 'magma', 'red', 'green', 'blue'). Default is 'gray' for grayscale images."),
         blending: str | None = Field(None, description="Blending mode for layer compositing: 'translucent' (default), 'additive', or 'opaque'."),
@@ -615,7 +702,7 @@ def create_mcp_server(
     )
     def viewer_add_labels(
         path: str | None = Field(None, description="File path to the labels image file (TIFF, PNG, etc.). Use this if loading from disk. Mutually exclusive with img_data."),
-        img_data: NDArray | None = Field(None, description="Numpy array containing the labeled mask where each unique integer represents a different region/object. Use this to pass segmentation results directly without saving to disk. Mutually exclusive with path."), 
+        img_data: NDArray | None = Field(None, description="Labeled mask as a 2D, 3D, or 4D integer array where each unique value represents a different region/object. Supports Z-stacks and time series. Mutually exclusive with path."),
         name: str | None = Field(None, description="Optional name for the labels layer in the viewer. If not provided, a default name will be generated.")
     ):
         """
@@ -793,7 +880,7 @@ def create_mcp_server(
 
     @mcp.tool(
             name="viewer_add_tracks",
-            description=""
+            description="Add a tracks layer to the napari viewer for visualizing object trajectories over time."
     )
     def viewer_add_tracks(
         track_data: NDArray = Field(description="""NxD+1 NumPy Array or list containig the coordinates of N vertices with a 
@@ -853,9 +940,3 @@ def create_mcp_server(
     return mcp
 
 
-def run_server(mcp: FastMCP) -> None:
-    """
-    Start the MCP Microscope Toolset server.
-    """
-    logger.info("MCP Microscope Toolset server started using streamable-http.")
-    mcp.run(transport="streamable-http")

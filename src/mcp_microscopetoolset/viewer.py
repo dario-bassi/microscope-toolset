@@ -3,6 +3,7 @@ import imageio.v3 as iio
 import numpy as np
 import logging
 import sys
+import re
 import base64
 from pathlib import Path
 from io import BytesIO
@@ -10,19 +11,20 @@ from PIL import Image
 from napari import Viewer
 from typing import Any
 import contextlib
+import tifffile
 
 
 #  logger
-logger = logging.getLogger("Initialize Agent")
-logger.setLevel(logging.DEBUG)
-logger.addHandler(logging.StreamHandler(sys.stdout))
-logger.setLevel(logging.INFO)
-fh = logging.FileHandler("microscope_toolset.log", encoding="utf-8")
-fh.setFormatter(logging.Formatter(
-    "%(asctime)s [%(levelname)s] %(name)s: %(message)s",
-    datefmt="%Y-%m-%d %H:%M:%S",
-))
-logger.addHandler(fh)
+logger = logging.getLogger("Viewer")
+if not logger.handlers:
+    logger.setLevel(logging.INFO)
+    logger.addHandler(logging.StreamHandler(sys.stdout))
+    fh = logging.FileHandler("microscope_toolset.log", encoding="utf-8")
+    fh.setFormatter(logging.Formatter(
+        "%(asctime)s [%(levelname)s] %(name)s: %(message)s",
+        datefmt="%Y-%m-%d %H:%M:%S",
+    ))
+    logger.addHandler(fh)
 
 
 class NapariViewerMC:
@@ -82,7 +84,7 @@ class NapariViewerMC:
             if hasattr(layer, "gamma"):
                 layers_detail["gamma"] = float(getattr(layer, "gamma", 1.0))
 
-            layers_details.append(layer)
+            layers_details.append(layers_detail)
         return {
             "viewer": viewer_infos,
             "layers": layers_details
@@ -117,8 +119,8 @@ class NapariViewerMC:
 
             
             result.append(entry)
-        
-        return result
+
+        return {"layers": result}
     
     def screenshot(self, canvas_only: bool):
         """
@@ -133,19 +135,95 @@ class NapariViewerMC:
     
     def layer_screenshot(self, layer_name: str):
         """
-        Return a screeshot from the selected layer
+        Return a screenshot of a single layer rendered by napari.
+
+        Uses napari's own rendering pipeline: hides all layers except the target,
+        takes a canvas screenshot, then restores visibility. This correctly handles
+        Labels layers (color-coded), colormaps, contrast limits, and current slice.
         """
-        # check if the layer name exist
-        if layer_name not in [layer.name for layer in self._viewer.layers] and layer_name not in [layer.name for layer in self._viewer.layers.selection]:
+        if layer_name not in [layer.name for layer in self._viewer.layers]:
             return {
                 "status": "error",
-                "message": "The layer_name doesn't exists! Please check the name."
+                "message": "The layer_name doesn't exist! Please check the name."
             }
-                
-        img_arr = self._viewer.layers[layer_name].data
-        
+
+        # Save visibility state of all layers
+        visibility_state = {layer.name: layer.visible for layer in self._viewer.layers}
+
+        try:
+            # Hide all layers except the target
+            for layer in self._viewer.layers:
+                layer.visible = (layer.name == layer_name)
+
+            # Use napari's own renderer — always produces RGBA uint8
+            img_arr = self._viewer.screenshot(canvas_only=True)
+        finally:
+            # Restore all layers' visibility
+            for layer in self._viewer.layers:
+                if layer.name in visibility_state:
+                    layer.visible = visibility_state[layer.name]
+
         return self._transform_array_to_image_content(img_arr)
     
+    def get_layer_data(self, layer_name: str, save_path: str | None = None):
+        """
+        Export raw numpy data from a napari layer to a TIFF file on disk.
+
+        This is the safe data bridge between the viewer (main thread) and
+        execute_python_code (daemon thread). Returns metadata about the
+        exported layer.
+
+        Supports Image and Labels layers. Returns error for unsupported types.
+        """
+        if layer_name not in [layer.name for layer in self._viewer.layers]:
+            return {
+                "status": "error",
+                "message": f"Layer '{layer_name}' not found. Use viewer_list_of_layers to see available layers."
+            }
+
+        layer = self._viewer.layers[layer_name]
+        layer_type = layer.__class__.__name__
+
+        if layer_type not in ("Image", "Labels"):
+            return {
+                "status": "error",
+                "message": f"Unsupported layer type '{layer_type}'. Only Image and Labels layers are supported."
+            }
+
+        data = np.asarray(layer.data)
+
+        # Build default save path from sanitized layer name
+        if save_path is None:
+            sanitized = re.sub(r'[^\w\-.]', '_', layer_name)
+            save_path = f"/tmp/{sanitized}.tif"
+
+        try:
+            tifffile.imwrite(save_path, data)
+        except Exception as e:
+            return {
+                "status": "error",
+                "message": f"Failed to write TIFF: {e}"
+            }
+
+        result = {
+            "status": "success",
+            "path": save_path,
+            "layer_type": layer_type,
+            "shape": list(data.shape),
+            "dtype": str(data.dtype),
+        }
+
+        if layer_type == "Labels":
+            unique = np.unique(data)
+            result["num_labels"] = int(len(unique) - 1) if 0 in unique else int(len(unique))
+            result["unique_labels"] = unique[:50].tolist()
+        elif layer_type == "Image":
+            result["min"] = float(np.min(data))
+            result["max"] = float(np.max(data))
+            result["mean"] = float(np.mean(data))
+
+        return result
+
     def _transform_array_to_image_content(self, arr: np.ndarray) -> dict[str, Any]:#ImageContent
         """Helper function to transfor the array in a ImageContent"""
 
@@ -569,11 +647,18 @@ class NapariViewerMC:
         """
 
         try:
-            self._viewer.add_tracks(data=track_data, features=features, tail_width=tail_width, tail_length=tail_length)
+            kwargs = {"data": np.asarray(track_data)}
+            if features is not None:
+                kwargs["features"] = features
+            if tail_width is not None:
+                kwargs["tail_width"] = int(tail_width)
+            if tail_length is not None:
+                kwargs["tail_length"] = int(tail_length)
+            self._viewer.add_tracks(**kwargs)
 
             return {
                 "status": "success",
-                "message": "The tracks data was susccessfully added."
+                "message": "The tracks data was successfully added."
             }
 
         except Exception as e:
