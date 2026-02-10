@@ -260,27 +260,24 @@ class CellCycleNormal(NormalCell):
     
     def update_behavior(self, dt: float) -> None:
         """Update cell cycle state and chromatin positions."""
-        # Skip normal physics if dying
-        if not self.is_dying:
-            super().update_behavior(dt)
-        
         # Update death timer if dying
         if self.is_dying:
             self.death_timer += dt
             self._update_apoptosis_phase()
             self._update_apoptotic_physics()
-        
-        # Update state cycle (G1 -> S -> G2 -> M) only if not dying
-        if not self.is_dying:
+            # Apply physics update to generate membrane ruffling with modified parameters
+            self.update_physics(dt)
+        else:
+            # Normal cell physics for non-dying cells
+            super().update_behavior(dt)
+            # Update state cycle (G1 -> S -> G2 -> M)
             self._change_state()
             self.current_time_life += dt
+            # Update cell cycle physics (constriction during mitosis)
+            self._physic_cell_cycle()
 
         # Update chromatin positions to follow cell center
         self.chromatin_pts = self._update_chromatin_pts()
-
-        # Update cell cycle physics
-        if not self.is_dying:
-            self._physic_cell_cycle()
 
     def _apply_constriction_to_radius(self) -> None:
         """Apply constriction to cell membrane based on constriction progress.
@@ -502,10 +499,10 @@ class CellCycleNormal(NormalCell):
         return progress
 
     def _get_current_shrinkage_factor(self) -> float:
-        """Returns radius multiplier of cell shrinkage (1.0 -> 0.7)."""
+        """Returns radius multiplier of cell shrinkage (1.0 -> 0.85)."""
         progress = self._get_shrinkage_progess()
-        # Linear shrinkage: start at 1.0, end at 0.7 (30% shrinkage)
-        shrinkage_factor = 1.0 - (0.3 * progress)
+        # Linear shrinkage: start at 1.0, end at 0.85 (15% shrinkage)
+        shrinkage_factor = 1.0 - (0.15 * progress)
         return shrinkage_factor
 
     def _get_apoptotic_body_positions(self) -> list[tuple[float, float]]:
@@ -544,18 +541,45 @@ class CellCycleNormal(NormalCell):
         
         - Stop velocity
         - Disable brownian motion
+        - Disable shape relaxation to preserve irregular membrane
+        - Increase membrane perturbations for irregular appearance
         - Initialize apoptotic bodies when entering that phase
         """
         # Stop all movement
         self.vel[:] = 0.0
         
-        # Apply shrinkage factor during Shrinkage phase
-        if self.apoptosis_death_phase == 'Shrinkage':
-            shrinkage_factor = self._get_current_shrinkage_factor()
+        # Apply shrinkage factor during Shrinkage phase and maintain through Blebbing
+        if self.apoptosis_death_phase in ('Shrinkage', 'Blebbing'):
+            if self.apoptosis_death_phase == 'Shrinkage':
+                shrinkage_factor = self._get_current_shrinkage_factor()
+            else:
+                # During blebbing, maintain the final shrinkage factor (0.85)
+                shrinkage_factor = 0.60
+            
             # Scale base_r for shrinkage (will affect nucleus size proportionally)
             if not hasattr(self, 'original_base_r_for_apoptosis'):
                 self.original_base_r_for_apoptosis = self.base_r
             self.base_r = self.original_base_r_for_apoptosis * shrinkage_factor
+        
+        # Disable shape relaxation during all apoptotic phases to preserve irregular membrane
+        if not hasattr(self, 'original_curvature_relax'):
+            # Store original values on first entry to apoptosis
+            self.original_curvature_relax = self.curvature_relax
+            self.original_radial_relax = self.radial_relax
+            self.original_ruffle_std = self.ruffle_std
+        
+        # During apoptosis, disable shape relaxation entirely to preserve blebs
+        # Set to near-zero to stop any recovery to round shape
+        self.curvature_relax = 0.001  # Almost no smoothing
+        self.radial_relax = 0.0  # No pulling back to base_r
+        
+        # Increase ruffle std for more irregular membrane, especially during blebbing
+        if self.apoptosis_death_phase == 'Blebbing':
+            # Much more irregular membrane during blebbing
+            self.ruffle_std = self.original_ruffle_std * 5.0  # 0.04 * 5 = 0.2
+        else:
+            # Less dramatic during shrinkage and later phases
+            self.ruffle_std = self.original_ruffle_std * 2.0  # 0.04 * 2 = 0.08
         
         # Initialize apoptotic bodies when entering that phase
         if self.apoptosis_death_phase == 'Apoptotic bodies':

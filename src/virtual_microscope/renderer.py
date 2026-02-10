@@ -798,7 +798,7 @@ class Renderer:
         cv2.circle(img, nucleus_pos, nucleus_radius, (150, 60, 60), -1, lineType=cv2.LINE_AA)
         
         # Draw condensed chromatin (nuclear material becoming more compact)
-        self._draw_condensed_chromatin(img, cell, camera_offset, num_chromosome=92)
+        self._draw_condensed_chromatin(img, cell, camera_offset, num_chromosome=10)
 
     def _draw_blebbing_apoptosis(self, img: np.ndarray, cell: CellCycleNormal,
                                  center_screen: np.ndarray, vertices: np.ndarray,
@@ -807,8 +807,9 @@ class Renderer:
         blebbing_progress = (cell.death_timer - cell.time_table_apoptois['Shrinkage']) / \
                             (cell.time_table_apoptois['Blebbing'] - cell.time_table_apoptois['Shrinkage'])
         
-        # Draw base cell (slightly smaller than shrinkage end)
-        shrinkage_factor = 0.7  # End of shrinkage phase
+        # Draw base cell at the final shrinkage size (0.85 = 15% shrinkage)
+        # Use the actual shrunk base_r from the cell physics, not hardcoded factor
+        shrinkage_factor = cell.base_r / (cell.original_base_r_for_apoptosis if hasattr(cell, 'original_base_r_for_apoptosis') else cell.base_r)
         vertices_blebbed = center_screen + (vertices - center_screen) * shrinkage_factor
         
         # Draw cell with blue gradient layers (same as normal cell cycle)
