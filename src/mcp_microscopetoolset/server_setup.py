@@ -569,7 +569,10 @@ def create_mcp_server(
             "Supports TIFF (including multi-frame), PNG, and JPEG. Optionally overlay a segmentation mask "
             "as green contours. Use this to visually verify segmentation, count cells, assess image quality, "
             "or decide on analysis strategy. Unlike viewer_screenshot (which captures the napari canvas), "
-            "this loads arbitrary image files from disk."
+            "this loads arbitrary image files from disk. "
+            "Contrast is auto-scaled using percentiles (1st-99.9th) to handle low-contrast microscopy images "
+            "and ignore hot pixels. For fine contrast control, use viewer_screenshot instead — the user can "
+            "adjust contrast limits interactively in napari before you take the screenshot."
         ),
     )
     def view_image(
@@ -603,20 +606,18 @@ def create_mcp_server(
             idx = min(frame_index, img.shape[0] - 1)
             img = img[idx]
 
-        # Normalize to uint8
-        if img.dtype == np.float32 or img.dtype == np.float64:
-            img = np.clip(img, 0, None)
-            if img.max() > 0:
-                img = (img / img.max() * 255).astype(np.uint8)
-            else:
-                img = img.astype(np.uint8)
-        elif img.dtype == np.uint16:
-            if img.max() > 0:
-                img = (img.astype(np.float32) / img.max() * 255).astype(np.uint8)
-            else:
-                img = img.astype(np.uint8)
-        elif img.dtype != np.uint8:
-            img = img.astype(np.uint8)
+        # Normalize to uint8 using percentile scaling to handle hot pixels
+        # and low-contrast microscopy images (e.g., 16-bit with bg~200, fg~300,
+        # or uint8 with narrow range like 4-72)
+        fimg = img.astype(np.float32)
+        p_low = np.percentile(fimg, 1)
+        p_high = np.percentile(fimg, 99.9)
+        if p_high > p_low:
+            img = np.clip((fimg - p_low) / (p_high - p_low) * 255, 0, 255).astype(np.uint8)
+        elif fimg.max() > 0:
+            img = np.clip(fimg / fimg.max() * 255, 0, 255).astype(np.uint8)
+        else:
+            img = np.zeros_like(fimg, dtype=np.uint8)
 
         # Convert grayscale to RGB for overlay drawing
         if img.ndim == 2:
