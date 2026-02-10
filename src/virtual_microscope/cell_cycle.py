@@ -43,11 +43,11 @@ class CellCycleNormal(NormalCell):
         self.is_dying: bool = self._initialization_apoptosis()
         self.time_tot_cycle: float = 660.0 # in simulation units (seconds)
         # Time table defines END times for each phase (cumulative)
-        # G1: 0-240, S: 240-360, G2: 360-480, M: 480-660
+        # G1: 0-240, S: 240-360, G2: 360-480, M: 480-550
         self.time_table_cycle: dict[str, float] = {'G1': 240.0, 'S': 360.0, 'G2': 480.0} # in seconds
         # Mitosis phases: cumulative times from start of M phase (480s)
-        # Prophase: 480-516, Metaphase: 516-552, Anaphase: 552-588, Telophase: 588-624, Cytokinesis: 624-634 (10 seconds)
-        self.time_table_mitosis: dict[str, float] = {'Prophase': 516.0, 'Metaphase': 552.0, 'Anaphase': 588.0, 'Telophase': 624.0, 'Cytokinesis': 634.0}
+        # Prophase: 480-495, Metaphase: 495-510, Anaphase: 510-525, Telophase: 525-540, Cytokinesis: 540-550
+        self.time_table_mitosis: dict[str, float] = {'Prophase': 495.0, 'Metaphase': 510.0, 'Anaphase': 525.0, 'Telophase': 540.0, 'Cytokinesis': 550.0}
         # add random start time point for each cell
         if initial_time is not None:
             self.current_time_life: float = float(initial_time)
@@ -173,7 +173,7 @@ class CellCycleNormal(NormalCell):
         # G1(240): 0 -> 240
         # S(360): 240 -> 360
         # G2(480): 360 -> 480
-        # M(660): 480 -> 660 (with phases)
+        # M(660): 480 -> 550 (with phases)
         match cell_cycle_state:
             case 'G1':
                 return random.randint(0, 240)
@@ -184,15 +184,15 @@ class CellCycleNormal(NormalCell):
             case 'M': # M
                 match cell_mitosis_state:
                     case 'Prophase':
-                        return random.randint(480, 516)
+                        return random.randint(480, 495)
                     case 'Metaphase':
-                        return random.randint(516, 552)
+                        return random.randint(495, 510)
                     case 'Anaphase':
-                        return random.randint(552, 588)
+                        return random.randint(510, 525)
                     case 'Telophase':
-                        return random.randint(588, 624)
+                        return random.randint(525, 540)
                     case 'Cytokinesis':  # Cytokinesis or Interphase
-                        return random.randint(624, 660)
+                        return random.randint(540, 550)
                     case _:
                         return -1 # undefined
             case _:
@@ -326,7 +326,7 @@ class CellCycleNormal(NormalCell):
             # At 1.0+: equator to near 0, poles expand more
             
             equator_reduction = 0.9 * self.constriction_progress  # Equator shrinks more
-            pole_expansion_factor = 1.6 * self.constriction_progress  # Poles expand even more strongly
+            pole_expansion_factor = 0.95 * self.constriction_progress  # Poles expand even more strongly
             
             constriction_factor = 1.0 - (equator_reduction * (1.0 - position_factor))
             pole_expansion = 1.0 + (pole_expansion_factor * position_factor)
@@ -359,8 +359,8 @@ class CellCycleNormal(NormalCell):
         if self.constriction_progress > 0.5:
             # After midway through pinching, start compensating for area loss
             # Scale up the overall cell to compensate for bridge volume loss
-            # Increased coefficient from 1.25 to 1.6 for even larger bulges
-            area_compensation = 1.0 + (1.25 * (self.constriction_progress - 0.5))
+            # Increased coefficient from 0.65 to 0.95 for even larger bulges
+            area_compensation = 1.0 + (0.95 * (self.constriction_progress - 0.5))
             self.base_r = self.original_base_r * area_compensation
         else:
             self.base_r = self.original_base_r
@@ -390,7 +390,7 @@ class CellCycleNormal(NormalCell):
             self._apply_constriction_to_radius()
             
         elif self.cell_mitosis_state == 'Telophase':
-            # Telophase: next 36s, constriction 0.3 → 0.8 (strong pinching)
+            # Telophase: next 36s, constriction 0.3 → 0.7 (strong pinching)
             # Continue from where anaphase left off
             anaphase_duration = self.time_table_mitosis['Telophase'] - self.time_table_mitosis['Anaphase']
             telophase_start = self.time_table_mitosis['Telophase']
@@ -398,9 +398,9 @@ class CellCycleNormal(NormalCell):
             time_in_telophase = self.current_time_life - telophase_start
             local_progress = time_in_telophase / telophase_duration
             
-            # Ramp from 0.3 to 0.8 during telophase
-            self.constriction_progress = 0.3 + (local_progress * 0.5)  # 0.3 to 0.8
-            self.constriction_progress = min(self.constriction_progress, 0.8)
+            # Ramp from 0.3 to 0.7 during telophase
+            self.constriction_progress = 0.3 + (local_progress * 0.5)  # 0.3 to 0.7
+            self.constriction_progress = min(self.constriction_progress, 0.7)
             self._apply_constriction_to_radius()
             
         elif self.cell_mitosis_state == 'Cytokinesis':
@@ -413,7 +413,7 @@ class CellCycleNormal(NormalCell):
             local_progress = min(time_in_cytokinesis / cytokinesis_duration, 1.0)  # 0 to 1
             
             # Ramp from 0.8 to 1.3 during cytokinesis
-            self.constriction_progress = 0.8 + (local_progress * 0.5)  # 0.8 to 1.3
+            self.constriction_progress = 0.7 + (local_progress * 0.5)  # 0.7 to 1.2
             self._apply_constriction_to_radius()
             
             # Mark ready to separate when bridge width reaches ~10% of original cell width
