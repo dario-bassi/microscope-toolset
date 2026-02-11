@@ -386,7 +386,7 @@ def create_mcp_server(
             for dev in raw_mmc.getLoadedDevices():
                 dev_type = raw_mmc.getDeviceType(dev)
                 # DeviceType 6 = StateDevice
-                if "bjective" in dev or (hasattr(dev_type, 'value') and dev_type.value == 6 and "bjective" in dev):
+                if "objective" in dev or (hasattr(dev_type, 'value') and dev_type.value == 6 and "objective" in dev):
                     obj_device = dev
                     break
             if obj_device is None:
