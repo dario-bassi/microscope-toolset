@@ -32,7 +32,7 @@ def initialize_virtual_microscope(core: UniMMCore, cell_type: str = "cycle") -> 
         # access UniMMCore
         # development python devices
         logger.info(f"Initialized UniMMCore with cell_type={cell_type}")
-        microscope_simulation = MicroscopeSimOptmized(cell_type=cell_type, nb_cells=50)
+        microscope_simulation = MicroscopeSimOptmized(cell_type=cell_type, nb_cells=50, width=600, height=600)
         # Initialize global Singleton
         bridge_module.GLOBAL_BRIDGE = SimulationBridge(microscope_simulation)
         logger.info("Initialized MicroscopeSim")
@@ -125,7 +125,7 @@ def initialize_virtual_microscope_from_configuration(core: UniMMCore, cell_type:
     try:
         # access UniMMCore
         logger.info(f"Initialized UniMMCore with cell_type={cell_type}")
-        microscope_simulation = MicroscopeSimOptmized(cell_type=cell_type, nb_cells=20)
+        microscope_simulation = MicroscopeSimOptmized(cell_type=cell_type, nb_cells=20, width=600, height=600)
         # Initialize global Singleton
         bridge_module.GLOBAL_BRIDGE = SimulationBridge(microscope_simulation)
         logger.info("Initialized MicroscopeSim")

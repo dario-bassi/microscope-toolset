@@ -58,8 +58,8 @@ class Renderer:
                           camera_offset: Tuple[float, float] = (0,0),
                           focal_plane: float = 0.0):
         """Render cell cycle to image array using OpenCV"""
-        # Create base image (white)
-        img = np.full((self.height, self.width, 3), 0, dtype=np.uint8)
+        # Create base image (BLACK background for fluorescence microscopy)
+        img = np.zeros((self.height, self.width, 3), dtype=np.uint8)
 
         # Get visibile cells
         visible_cells = self._get_visible_cells(cells, camera_offset)
@@ -67,8 +67,8 @@ class Renderer:
         for cell in visible_cells:
             self._draw_cell_cycle(img, cell, camera_offset, focal_plane, mode)  # type: ignore
 
-        # apply microscope filters
-        #img = self._apply_filters(img, mode)
+        # Apply minimal fluorescence filters (no noise for clean image)
+        img = self._apply_fluorescence_filters(img, mode)
 
         # crop and rescale base on the objective used
         img = self._crop_and_rescale(img)
@@ -97,7 +97,7 @@ class Renderer:
                          vertices: np.ndarray,color: tuple, 
                          thickness: int = -1) -> None:
         """Draw a smooth cell shape using cubic spline interpolation for rounder borders."""
-        n_interp = 200  # Increased for even smoother appearance
+        n_interp = 100  # Increased for even smoother appearance
         angles_interp = np.linspace(0, 2 * np.pi, n_interp, endpoint=False)
         
         # Get original angles and radii
@@ -132,107 +132,77 @@ class Renderer:
     def _draw_cell_cycle(self, img: np.ndarray, cell: CellCycleNormal,
                          camera_offset: Tuple[float, float], focal_plane: float,
                          mode: int = 0) -> None:
-        """Draw a single cell in cell cycle using OpenCV with proper focal plane effect."""
-        # compute blur and opacity depth of field and z-distance
+        """Draw a single cell in cell cycle - simplified for fluorescence microscopy.
+
+        Rendering modes:
+        - Mode 0 (brightfield): Cell membrane AND chromatin (full cellular structure)
+        - Mode 1 (nucleus): Chromatin only (orange, no membrane)
+        - Mode 2 (membrane): Cell membrane only (red, no chromatin)
+        """
+        # Compute blur and opacity based on focal plane
         kernel_size, opacity = self._compute_blur_and_opacity(cell.z_position, focal_plane)
 
         # Get vertex position adjusted for camera (convert to screen space)
         vertices = (cell.vertices_positions - camera_offset)
         center_screen = (cell.center - camera_offset)
-        
-        # Convert chromatin points to screen space (consistent with vertices)
+
+        # Convert chromatin points to screen space
         chromatin_pts_screen = [(pt[0] - camera_offset[0], pt[1] - camera_offset[1]) for pt in cell.chromatin_pts]
 
-        # Adjust cell radius for zoom
+        # Adjust cell radius
         cell_radius = cell.base_r
 
         # Skip if center is outside viewport
         if (center_screen[0] < -self.margins or center_screen[0] > self.width + self.margins or
             center_screen[1] < -self.margins or center_screen[1] > self.height + self.margins):
             return
-        
+
+        # Skip rendering if cell state is invalid or in problematic transition
+        # This avoids strange rendering artifacts during cytokinesis→G1 transition
+        # or when sister cells are just created
+        if not hasattr(cell, 'cell_cycle_state') or not hasattr(cell, 'cell_mitosis_state'):
+            return  # Skip if state attributes missing (incomplete initialization)
+
+        # Skip if in problematic transition state (exact moment of state change)
+        if (cell.cell_mitosis_state is None or cell.cell_cycle_state is None or
+            cell.current_time_life < 0):  # Time should never be negative
+            return
+
+        # Skip during cytokinesis→G1 transition to avoid rendering artifacts
+        # This is when sister cells are created and state is being reset
+        # The cell is in a momentary invalid state during this transition
+        if (cell.cell_mitosis_state == 'Interphase' and
+            cell.cell_cycle_state == 'G1' and
+            cell.current_time_life < 1.0):  # First 1 second of new G1 phase
+            # Skip rendering during the very first frame after cytokinesis
+            # The chromatin state might not be properly initialized yet
+            return
+
         # Handle apoptosis rendering
         if cell.is_dying:
             self._draw_apoptosis_phase(img, cell, center_screen, vertices, chromatin_pts_screen, camera_offset, opacity, kernel_size)
             return
-        
-        # create temporaly image for the cell
-        cell_img = np.full((self.height, self.width, 3), 0, dtype=np.uint8)
-        layers = 10 #6 # numbers of layers
 
-        for i in range(layers, 0, -1):
-            s = i / layers
-            shade = 80 + int(100 * s)
-            color = (shade, shade, 255)
+        # Create temporary image for the cell
+        cell_img = np.zeros((self.height, self.width, 3), dtype=np.uint8)
 
-            scaled_verts = center_screen + (vertices - center_screen) * s
+        # MODE-DEPENDENT RENDERING
+        if mode == 0:  # Brightfield - show BOTH membrane AND chromatin
+            self._draw_membrane_only(cell_img, center_screen, vertices)
+            self._draw_chromatin_only(cell_img, cell, center_screen, chromatin_pts_screen, camera_offset)
 
-            self._draw_smooth_cell(cell_img, center_screen, scaled_verts, 
-                                    color, thickness=-1)
-            
-        self._draw_smooth_cell(cell_img, center_screen, vertices,
-                            (0, 0, 0), thickness=2)
-        
-        # Draw nucleus with (dark center)
-        nucleus_pos = tuple(center_screen.astype(int))
-        nucleus_radius = int(0.4 * cell_radius)
+        elif mode == 1:  # Nucleus fluorescence - show chromatin only (no membrane)
+            self._draw_chromatin_only(cell_img, cell, center_screen, chromatin_pts_screen, camera_offset)
 
-        # Depending on the cell phase draw different type of chromatin or cell size
-        # draw uncondensed chromatin
-        if cell.cell_mitosis_state == 'Interphase' and cell.cell_cycle_state == 'G1':
-            # Nucleus is intact with uncondesed chromatin
-            cv2.circle(cell_img, nucleus_pos, nucleus_radius, (150, 60, 60), -1, lineType=cv2.LINE_AA)
-            self._draw_smooth_chromatin(cell_img, chromatin_pts_screen, num_strands=20) # 2n = 46, here is double after S phase
+        elif mode == 2:  # Membrane fluorescence - show membrane only (no chromatin)
+            self._draw_membrane_fluorescence(cell_img, center_screen, vertices)
 
-        elif cell.cell_mitosis_state == 'Interphase' and cell.cell_cycle_state == 'S':
-            # S phase: DNA replication, uncondensed chromosome
-            cv2.circle(cell_img, nucleus_pos, nucleus_radius, (150, 60, 60), -1, lineType=cv2.LINE_AA)
-            self._draw_smooth_chromatin(cell_img, chromatin_pts_screen, num_strands=40) # 2n = 46, here is double after S phase
-
-        elif cell.cell_mitosis_state == 'Interphase' and cell.cell_cycle_state == 'G2':
-            cv2.circle(cell_img, nucleus_pos, nucleus_radius, (150, 60, 60), -1, lineType=cv2.LINE_AA)
-            self._draw_smooth_chromatin(cell_img, chromatin_pts_screen, num_strands=40) # 2n = 46, here is double after S phase
-
-        elif cell.cell_mitosis_state == 'Prophase' and cell.cell_cycle_state == 'M':
-            # Nucleus dissolve, chromatin condenses into sister chromatine shape
-            # Draw condensed chromatin (for simplicity use X shape) without nucleus border
-            self._draw_condensed_chromatin(cell_img, cell, camera_offset, num_chromosome=10)
-
-        elif cell.cell_mitosis_state == 'Metaphase'and cell.cell_cycle_state == 'M':
-            # Chromatin alignes at cell equator
-            self._draw_condensed_chromatin_equator(cell_img, cell, camera_offset, num_chromosome=10)
-
-        elif cell.cell_mitosis_state == 'Anaphase'and cell.cell_cycle_state == 'M':
-            # Sister chromatin separate toward cell's poles
-            # Cell membrane starts pinching at equator (constriction_progress: 0% → 50%)
-            self._draw_condensed_chromatin_polar(cell_img, cell, camera_offset, num_chromosome=10)
-
-        elif cell.cell_mitosis_state == 'Telophase'and cell.cell_cycle_state == 'M':
-            # Two nuclei forming at the cell's poles
-            # Cell membrane constriction complete (constriction_progress: 50% → 100%)
-            # The cell is now deeply pinched with dumbbell/hourglass shape
-            self._draw_condensed_chromatin_polar(cell_img, cell, camera_offset, num_chromosome=10)
-            # Draw two new nuclei at poles (TOP and BOTTOM along division axis)
-            pole_offset = int(cell_radius * 0.5)
-            cv2.circle(cell_img, (nucleus_pos[0], nucleus_pos[1] - pole_offset),
-                       int(nucleus_radius * 0.7), (150, 60, 60), -1, lineType=cv2.LINE_AA)
-            cv2.circle(cell_img, (nucleus_pos[0], nucleus_pos[1] + pole_offset),
-                       int(nucleus_radius * 0.7), (150, 60, 60), -1, lineType=cv2.LINE_AA)
-            
-        elif cell.cell_mitosis_state == 'Cytokinesis'and cell.cell_cycle_state == 'M':
-            # Draw pinched cell during cytokinesis
-            # Constriction continues beyond 100% as the bridge narrows
-            # As constriction_progress increases from 1.0 → 1.3, the bridge decreases in size
-            # Once bridge disappears (constriction >= 1.2), division is triggered and
-            # sister cell is created in the next state_manager update
-            self._draw_condensed_chromatin_polar(cell_img, cell, camera_offset, num_chromosome=10)
-        
         # Apply blur based on focal plane
         if kernel_size > 0:
             cell_img = cv2.GaussianBlur(cell_img,
                                         (kernel_size, kernel_size),
                                         kernel_size / 3.0)
-            
+
         cell_opacity = opacity * 1.0
         img[:] = cv2.addWeighted(img, 1.0, cell_img, cell_opacity, 0)
         
@@ -355,6 +325,122 @@ class Renderer:
                 # Blend with main image
                 img[:] = cv2.add(img, fluor_img)
 
+    def _draw_membrane_only(self, img: np.ndarray, center_screen: np.ndarray,
+                           vertices: np.ndarray) -> None:
+        """Draw cell membrane only (for brightfield mode)."""
+        # Draw with gradient layers for realistic appearance
+        layers = 6
+        for i in range(layers, 0, -1):
+            s = i / layers
+            # Grayscale gradient for brightfield
+            shade = int(80 + 100 * s)
+            color = (shade, shade, shade)
+
+            scaled_verts = center_screen + (vertices - center_screen) * s
+            self._draw_smooth_cell(img, center_screen, scaled_verts, color, thickness=-1)
+
+        # Draw membrane outline
+        self._draw_smooth_cell(img, center_screen, vertices, (200, 200, 200), thickness=1)
+
+    def _draw_chromatin_only(self, img: np.ndarray, cell: CellCycleNormal,
+                            center_screen: np.ndarray, chromatin_pts_screen: list,
+                            camera_offset: Tuple[float, float]) -> None:
+        """Draw only chromatin (nucleus fluorescence) without membrane or nucleus circle.
+
+        Chromosome count reflects biological reality:
+        - G1: 46 chromosomes (single copy)
+        - S/G2: 92 chromatids (46 chromosomes × 2 sister chromatids)
+        - Anaphase+: 46 chromosomes per pole (sister chromatids separated)
+        """
+        # Draw based on cell cycle phase
+        if cell.cell_mitosis_state == 'Interphase' and cell.cell_cycle_state == 'G1':
+            # G1: 46 uncondensed chromatin strands
+            self._draw_smooth_chromatin(img, chromatin_pts_screen, num_strands=46)
+
+        elif cell.cell_mitosis_state == 'Interphase' and cell.cell_cycle_state == 'S':
+            # S phase: 92 chromatids (DNA replicated but sister chromatids still joined)
+            self._draw_smooth_chromatin(img, chromatin_pts_screen, num_strands=92)
+
+        elif cell.cell_mitosis_state == 'Interphase' and cell.cell_cycle_state == 'G2':
+            # G2: 92 chromatids (sister chromatids still present)
+            self._draw_smooth_chromatin(img, chromatin_pts_screen, num_strands=92)
+
+        elif cell.cell_mitosis_state == 'Prophase' and cell.cell_cycle_state == 'M':
+            # Prophase: Condensation begins - 92 condensed chromatids scattered in nucleus
+            self._draw_condensed_chromatin(img, cell, camera_offset, num_chromosome=92)
+
+        elif cell.cell_mitosis_state == 'Metaphase' and cell.cell_cycle_state == 'M':
+            # Metaphase: 92 chromatids aligned at equator (metaphase plate)
+            self._draw_condensed_chromatin_equator(img, cell, camera_offset, num_chromosome=92)
+
+        elif cell.cell_mitosis_state == 'Anaphase' and cell.cell_cycle_state == 'M':
+            # Anaphase: Sister chromatids SEPARATE → 46 chromosomes at EACH pole
+            # Total 92 but split: 46 to north pole, 46 to south pole
+            self._draw_condensed_chromatin_polar(img, cell, camera_offset, num_chromosome=46)
+
+        elif cell.cell_mitosis_state == 'Telophase' and cell.cell_cycle_state == 'M':
+            # Telophase: Chromatin DECONDENSES as nuclear envelope reforms
+            # Shows transition from condensed chromosomes → uncondensed strands
+            # 46 chromosomes per pole (separated sister chromatids)
+            self._draw_decondesing_chromatin_polar(img, cell, center_screen,
+                                                   chromatin_pts_screen, camera_offset,
+                                                   num_chromosome=46)
+
+        elif cell.cell_mitosis_state == 'Cytokinesis' and cell.cell_cycle_state == 'M':
+            # Cytokinesis: Chromatin is fully uncondensed in forming nuclei
+            # Two separate nuclei with uncondensed strands
+            # 46 chromosomes per nucleus (daughter cells)
+            self._draw_cytokinesis_chromatin(img, cell, center_screen,
+                                            chromatin_pts_screen, camera_offset,
+                                            num_strands=46)
+
+    def _draw_membrane_fluorescence(self, img: np.ndarray, center_screen: np.ndarray,
+                                   vertices: np.ndarray) -> None:
+        """Draw cell membrane with fluorescence (mode 2)."""
+        # Red fluorescence for membrane
+        fluor_color = (8, 8, 255)  # Red in BGR
+
+        # Draw membrane as filled polygon
+        smooth_verts = self._get_smooth_vertices(center_screen, vertices)
+        cv2.fillPoly(img, [smooth_verts], fluor_color, lineType=cv2.LINE_AA)
+
+    def _get_smooth_vertices(self, center_screen: np.ndarray, vertices: np.ndarray) -> np.ndarray:
+        """Get smoothly interpolated vertices for drawing."""
+        n_interp = 100
+        angles_interp = np.linspace(0, 2 * np.pi, n_interp, endpoint=False)
+
+        # Get original angles and radii
+        angles_orig = np.linspace(0, 2 * np.pi, len(vertices), endpoint=False)
+        radii_orig = np.linalg.norm(vertices - center_screen, axis=1)
+
+        # Duplicate first point at the end for periodic boundary
+        angles_extended = np.append(angles_orig, angles_orig[0] + 2 * np.pi)
+        radii_extended = np.append(radii_orig, radii_orig[0])
+
+        # Cubic spline interpolation
+        from scipy.interpolate import CubicSpline
+        cs = CubicSpline(angles_extended, radii_extended, bc_type='periodic')
+        radii_interp = cs(angles_interp)
+        radii_interp = np.maximum(radii_interp, 0.01)
+
+        # Generate smooth vertices
+        smooth_verts = np.zeros((n_interp, 2))
+        smooth_verts[:, 0] = center_screen[0] + radii_interp * np.cos(angles_interp)
+        smooth_verts[:, 1] = center_screen[1] + radii_interp * np.sin(angles_interp)
+
+        return smooth_verts.astype(np.int32)
+
+    def _apply_fluorescence_filters(self, img: np.ndarray, mode: int) -> np.ndarray:
+        """Apply minimal filters for fluorescence images (clean, no noise)."""
+        if mode == 0:  # Brightfield
+            # Minimal blur for clean appearance
+            img = cv2.GaussianBlur(img, (3, 3), 0.5)
+        else:  # Fluorescence modes (1 and 2)
+            # Slight blur for glow effect
+            img = cv2.GaussianBlur(img, (5, 5), 1.0)
+
+        return img
+
     def _apply_filters(self, img: np.ndarray, mode: int) -> np.ndarray:
         """Apply microscope-like filters using OpenCV"""
         if mode == 0: # brightfield
@@ -459,7 +545,7 @@ class Renderer:
     
 
     def _draw_smooth_chromatin(self, img: np.ndarray, control_points: list[tuple[float, float]], num_strands: int = 46):
-        """Draw uncondensed chromatin as smooth strands using Bezier curves."""
+        """Draw uncondensed chromatin as smooth strands using Bezier curves (orange fluorescence)."""
 
         if not control_points or len(control_points) < 2:
             return
@@ -482,10 +568,10 @@ class Renderer:
                 # append the points
                 curve_pts.append(res.astype(np.int32))
 
-            # 3. Draw the strand
+            # Draw the strand with orange fluorescence color
             curve_pts = np.array(curve_pts).reshape((-1, 1, 2))
-            cv2.polylines(img, [curve_pts], isClosed=False, 
-                        color=(63, 0, 0), thickness=1,  # Thin chromatin strands
+            cv2.polylines(img, [curve_pts], isClosed=False,
+                        color=(8, 128, 255), thickness=2,  # Orange fluorescence
                         lineType=cv2.LINE_AA) # LINE_AA is crucial for smoothness
             
 
@@ -512,18 +598,18 @@ class Renderer:
     
     def _draw_chromosome_x(self, img: np.ndarray, center: np.ndarray,
                            rotation: float, scale: float):
-        """Draw a chromosome at given position and rotation."""
+        """Draw a chromosome at given position and rotation (orange fluorescence)."""
         # Transform all points of master shape at once
         transformed_points = self._get_transformed_point(self.master_shape, center, rotation, scale)
 
         # Convert to int32 for OpenCV
         pts = transformed_points.astype(np.int32)
 
-        # Draw as filled polygon
-        cv2.fillPoly(img, [pts], (200, 0, 200), lineType=cv2.LINE_AA)  # Purple - visible over red nucleus
+        # Draw as filled polygon with orange fluorescence
+        cv2.fillPoly(img, [pts], (8, 128, 255), lineType=cv2.LINE_AA)  # Orange fluorescence
 
         # Draw outline
-        cv2.polylines(img, [pts], True, (150, 0, 150), 1, lineType=cv2.LINE_AA)  # Darker purple outline
+        cv2.polylines(img, [pts], True, (5, 100, 200), 1, lineType=cv2.LINE_AA)  # Darker orange outline
         
 
     def _draw_condensed_chromatin(self, img: np.ndarray, cell: CellCycleNormal, camera_offset: Tuple[float, float], num_chromosome: int = 46):
@@ -624,6 +710,142 @@ class Renderer:
             rotation = np.random.uniform(0, 2 * np.pi)
             self._draw_chromosome_x(img, chrom_center, rotation, scale=0.9)
 
+
+    def _draw_decondesing_chromatin_polar(self, img: np.ndarray, cell: CellCycleNormal,
+                                         center_screen: np.ndarray, chromatin_pts_screen: list,
+                                         camera_offset: Tuple[float, float], num_chromosome: int = 46) -> None:
+        """Draw chromatin during telophase - transition from condensed to decondensed.
+
+        During telophase:
+        - Nuclear envelope reforms around condensed chromosomes
+        - Chromatin begins to decondense (unwind) into strands
+        - Early telophase: mostly condensed X shapes
+        - Late telophase: mostly uncondensed strands with reformed nuclei
+
+        Args:
+            num_chromosome: Number of chromosomes at each pole (typically 46 for anaphase/telophase)
+        """
+        cell_radius = cell.base_r
+
+        # Calculate decondesation progress during telophase
+        # telophase goes from time 525 to 540 (15 seconds)
+        telophase_start = cell.time_table_mitosis['Telophase']  # 525
+        telophase_end = cell.time_table_mitosis['Cytokinesis']  # 540
+        time_in_telophase = cell.current_time_life - telophase_start
+        telophase_duration = telophase_end - telophase_start
+        decondesation_progress = min(time_in_telophase / telophase_duration, 1.0)  # 0→1
+
+        # Distance of poles from center
+        pole_distance = cell_radius * 0.5
+
+        # North pole (top)
+        pole_north = np.array([center_screen[0], center_screen[1] - pole_distance])
+
+        # South pole (bottom)
+        pole_south = np.array([center_screen[0], center_screen[1] + pole_distance])
+
+        nucleus_radius = int(0.35 * cell_radius)
+
+        for pole_pos in [pole_north, pole_south]:
+            # Early telophase (progress 0-0.4): Show mostly condensed chromosomes
+            # Late telophase (progress 0.4-1.0): Show mostly uncondensed strands
+
+            if decondesation_progress < 0.5:
+                # Early-mid telophase: Mix of condensed chromosomes
+                num_chromosomes_per_pole = num_chromosome // 2
+                for i in range(num_chromosomes_per_pole):
+                    angle = (i / max(1, num_chromosomes_per_pole)) * 2 * np.pi
+                    radius = np.random.uniform(0, nucleus_radius * 0.8)
+
+                    chrom_x = pole_pos[0] + radius * np.cos(angle)
+                    chrom_y = pole_pos[1] + radius * np.sin(angle)
+                    chrom_center = np.array([chrom_x, chrom_y])
+
+                    rotation = np.random.uniform(0, 2 * np.pi)
+                    scale = 0.8 - (0.2 * decondesation_progress / 0.5)  # Shrink X shapes as decondensing
+                    self._draw_chromosome_x(img, chrom_center, rotation, scale=scale)
+            else:
+                # Mid-late telophase (0.5-1.0): Transition to uncondensed strands
+                num_strands = max(10, int(num_chromosome * 0.5))  # Show some strands
+
+                # Draw uncondensed chromatin strands at poles
+                for strand_idx in range(num_strands):
+                    offset_angle = (strand_idx / max(1, num_strands)) * 2 * np.pi
+                    curve_pts = []
+
+                    for t in np.linspace(0, 1, 20):
+                        # Create curves around pole
+                        angle = offset_angle + t * np.pi
+                        radius = nucleus_radius * 0.6 * np.sin(t * np.pi)
+
+                        x = pole_pos[0] + radius * np.cos(angle)
+                        y = pole_pos[1] + radius * np.sin(angle)
+                        curve_pts.append(np.array([x, y]).astype(np.int32))
+
+                    curve_pts = np.array(curve_pts).reshape((-1, 1, 2))
+                    cv2.polylines(img, [curve_pts], isClosed=False,
+                                color=(8, 128, 255), thickness=2,
+                                lineType=cv2.LINE_AA)
+
+            # Nucleus boundary NOT drawn - only chromatin visible (as requested)
+
+    def _draw_cytokinesis_chromatin(self, img: np.ndarray, cell: CellCycleNormal,
+                                   center_screen: np.ndarray, chromatin_pts_screen: list,
+                                   camera_offset: Tuple[float, float], num_strands: int = 46) -> None:
+        """Draw chromatin during cytokinesis - fully decondensed in two daughter cells.
+
+        During cytokinesis:
+        - Cell is pinching (forming two daughter cells)
+        - Chromatin is fully decondensed (uncondensed strands)
+        - Two separate nuclei visible at poles
+
+        Args:
+            num_strands: Total number of strands (will be split between two nuclei)
+        """
+        cell_radius = cell.base_r
+
+        # Distance of poles from center (daughter cells separating)
+        pole_distance = cell_radius * 0.5
+
+        # North pole (top daughter cell nucleus)
+        pole_north = np.array([center_screen[0], center_screen[1] - pole_distance])
+
+        # South pole (bottom daughter cell nucleus)
+        pole_south = np.array([center_screen[0], center_screen[1] + pole_distance])
+
+        # Draw uncondensed chromatin at both poles
+        # Use strands to represent fully decondensed chromatin
+        num_strands_per_pole = num_strands // 2  # Split between two daughter nuclei
+        nucleus_radius = int(0.35 * cell_radius)
+
+        for pole_pos in [pole_north, pole_south]:
+            # Nucleus boundary NOT drawn - only chromatin visible
+            # Draw uncondensed chromatin strands inside nucleus region
+            # Create local chromatin control points for this nucleus
+            local_chromatin_pts = [
+                (pole_pos[0] + np.random.uniform(-nucleus_radius * 0.4, nucleus_radius * 0.4),
+                 pole_pos[1] + np.random.uniform(-nucleus_radius * 0.4, nucleus_radius * 0.4))
+                for _ in range(3)
+            ]
+
+            # Draw strands at this pole
+            for strand_idx in range(num_strands_per_pole):
+                offset_angle = (strand_idx / max(1, num_strands_per_pole)) * 2 * np.pi
+                curve_pts = []
+
+                for t in np.linspace(0, 1, 20):
+                    # Bezier curve through chromatin points
+                    p0 = np.array(local_chromatin_pts[0])
+                    p1 = np.array(local_chromatin_pts[1 % len(local_chromatin_pts)])
+                    p2 = np.array(local_chromatin_pts[2 % len(local_chromatin_pts)])
+                    res = (1-t)**2 * p0 + 2*(1-t)*t * p1 + t**2 * p2
+                    curve_pts.append(res.astype(np.int32))
+
+                # Draw uncondensed chromatin strand
+                curve_pts = np.array(curve_pts).reshape((-1, 1, 2))
+                cv2.polylines(img, [curve_pts], isClosed=False,
+                            color=(8, 128, 255), thickness=1,
+                            lineType=cv2.LINE_AA)
 
     def _draw_cytokenesis_furrow(self, img: np.ndarray, cell: CellCycleNormal,
                                  center: np.ndarray, vertices: np.ndarray,
