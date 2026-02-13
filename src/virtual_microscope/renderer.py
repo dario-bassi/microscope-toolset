@@ -180,7 +180,7 @@ class Renderer:
 
         # Handle apoptosis rendering
         if cell.is_dying:
-            self._draw_apoptosis_phase(img, cell, center_screen, vertices, chromatin_pts_screen, camera_offset, opacity, kernel_size)
+            self._draw_apoptosis_phase(img, cell, center_screen, vertices, chromatin_pts_screen, camera_offset, opacity, kernel_size, mode)
             return
 
         # Create temporary image for the cell
@@ -848,128 +848,312 @@ class Renderer:
                             lineType=cv2.LINE_AA)
                             
 
-    def _draw_apoptosis_phase(self, img: np.ndarray, cell: CellCycleNormal, 
+    def _draw_apoptosis_phase(self, img: np.ndarray, cell: CellCycleNormal,
                               center_screen: np.ndarray, vertices: np.ndarray,
                               chromatin_pts_screen: list, camera_offset: Tuple[float, float],
-                              opacity: float, kernel_size: int) -> None:
-        """Main dispatcher for apoptotic cell rendering based on phase."""
+                              opacity: float, kernel_size: int, mode: int = 0) -> None:
+        """Main dispatcher for apoptotic cell rendering based on phase.
+
+        Args:
+            mode: Visualization mode (0=brightfield, 1=nucleus, 2=membrane)
+        """
         cell_img = np.full((self.height, self.width, 3), 0, dtype=np.uint8)
-        
+
         if cell.apoptosis_death_phase == 'Shrinkage':
-            self._draw_shrinkage_apoptosis(cell_img, cell, center_screen, vertices, chromatin_pts_screen, camera_offset)
+            self._draw_shrinkage_apoptosis(cell_img, cell, center_screen, vertices, chromatin_pts_screen, camera_offset, mode)
         elif cell.apoptosis_death_phase == 'Blebbing':
-            self._draw_blebbing_apoptosis(cell_img, cell, center_screen, vertices, chromatin_pts_screen)
+            self._draw_blebbing_apoptosis(cell_img, cell, center_screen, vertices, chromatin_pts_screen, camera_offset, mode)
         elif cell.apoptosis_death_phase == 'Apoptotic bodies':
-            self._draw_apoptotic_bodies_phase(cell_img, cell, center_screen, chromatin_pts_screen, camera_offset)
+            self._draw_apoptotic_bodies_phase(cell_img, cell, center_screen, chromatin_pts_screen, camera_offset, mode)
         elif cell.apoptosis_death_phase == 'Phagocytosis':
-            self._draw_phagocytosis_apoptosis(cell_img, cell, center_screen)
-        
+            self._draw_phagocytosis_apoptosis(cell_img, cell, center_screen, camera_offset, mode)
+
         # Apply blur and opacity
         if kernel_size > 0:
             cell_img = cv2.GaussianBlur(cell_img, (kernel_size, kernel_size), kernel_size / 3.0)
-        
+
         apoptosis_opacity = self._get_apoptosis_opacity(cell) * opacity
         img[:] = cv2.addWeighted(img, 1.0, cell_img, apoptosis_opacity, 0)
 
     def _draw_shrinkage_apoptosis(self, img: np.ndarray, cell: CellCycleNormal,
                                   center_screen: np.ndarray, vertices: np.ndarray,
-                                  chromatin_pts_screen: list, camera_offset: Tuple[float, float]) -> None:
-        """Draw shrinking cell with condensed chromatin visible inside."""
+                                  chromatin_pts_screen: list, camera_offset: Tuple[float, float],
+                                  mode: int = 0) -> None:
+        """Draw shrinking cell with condensed chromatin visible inside.
+
+        Args:
+            mode: Visualization mode (0=brightfield, 1=nucleus, 2=membrane)
+                - Mode 0: membrane + chromatin
+                - Mode 1: chromatin only
+                - Mode 2: membrane only
+        """
         # Get shrinkage factor and apply to vertices
         shrinkage_factor = cell._get_current_shrinkage_factor()
         vertices_shrunk = center_screen + (vertices - center_screen) * shrinkage_factor
-        
-        # Draw shrinking cell membrane with blue gradient layers (same as normal cell cycle)
-        layers = 10
-        for i in range(layers, 0, -1):
-            s = i / layers * shrinkage_factor
-            shade = 80 + int(100 * s / shrinkage_factor) if shrinkage_factor > 0 else 80
-            color = (shade, shade, 255)
-            scaled_verts = center_screen + (vertices_shrunk - center_screen) * (i / layers)
-            self._draw_smooth_cell(img, center_screen, scaled_verts, color, thickness=-1)
-        
-        self._draw_smooth_cell(img, center_screen, vertices_shrunk, (0, 0, 0), thickness=2)
-        
-        # Draw shrinking nucleus
-        nucleus_radius = int(0.4 * cell.base_r * shrinkage_factor)
-        nucleus_pos = tuple(center_screen.astype(int))
-        cv2.circle(img, nucleus_pos, nucleus_radius, (150, 60, 60), -1, lineType=cv2.LINE_AA)
-        
-        # Draw condensed chromatin (nuclear material becoming more compact)
-        self._draw_condensed_chromatin(img, cell, camera_offset, num_chromosome=10)
+
+        # Draw membrane in mode 0 (brightfield) and mode 2 (membrane only)
+        if mode in (0, 2):
+            # Draw shrinking cell membrane with blue gradient layers
+            layers = 10
+            for i in range(layers, 0, -1):
+                s = i / layers * shrinkage_factor
+                shade = 80 + int(100 * s / shrinkage_factor) if shrinkage_factor > 0 else 80
+                color = (shade, shade, 255)
+                scaled_verts = center_screen + (vertices_shrunk - center_screen) * (i / layers)
+                self._draw_smooth_cell(img, center_screen, scaled_verts, color, thickness=-1)
+
+            self._draw_smooth_cell(img, center_screen, vertices_shrunk, (0, 0, 0), thickness=2)
+
+        # Draw chromatin in mode 0 (brightfield) and mode 1 (nucleus only)
+        if mode in (0, 1):
+            # Draw condensed chromatin (nuclear material becoming more compact)
+            self._draw_condensed_chromatin(img, cell, camera_offset, num_chromosome=10)
 
     def _draw_blebbing_apoptosis(self, img: np.ndarray, cell: CellCycleNormal,
                                  center_screen: np.ndarray, vertices: np.ndarray,
-                                 chromatin_pts_screen: list) -> None:
-        """Draw cell with membrane blebs (8-10 protrusions) forming."""
+                                 chromatin_pts_screen: list, camera_offset: Tuple[float, float],
+                                 mode: int = 0) -> None:
+        """Draw cell with progressive membrane blebs and visible chromatin fragments.
+
+        Progressively increases membrane protrusions:
+        - First half (0-50%): Primary blebs protrude outward, other vertices contract
+        - Second half (50-100%): Secondary blebs appear and protrude, all effects amplify
+
+        Args:
+            mode: Visualization mode (0=brightfield, 1=nucleus, 2=membrane)
+                - Mode 0: membrane blebs + chromatin inside
+                - Mode 1: chromatin inside only
+                - Mode 2: membrane blebs only
+        """
         blebbing_progress = (cell.death_timer - cell.time_table_apoptois['Shrinkage']) / \
                             (cell.time_table_apoptois['Blebbing'] - cell.time_table_apoptois['Shrinkage'])
-        
-        # Draw base cell at the final shrinkage size (0.85 = 15% shrinkage)
-        # Use the actual shrunk base_r from the cell physics, not hardcoded factor
+        blebbing_progress = min(blebbing_progress, 1.0)
+
+        # Get the shrinkage factor to maintain size continuity with shrinkage phase
         shrinkage_factor = cell.base_r / (cell.original_base_r_for_apoptosis if hasattr(cell, 'original_base_r_for_apoptosis') else cell.base_r)
+
+        # Create blebbed vertices by modifying specific vertices
         vertices_blebbed = center_screen + (vertices - center_screen) * shrinkage_factor
-        
-        # Draw cell with blue gradient layers (same as normal cell cycle)
-        layers = 10
-        for i in range(layers, 0, -1):
-            s = i / layers * shrinkage_factor
-            shade = 80 + int(100 * s / shrinkage_factor) if shrinkage_factor > 0 else 80
-            color = (shade, shade, 255)
-            scaled_verts = center_screen + (vertices_blebbed - center_screen) * (i / layers)
-            self._draw_smooth_cell(img, center_screen, scaled_verts, color, thickness=-1)
-        
-        # Generate and draw blebs (8-10) in blue color from gradient
-        bleb_positions = self._generate_bleb_points(center_screen, vertices_blebbed, 
-                                                    num_blebs=int(8 + 2 * blebbing_progress))
-        
-        bleb_color = (130, 130, 255)  # Blue from gradient range
-        for bleb_pos, bleb_radius in bleb_positions:
-            cv2.circle(img, tuple(bleb_pos.astype(int)), bleb_radius, bleb_color, -1, lineType=cv2.LINE_AA)
-        
-        # Draw membrane outline
-        self._draw_smooth_cell(img, center_screen, vertices_blebbed, (0, 0, 0), thickness=1)
-        
-        # Draw nucleus inside (intact but shrinking)
-        nucleus_radius = int(0.35 * cell.base_r * 0.7)
-        nucleus_pos = tuple(center_screen.astype(int))
-        cv2.circle(img, nucleus_pos, nucleus_radius, (150, 60, 60), -1, lineType=cv2.LINE_AA)
+
+        # Apply progressive bleb deformations
+        if mode in (0, 2):
+            if hasattr(cell, 'bleb_vertex_indices_primary'):
+                primary_blebs = cell.bleb_vertex_indices_primary
+                secondary_blebs = getattr(cell, 'bleb_vertex_indices_secondary', [])
+
+                # Calculate distance from center for each vertex
+                distances = np.linalg.norm(vertices_blebbed - center_screen, axis=1)
+                mean_distance = np.mean(distances)
+
+                # Determine activation progress for secondary blebs (activate at 50%)
+                secondary_activation = max(0.0, (blebbing_progress - 0.5) / 0.5)
+
+                # Modify vertices based on bleb status
+                for i in range(len(vertices_blebbed)):
+                    direction = (vertices_blebbed[i] - center_screen) / (distances[i] + 1e-6)
+
+                    if i in primary_blebs:
+                        # Primary blebs: protrude outward from start to end
+                        # Gradually increase protrusion: 0.2 + 0.4 * progress
+                        protrusion = mean_distance * (0.2 + 0.4 * blebbing_progress)
+                        vertices_blebbed[i] = center_screen + direction * (distances[i] + protrusion)
+
+                    elif i in secondary_blebs:
+                        # Secondary blebs: only active after 50% progress
+                        # Start at 0 protrusion, ramp up to 0.35
+                        protrusion = mean_distance * (0.35 * secondary_activation)
+                        vertices_blebbed[i] = center_screen + direction * (distances[i] + protrusion)
+
+                    else:
+                        # Non-bleb vertices: contract inward throughout
+                        # Increase contraction as blebbing progresses: 0.05 to 0.15
+                        contraction = mean_distance * (0.05 + 0.1 * blebbing_progress)
+                        vertices_blebbed[i] = center_screen + direction * max(distances[i] - contraction, mean_distance * 0.6)
+
+        # Draw membrane in mode 0 and mode 2
+        if mode in (0, 2):
+            # Draw cell with blue gradient layers
+            layers = 10
+            for i in range(layers, 0, -1):
+                s = i / layers
+                shade = 80 + int(100 * s)
+                color = (shade, shade, 255)
+                scaled_verts = center_screen + (vertices_blebbed - center_screen) * (i / layers)
+                self._draw_smooth_cell(img, center_screen, scaled_verts, color, thickness=-1)
+
+            # Draw membrane outline
+            self._draw_smooth_cell(img, center_screen, vertices_blebbed, (0, 0, 0), thickness=2)
+
+        # Draw condensed chromatin first (underneath)
+        # Animate it to show movement during blebbing
+        if mode in (0, 1):
+            # Draw compact chromatin to show nucleus material
+            # Make it compact since nucleus area is affected by protrusions
+            center_world = cell.center
+            nucleus_radius = int(0.3 * cell.base_r * shrinkage_factor)  # Smaller nucleus due to blebs
+            nucleus_center_screen = (center_world - np.array(camera_offset))
+
+            # Draw condensed chromatin as an animated compact cluster
+            if nucleus_radius > 0:
+                # Use death_timer for animation - creates pulsing/moving effect
+                time_offset = cell.death_timer * 0.5  # Animation speed
+
+                # Draw a few condensed chromatin circles to show nuclear material
+                # Keep them tightly clustered within nucleus core (0.5 nucleus radius)
+                num_fragments = 5
+                nucleus_core_radius = nucleus_radius * 0.5  # Tighter bounds for cluster
+
+                for j in range(num_fragments):
+                    # Animated angle - slowly rotates the chromatin cluster
+                    angle = (j / num_fragments) * 2 * np.pi + time_offset
+
+                    # Varying distance for dynamic effect - pulsing radius
+                    # REDUCED: Keep fragments tightly clustered (0.2 to 0.4 of nucleus radius)
+                    pulse = 0.15 * np.sin(time_offset + j * 0.5)  # Reduced pulsing amplitude
+                    r = nucleus_core_radius * (0.3 + 0.15 * pulse) * (0.7 + 0.3 * np.cos(j * 1.3))
+
+                    # Position with animation - stays within nucleus core
+                    fragment_offset = np.array([r * np.cos(angle), r * np.sin(angle)])
+                    fragment_distance = np.linalg.norm(fragment_offset)
+
+                    # Clamp to nucleus core radius to keep fragments tightly clustered
+                    if fragment_distance > nucleus_core_radius:
+                        scale = nucleus_core_radius / (fragment_distance + 1e-6)
+                        fragment_offset = fragment_offset * scale
+
+                    frag_x = nucleus_center_screen[0] + fragment_offset[0]
+                    frag_y = nucleus_center_screen[1] + fragment_offset[1]
+                    frag_radius = max(2, int(nucleus_radius * 0.25))
+
+                    cv2.circle(img, (int(frag_x), int(frag_y)), frag_radius,
+                              (100, 150, 200), -1, lineType=cv2.LINE_AA)
+
+        # Draw chromatin bleb fragments prominently (on top)
+        # Draw AFTER membrane so it appears on top
+        if mode in (0, 1):
+            if hasattr(cell, 'chromatin_bleb_positions'):
+                chromatin_color = (0, 100, 200)  # Orange chromatin color (BGR)
+                # Make chromatin radius larger to ensure visibility
+                chromatin_bleb_radius = int(cell.base_r * 0.10)
+
+                # Animation for chromatin fragments
+                time_offset = cell.death_timer * 0.3
+
+                # Calculate tight bounds for chromatin cluster (nucleus area only)
+                nucleus_radius_screen = int(0.3 * cell.base_r * shrinkage_factor)
+                max_chromatin_distance = nucleus_radius_screen * 0.7  # Keep within nucleus
+
+                for bleb_idx, bleb_pos in enumerate(cell.chromatin_bleb_positions):
+                    # Add slight animation to chromatin position (oscillation)
+                    oscillation_x = 1.5 * np.sin(time_offset + bleb_idx * 0.7)  # Reduced oscillation
+                    oscillation_y = 1.5 * np.cos(time_offset + bleb_idx * 0.9)
+
+                    bleb_screen = np.array([
+                        bleb_pos[0] - camera_offset[0] + oscillation_x,
+                        bleb_pos[1] - camera_offset[1] + oscillation_y
+                    ])
+
+                    # Ensure chromatin fragments stay clustered within nucleus area
+                    # Calculate distance from cell center
+                    cell_center_screen = center_screen
+                    offset_from_center = bleb_screen - cell_center_screen
+                    distance_from_center = np.linalg.norm(offset_from_center)
+
+                    # Clamp to nucleus radius to keep fragments tightly clustered together
+                    if distance_from_center > max_chromatin_distance:
+                        scale = max_chromatin_distance / (distance_from_center + 1e-6)
+                        bleb_screen = cell_center_screen + offset_from_center * scale
+
+                    # Draw chromatin circle with solid fill
+                    cv2.circle(img, tuple(bleb_screen.astype(int)),
+                              chromatin_bleb_radius, chromatin_color, -1,
+                              lineType=cv2.LINE_AA)
+                    # Draw bright outline to make it clearly visible
+                    cv2.circle(img, tuple(bleb_screen.astype(int)),
+                              chromatin_bleb_radius, (0, 200, 255), 2,
+                              lineType=cv2.LINE_AA)
 
     def _draw_apoptotic_bodies_phase(self, img: np.ndarray, cell: CellCycleNormal,
                                      center_screen: np.ndarray, chromatin_pts_screen: list,
-                                     camera_offset: Tuple[float, float]) -> None:
-        """Draw scattered apoptotic bodies with fragmented nucleus inside."""
+                                     camera_offset: Tuple[float, float], mode: int = 0) -> None:
+        """Draw scattered apoptotic bodies with chromatin fragments inside.
+
+        Args:
+            mode: Visualization mode (0=brightfield, 1=nucleus, 2=membrane)
+                - Mode 0: membrane shells + chromatin inside
+                - Mode 1: chromatin fragments only
+                - Mode 2: membrane shells only
+        """
         if not hasattr(cell, 'apoptotic_body_positions'):
             return
-        
+
         body_radius = int(cell.base_r * 0.25)  # Each body is small
         body_color = (130, 130, 255)  # Blue from gradient range
-        
-        # Draw apoptotic bodies in blue
-        for body_pos in cell.apoptotic_body_positions:
+        chromatin_color = (0, 100, 200)  # Orange chromatin color (BGR)
+        chromatin_radius = int(body_radius * 0.4)
+
+        # Get chromatin assignments if available
+        chromatin_assignments = getattr(cell, 'apoptotic_body_chromatin', [0] * len(cell.apoptotic_body_positions))
+
+        # Draw each apoptotic body
+        for i, body_pos in enumerate(cell.apoptotic_body_positions):
             body_screen = np.array([body_pos[0] - camera_offset[0], body_pos[1] - camera_offset[1]])
-            cv2.circle(img, tuple(body_screen.astype(int)), body_radius, body_color, -1, lineType=cv2.LINE_AA)
-            cv2.circle(img, tuple(body_screen.astype(int)), body_radius, (0, 0, 0), 1, lineType=cv2.LINE_AA)
+
+            # Draw membrane shell in mode 0 and mode 2
+            if mode in (0, 2):
+                cv2.circle(img, tuple(body_screen.astype(int)), body_radius, body_color, -1, lineType=cv2.LINE_AA)
+                cv2.circle(img, tuple(body_screen.astype(int)), body_radius, (0, 0, 0), 1, lineType=cv2.LINE_AA)
+
+            # Draw chromatin fragment inside in mode 0 and mode 1
+            if mode in (0, 1):
+                cv2.circle(img, tuple(body_screen.astype(int)), chromatin_radius,
+                          chromatin_color, -1, lineType=cv2.LINE_AA)
 
     def _draw_phagocytosis_apoptosis(self, img: np.ndarray, cell: CellCycleNormal,
-                                     center_screen: np.ndarray) -> None:
-        """Draw fading apoptotic bodies with decreasing opacity."""
+                                     center_screen: np.ndarray, camera_offset: Tuple[float, float],
+                                     mode: int = 0) -> None:
+        """Draw fading apoptotic bodies with chromatin, decreasing opacity.
+
+        Args:
+            mode: Visualization mode (0=brightfield, 1=nucleus, 2=membrane)
+                - Mode 0: fading membrane shells + chromatin
+                - Mode 1: fading chromatin only
+                - Mode 2: fading membrane shells only
+        """
         if not hasattr(cell, 'apoptotic_body_positions'):
             return
-        
+
         phagocytosis_progress = (cell.death_timer - cell.time_table_apoptois['Apoptotic bodies']) / \
                                (cell.max_death_timer - cell.time_table_apoptois['Apoptotic bodies'])
-        
+
         body_radius = int(cell.base_r * 0.25)
-        # Fade from blue gradient color (130, 130, 255) to black
+        chromatin_radius = int(body_radius * 0.4)
+
+        # Fade factor for opacity
         fade_factor = 1.0 - phagocytosis_progress
+
+        # Membrane colors fade to black
         fade_b = int(130 * fade_factor)
         fade_g = int(130 * fade_factor)
         fade_r = int(255 * fade_factor)
-        
+
+        # Chromatin color fades too
+        chromatin_fade_b = int(0 * fade_factor)
+        chromatin_fade_g = int(100 * fade_factor)
+        chromatin_fade_r = int(200 * fade_factor)
+
         for body_pos in cell.apoptotic_body_positions:
-            cv2.circle(img, tuple(np.array(body_pos).astype(int)), body_radius, 
-                      (fade_b, fade_g, fade_r), -1, lineType=cv2.LINE_AA)
+            body_screen = np.array([body_pos[0] - camera_offset[0], body_pos[1] - camera_offset[1]])
+
+            # Draw fading membrane shell in mode 0 and mode 2
+            if mode in (0, 2):
+                cv2.circle(img, tuple(body_screen.astype(int)), body_radius,
+                          (fade_b, fade_g, fade_r), -1, lineType=cv2.LINE_AA)
+
+            # Draw fading chromatin fragment in mode 0 and mode 1
+            if mode in (0, 1):
+                cv2.circle(img, tuple(body_screen.astype(int)), chromatin_radius,
+                          (chromatin_fade_b, chromatin_fade_g, chromatin_fade_r), -1, lineType=cv2.LINE_AA)
 
     def _generate_bleb_points(self, center_screen: np.ndarray,
                              vertices: np.ndarray, num_blebs: int = 8) -> list:

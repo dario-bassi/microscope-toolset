@@ -499,42 +499,140 @@ class CellCycleNormal(NormalCell):
         return progress
 
     def _get_current_shrinkage_factor(self) -> float:
-        """Returns radius multiplier of cell shrinkage (1.0 -> 0.85)."""
+        """Returns radius multiplier of cell shrinkage (1.0 -> 0.70)."""
         progress = self._get_shrinkage_progess()
-        # Linear shrinkage: start at 1.0, end at 0.85 (15% shrinkage)
-        shrinkage_factor = 1.0 - (0.15 * progress)
+        # Linear shrinkage: start at 1.0, end at 0.70 (30% shrinkage)
+        shrinkage_factor = 1.0 - (0.30 * progress)
         return shrinkage_factor
 
-    def _get_apoptotic_body_positions(self) -> list[tuple[float, float]]:
-        """Generate 3-5 body positions scattered linearly from center.
-        
+    def _generate_bleb_vertex_indices(self) -> tuple[list[int], list[int]]:
+        """Select 2-3 primary and 2-3 secondary vertices for progressive blebs.
+
+        Primary blebs start immediately, secondary blebs appear halfway through blebbing.
+        This creates a progressive increase in membrane protrusions.
+
+        Returns:
+            tuple: (primary_bleb_indices, secondary_bleb_indices)
+        """
+        # Primary blebs: appear immediately at start of blebbing
+        num_primary = random.randint(2, 3)
+        primary_indices = random.sample(range(len(self.angles)), num_primary)
+
+        # Secondary blebs: different vertices, appear later in blebbing phase
+        remaining_indices = [i for i in range(len(self.angles)) if i not in primary_indices]
+        num_secondary = random.randint(2, 3)
+        secondary_indices = random.sample(remaining_indices, num_secondary)
+
+        return sorted(primary_indices), sorted(secondary_indices)
+
+    def _generate_chromatin_blebs(self) -> list[tuple[float, float]]:
+        """Generate chromatin fragments scattered within the cell during blebbing.
+
+        These represent fragmented nuclear material, positioned near the chromatin offsets
+        but scattered to show fragmentation.
+        """
+        num_fragments = len(self.chromatin_offset)
+        chromatin_blebs = []
+
+        # Create fragments based on chromatin offsets, with some scattering
+        for offset in self.chromatin_offset:
+            # Add random displacement to show fragmentation
+            scatter_radius = self.base_r * 0.1
+            angle = random.uniform(0, 2 * np.pi)
+            dx = scatter_radius * np.cos(angle)
+            dy = scatter_radius * np.sin(angle)
+
+            # Position relative to center
+            bleb_x = self.center[0] + offset[0] + dx
+            bleb_y = self.center[1] + offset[1] + dy
+            chromatin_blebs.append((bleb_x, bleb_y))
+
+        return chromatin_blebs
+
+    def _get_apoptotic_body_positions(self) -> tuple[list[tuple[float, float]], list[int]]:
+        """Generate 3-5 body positions and their chromatin fragment assignments.
+
         Bodies scatter within 0.5 of the original cell radius from center.
+        Each body contains a chromatin fragment.
+
+        Returns:
+            tuple: (body_positions, chromatin_indices) where chromatin_indices
+                   maps each body to which chromatin fragment it contains
         """
         num_bodies = random.randint(3, 5)
         original_radius = self.base_r
         max_scatter_radius = original_radius * 0.5
-        
+
         positions = []
+        chromatin_indices = []
         for i in range(num_bodies):
             # Spread linearly around center
             angle = (i / num_bodies) * 2 * np.pi + random.uniform(-0.2, 0.2)
             radius = random.uniform(0, max_scatter_radius)
-            
+
             x = self.center[0] + radius * np.cos(angle)
             y = self.center[1] + radius * np.sin(angle)
             positions.append((x, y))
-        
-        return positions
+
+            # Assign chromatin fragment (cycle through available chromatin)
+            chromatin_indices.append(i % min(len(self.chromatin_offset), num_bodies))
+
+        return positions, chromatin_indices
 
     def _initialize_apoptotic_bodies(self) -> None:
-        """Initialize 'Apoptotic Bodies' phase to set up nucleus fragments.
-        
-        Store original radius and generate body positions.
+        """Initialize 'Apoptotic Bodies' phase to set up nucleus fragments with Brownian motion.
+
+        Store original radius, generate body positions, assign chromatin fragments,
+        and initialize velocities for Brownian motion.
         """
         if not hasattr(self, 'apoptotic_body_positions'):
-            self.apoptotic_body_positions = self._get_apoptotic_body_positions()
+            body_pos, chromatin_assign = self._get_apoptotic_body_positions()
+            self.apoptotic_body_positions = body_pos
+            self.apoptotic_body_chromatin = chromatin_assign
         if not hasattr(self, 'original_base_r_for_apoptosis'):
             self.original_base_r_for_apoptosis = self.base_r
+        if not hasattr(self, 'apoptotic_body_velocities'):
+            # Initialize random velocities for Brownian motion
+            # Each body gets a small random velocity in 2D space
+            num_bodies = len(self.apoptotic_body_positions)
+            self.apoptotic_body_velocities = []
+            for _ in range(num_bodies):
+                # Random direction and speed (small for realistic drift)
+                angle = random.uniform(0, 2 * np.pi)
+                speed = random.uniform(0.5, 2.0)  # Pixels per frame
+                vx = speed * np.cos(angle)
+                vy = speed * np.sin(angle)
+                self.apoptotic_body_velocities.append(np.array([vx, vy]))
+
+    def _update_apoptotic_bodies_brownian_motion(self) -> None:
+        """Update apoptotic body positions with Brownian motion.
+
+        Bodies drift randomly with periodic direction changes,
+        simulating diffusion through tissue during phagocytosis.
+        """
+        if not hasattr(self, 'apoptotic_body_positions') or not hasattr(self, 'apoptotic_body_velocities'):
+            return
+
+        # Update each body position with Brownian motion
+        for i, pos in enumerate(self.apoptotic_body_positions):
+            # Update position
+            new_x = pos[0] + self.apoptotic_body_velocities[i][0]
+            new_y = pos[1] + self.apoptotic_body_velocities[i][1]
+
+            # Wrap position at world boundaries (toroidal space)
+            new_x = new_x % self.width
+            new_y = new_y % self.height
+
+            self.apoptotic_body_positions[i] = (new_x, new_y)
+
+            # Occasionally change direction (at random intervals)
+            if random.random() < 0.1:  # 10% chance each update
+                angle = random.uniform(0, 2 * np.pi)
+                speed = random.uniform(0.5, 2.0)
+                self.apoptotic_body_velocities[i] = np.array([
+                    speed * np.cos(angle),
+                    speed * np.sin(angle)
+                ])
     
     def _update_apoptotic_physics(self) -> None:
         """Disable physics for apoptotic cells.
@@ -553,8 +651,8 @@ class CellCycleNormal(NormalCell):
             if self.apoptosis_death_phase == 'Shrinkage':
                 shrinkage_factor = self._get_current_shrinkage_factor()
             else:
-                # During blebbing, maintain the final shrinkage factor (0.85)
-                shrinkage_factor = 0.60
+                # During blebbing, maintain the final shrinkage factor (0.70 = 30% shrinkage)
+                shrinkage_factor = 0.70
             
             # Scale base_r for shrinkage (will affect nucleus size proportionally)
             if not hasattr(self, 'original_base_r_for_apoptosis'):
@@ -577,10 +675,22 @@ class CellCycleNormal(NormalCell):
         if self.apoptosis_death_phase == 'Blebbing':
             # Much more irregular membrane during blebbing
             self.ruffle_std = self.original_ruffle_std * 5.0  # 0.04 * 5 = 0.2
+            # Initialize progressive bleb vertices and chromatin when entering blebbing phase
+            if not hasattr(self, 'bleb_vertex_indices_primary'):
+                primary_blebs, secondary_blebs = self._generate_bleb_vertex_indices()
+                self.bleb_vertex_indices_primary = primary_blebs
+                self.bleb_vertex_indices_secondary = secondary_blebs
+            if not hasattr(self, 'chromatin_bleb_positions'):
+                self.chromatin_bleb_positions = self._generate_chromatin_blebs()
         else:
             # Less dramatic during shrinkage and later phases
             self.ruffle_std = self.original_ruffle_std * 2.0  # 0.04 * 2 = 0.08
-        
+
         # Initialize apoptotic bodies when entering that phase
         if self.apoptosis_death_phase == 'Apoptotic bodies':
             self._initialize_apoptotic_bodies()
+            # Update bodies with Brownian motion
+            self._update_apoptotic_bodies_brownian_motion()
+        elif self.apoptosis_death_phase == 'Phagocytosis':
+            # Continue Brownian motion during phagocytosis
+            self._update_apoptotic_bodies_brownian_motion()
