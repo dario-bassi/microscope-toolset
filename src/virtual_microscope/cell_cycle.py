@@ -257,8 +257,8 @@ class CellCycleNormal(NormalCell):
             self.death_timer += dt
             self._update_apoptosis_phase()
             self._update_apoptotic_physics()
-            # Apply physics update to generate membrane ruffling with modified parameters
-            self.update_physics(dt)
+            # Apoptotic cells do NOT move - they're anchored in place during cell death
+            # Do not call update_physics() to prevent migration
         else:
             # Normal cell physics for non-dying cells
             super().update_behavior(dt)
