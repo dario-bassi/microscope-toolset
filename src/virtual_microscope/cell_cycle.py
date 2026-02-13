@@ -41,7 +41,6 @@ class CellCycleNormal(NormalCell):
             self.n_div: int = self._initial_number_division()
             
         self.is_dying: bool = self._initialization_apoptosis()
-        self.time_tot_cycle: float = 660.0 # in simulation units (seconds)
         # Time table defines END times for each phase (cumulative)
         # G1: 0-240, S: 240-360, G2: 360-480, M: 480-550
         self.time_table_cycle: dict[str, float] = {'G1': 240.0, 'S': 360.0, 'G2': 480.0} # in seconds
@@ -251,13 +250,6 @@ class CellCycleNormal(NormalCell):
             if self.n_div >= self.max_nb_div:
                 self.is_dying = True
 
-    def _start_apoptosis(self) -> bool:
-        """Start signal for apoptosis."""
-        if self.is_dying:
-            return True
-        
-        return False
-    
     def update_behavior(self, dt: float) -> None:
         """Update cell cycle state and chromatin positions."""
         # Update death timer if dying

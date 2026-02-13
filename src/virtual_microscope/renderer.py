@@ -1155,46 +1155,13 @@ class Renderer:
                 cv2.circle(img, tuple(body_screen.astype(int)), chromatin_radius,
                           (chromatin_fade_b, chromatin_fade_g, chromatin_fade_r), -1, lineType=cv2.LINE_AA)
 
-    def _generate_bleb_points(self, center_screen: np.ndarray,
-                             vertices: np.ndarray, num_blebs: int = 8) -> list:
-        """Generate bleb protrusion positions on membrane.
-        
-        Returns list of (position, radius) tuples for each bleb.
-        """
-        blebs = []
-        
-        # Get vertices as angles and distances
-        angles = np.linspace(0, 2 * np.pi, len(vertices), endpoint=False)
-        radii_orig = np.linalg.norm(vertices - center_screen, axis=1)
-        max_radius = np.max(radii_orig)
-        
-        for i in range(num_blebs):
-            # Random position on membrane
-            angle = random.uniform(0, 2 * np.pi)
-            
-            # Bleb extends outward from membrane
-            base_radius = max_radius * 0.9
-            bleb_extension = max_radius * 0.4  # Blebs can extend 40% beyond radius
-            bleb_radius = int(max_radius * 0.15)  # Size of each bleb
-            
-            # Position on membrane + extension
-            bleb_distance = base_radius + bleb_extension * random.uniform(0.3, 1.0)
-            
-            bleb_x = center_screen[0] + bleb_distance * np.cos(angle)
-            bleb_y = center_screen[1] + bleb_distance * np.sin(angle)
-            bleb_pos = np.array([bleb_x, bleb_y])
-            
-            blebs.append((bleb_pos, bleb_radius))
-        
-        return blebs
-
     def _get_apoptosis_opacity(self, cell: CellCycleNormal) -> float:
-        """Calculate opacity for current apoptosis phase."""
-        if cell.apoptosis_death_phase == 'Phagocytosis':
-            # Fade out during phagocytosis
-            phagocytosis_progress = (cell.death_timer - cell.time_table_apoptois['Apoptotic bodies']) / \
-                                   (cell.max_death_timer - cell.time_table_apoptois['Apoptotic bodies'])
-            return 1.0 - phagocytosis_progress
-        else:
-            # Full opacity for earlier phases
-            return 1.0
+            """Calculate opacity for current apoptosis phase."""
+            if cell.apoptosis_death_phase == 'Phagocytosis':
+                # Fade out during phagocytosis
+                phagocytosis_progress = (cell.death_timer - cell.time_table_apoptois['Apoptotic bodies']) / \
+                                    (cell.max_death_timer - cell.time_table_apoptois['Apoptotic bodies'])
+                return 1.0 - phagocytosis_progress
+            else:
+                # Full opacity for earlier phases
+                return 1.0
