@@ -83,25 +83,27 @@ On the right there is the panel control that will start or stop the MCP Microsco
 
 In the UI at your choice (e.g. vs-code, Claude Desktop) add the configuration file of the mcp server.
 ```
+Example of vs-code
 {
 	"servers": {
-		"microscope toolset": {
-			"url": "http://127.1.1.1:5500/mcp",
-			"type": "http",
-			"env": {
-				"OPENAI_API_KEY":"${input:api-key}"
-			}
+		"microscope": {
+			"url": "http://127.0.0.1:5500/mcp",
+			"type": "http"
 		}
-	},
-	"inputs": [
-		{
-      "type": "promptString",
-      "id": "api-key",
-      "description": "Please enter your OpenAI API key.",
-      "password": true
-    }
-  ]
+	}
 }
 ```
 After you added the *mcp.json* configuration file, you can start the MCP Client that will connect to the server.
+
+```
+Example of claude code
+
+$ claude code add --transport http microscope http://127.0.0.1:5500/mcp
+
+Then goes in /mcp
+
+$ /mcp + enter
+
+And select the microscope MCP server either connecting the server or enabling the server, and from the terminal whery you started the napari-plugin you will see if the server correctly connected.
+```
 
