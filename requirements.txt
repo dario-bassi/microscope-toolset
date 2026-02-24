@@ -4,7 +4,7 @@ pymupdf
 semantic_text_splitter
 napari[pyqt6, optional]
 napari-micromanager
-git+https://github.com/dario-bassi/pymmcore-widgets.git@main
+git+https://github.com/dario-bassi/pymmcore-widgets.git@modified_stage
 git+https://github.com/pymmcore-plus/pymmcore-plus.git@main
 numpy
 psycopg2
