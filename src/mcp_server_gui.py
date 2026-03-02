@@ -5,6 +5,7 @@ import logging
 import threading
 import signal
 import time
+from datetime import datetime
 
 from typing import Any
 
@@ -22,6 +23,7 @@ from src.mcp_microscopetoolset.agents_init import initialize_agents
 from src.mcp_microscopetoolset.viewer import NapariViewerMC
 from src.microscope.microscope_event_cache import MicroscopeEventCache
 from src.virtual_microscope.initialize_virtual_microscope import initialize_virtual_microscope_from_configuration
+from src.benchmarking.benchmark_logger import BenchmarkLogger
 
 #  logger
 logger = logging.getLogger("MCPServer")
@@ -226,13 +228,20 @@ class MCPWorker(QObject):
                     raise RuntimeError("Microscope core not initialized - load a .cfg file first")
                 event_cache = MicroscopeEventCache(self._mmc)
 
+                # Initialize benchmark logger if needed
+                timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+                run_id = f"benchmark_{timestamp}"
+                benchmark_logger = BenchmarkLogger(agent_type="untrained", run_id=run_id)
+                logger.info(f"Benchmark logger initialized: {run_id}")
+
                 mcp_server = create_mcp_server(
                     database_agent=agents["database_agent"],
                     microscope_status=agents["microscope_status"],
                     executor=agents["executor"],
                     viewer=viewer_instance,
                     event_cache=event_cache,
-                    viewer_proxy=self._viewer_proxy
+                    viewer_proxy=self._viewer_proxy,
+                    benchmark_logger_instance=benchmark_logger
                 )
 
                 # Run the server — create uvicorn explicitly so we can shut it down later

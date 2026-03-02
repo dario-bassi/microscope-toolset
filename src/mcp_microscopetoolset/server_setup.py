@@ -10,9 +10,13 @@ import datetime
 import numpy as np
 import asyncio
 import base64
+import time
+import os
 from io import BytesIO
 from pydantic import BaseModel
 from src.local.gatekeeper_core import GatekeeperCore
+from dotenv import load_dotenv
+from src.benchmarking.benchmark_logger import BenchmarkLogger
 
 #  logger
 logger = logging.getLogger("ServerSetup")
@@ -26,6 +30,8 @@ if not logger.handlers:
     ))
     logger.addHandler(fh)
 
+# Global benchmark logger (set from outside when benchmarking)
+benchmark_logger: BenchmarkLogger | None = None
 
 # This ensures the LLM sees a standard list of numbers
 NDArray = Annotated[
@@ -45,7 +51,8 @@ def create_mcp_server(
         executor,
         viewer,
         event_cache,
-        viewer_proxy=None
+        viewer_proxy=None,
+        benchmark_logger_instance: BenchmarkLogger | None = None
 ) -> FastMCP:
     # Server definition
     mcp = FastMCP(
@@ -64,6 +71,13 @@ def create_mcp_server(
     except Exception:
         pass
 
+    # Set up benchmark logger if provided
+    global benchmark_logger
+    benchmark_logger = benchmark_logger_instance
+
+    # Load .env for configuration
+    load_dotenv()
+
     @mcp.tool(
         name="pymmcore_api_database",
         description="Search the pymmcore-plus API documentation database using hybrid BM25 + KNN retrieval with cross-encoder re-ranking. Returns the top 25 most relevant chunks."
@@ -71,29 +85,45 @@ def create_mcp_server(
     def pymmcore_api_database(
             user_query: str = Field(..., description="The user original question")
     ) -> dict[str, Any]:
-        if database_agent is None:
-            return {"user_query": user_query, "error": "Database agent not available (Elasticsearch not configured)"}
+        start_time = time.time()
+        result = None
         try:
+            if database_agent is None:
+                result = {"user_query": user_query, "error": "Database agent not available (Elasticsearch not configured)"}
+                return result
+
             # reformulate user query
             reformulated_question = database_agent.rephrase_query(user_query)
-            
+
             # check if rephrase failed
             if isinstance(reformulated_question, dict) and reformulated_question.get('intent') == 'error':
-                return {
+                result = {
                     "user_query": user_query,
                     "error": reformulated_question.get('message', 'Failed to reformulate query')
                 }
+                return result
 
             # extract reformulated_query string from dict
             reformulated_query_str = reformulated_question.get("reformulated_query", user_query) if isinstance(reformulated_question, dict) else reformulated_question
 
-            return database_agent.api_pymmcore_context(user_query, reformulated_query_str)
+            result = database_agent.api_pymmcore_context(user_query, reformulated_query_str)
+            return result
         except Exception as e:
             logger.error(f"Error in pymmcore_api_database: {e}", exc_info=True)
-            return {
+            result = {
                 "user_query": user_query,
                 "error": f"Error retrieving information from databases: {str(e)}"
             }
+            return result
+        finally:
+            execution_time_ms = (time.time() - start_time) * 1000
+            if benchmark_logger and result is not None:
+                benchmark_logger.log_tool_call(
+                    tool_name="pymmcore_api_database",
+                    input_params={"user_query": user_query},
+                    result=result,
+                    execution_time_ms=execution_time_ms
+                )
     @mcp.tool(
         name="micromanager_device_database",
         description="Search the Micro-Manager device documentation database using hybrid BM25 + KNN retrieval with cross-encoder re-ranking. Returns the top 25 most relevant chunks."
@@ -101,29 +131,45 @@ def create_mcp_server(
     def micromanager_device_database(
             user_query: str = Field(..., description="The user original question")
     ) -> dict[str, Any]:
-        if database_agent is None:
-            return {"user_query": user_query, "error": "Database agent not available (Elasticsearch not configured)"}
+        start_time = time.time()
+        result = None
         try:
+            if database_agent is None:
+                result = {"user_query": user_query, "error": "Database agent not available (Elasticsearch not configured)"}
+                return result
+
             # reformulate user query
             reformulated_question = database_agent.rephrase_query(user_query)
-            
+
             # check if rephrase failed
             if isinstance(reformulated_question, dict) and reformulated_question.get('intent') == 'error':
-                return {
+                result = {
                     "user_query": user_query,
                     "error": reformulated_question.get('message', 'Failed to reformulate query')
                 }
+                return result
 
             # extract reformulated_query string from dict
             reformulated_query_str = reformulated_question.get("reformulated_query", user_query) if isinstance(reformulated_question, dict) else reformulated_question
 
-            return database_agent.devices_micromanager_context(user_query, reformulated_query_str)
+            result = database_agent.devices_micromanager_context(user_query, reformulated_query_str)
+            return result
         except Exception as e:
             logger.error(f"Error in micromanager_device_database: {e}", exc_info=True)
-            return {
+            result = {
                 "user_query": user_query,
                 "error": f"Error retrieving information from databases: {str(e)}"
             }
+            return result
+        finally:
+            execution_time_ms = (time.time() - start_time) * 1000
+            if benchmark_logger and result is not None:
+                benchmark_logger.log_tool_call(
+                    tool_name="micromanager_device_database",
+                    input_params={"user_query": user_query},
+                    result=result,
+                    execution_time_ms=execution_time_ms
+                )
     @mcp.tool(
         name="pdfs_publication_database",
         description="Search scientific publications using hybrid BM25 + KNN retrieval with cross-encoder re-ranking. Returns the top 25 most relevant chunks."
@@ -131,63 +177,98 @@ def create_mcp_server(
     def pdfs_publication_database(
             user_query: str = Field(..., description="The user original question")
     ) -> dict[str, Any]:
-        if database_agent is None:
-            return {"user_query": user_query, "error": "Database agent not available (Elasticsearch not configured)"}
+        start_time = time.time()
+        result = None
         try:
+            if database_agent is None:
+                result = {"user_query": user_query, "error": "Database agent not available (Elasticsearch not configured)"}
+                return result
+
             # reformulate user query
             reformulated_question = database_agent.rephrase_query(user_query)
-            
+
             # check if rephrase failed
             if isinstance(reformulated_question, dict) and reformulated_question.get('intent') == 'error':
-                return {
+                result = {
                     "user_query": user_query,
                     "error": reformulated_question.get('message', 'Failed to reformulate query')
                 }
+                return result
 
             reformulated_result = reformulated_question.get("reformulated_query", user_query) if isinstance(reformulated_question, dict) else user_query
 
-            return database_agent.pdf_publication_context(user_query, reformulated_result)
+            result = database_agent.pdf_publication_context(user_query, reformulated_result)
+            return result
         except Exception as e:
             logger.error(f"Error in pdfs_publication_database: {e}", exc_info=True)
-            return {
+            result = {
                 "user_query": user_query,
                 "error": f"Error retrieving information from databases: {str(e)}"
             }
+            return result
+        finally:
+            execution_time_ms = (time.time() - start_time) * 1000
+            if benchmark_logger and result is not None:
+                benchmark_logger.log_tool_call(
+                    tool_name="pdfs_publication_database",
+                    input_params={"user_query": user_query},
+                    result=result,
+                    execution_time_ms=execution_time_ms
+                )
 
     @mcp.tool(
          name="reformulate_user_query",
          description="Rephrase a user question into an optimized search query for database retrieval via BM25 text matching and embedding vectors."
      )
     def reformulate_user_query(
-             user_question: str = Field(..., description="The user original question")
+             user_question: str = Field(..., description="The user original question"),
+             user_query: str = Field("", description="(Optional) The original user query, used for logging only.")
      ) -> dict[str, Any]:
-         if database_agent is None:
-             return {"user_query": user_question, "error": "Database agent not available (Elasticsearch not configured)"}
-         # add check that structured response is getting the correct answer
-         return database_agent.rephrase_query(user_question)
+         start_time = time.time()
+         result = None
+         try:
+             if database_agent is None:
+                 result = {"user_query": user_question, "error": "Database agent not available (Elasticsearch not configured)"}
+                 return result
+             # add check that structured response is getting the correct answer
+             result = database_agent.rephrase_query(user_question)
+             return result
+         finally:
+             execution_time_ms = (time.time() - start_time) * 1000
+             if benchmark_logger and result is not None:
+                 benchmark_logger.log_tool_call(
+                     tool_name="reformulate_user_query",
+                     input_params={"user_question": user_question, "user_query": user_query},
+                     result=result,
+                     execution_time_ms=execution_time_ms
+                 )
 
     @mcp.tool(
         name="get_microscope_settings",
         description="Return the current microscope state: device property schemas, current values, and configuration groups."
     )
-    def get_microscope_settings() -> dict[str, Any]:
+    def get_microscope_settings(
+        user_query: str = Field("", description="(Optional) The original user query, used for logging only.")
+    ) -> dict[str, Any]:
+        start_time = time.time()
+        result = None
         try:
             # Get Properties of the microscope
             logger.info("Getting microscope properties...")
             microscope_properties_response = microscope_status.get_properties()
             logger.info(f"Properties retrieved: {type(microscope_properties_response)}")
-            
+
             # Get current settings
             logger.info("Getting microscope current status...")
             microscope_status_response = microscope_status.get_current_status()
             logger.info(f"Status retrieved: {type(microscope_status_response)}")
-            
+
             # Get configuration settings
             logger.info("Getting microscope available configs...")
             config_settings = microscope_status.get_available_configs()
             logger.info(f"Configs retrieved: {type(config_settings)}")
-            
-            microscope_status_settings = {
+
+            result = {
                 "properties_schema": microscope_properties_response,
                 "current_properties_status": microscope_status_response,
                 "configuration_groups_settings": config_settings
@@ -198,15 +279,25 @@ def create_mcp_server(
                 "current_properties_status": microscope_status_response,
                 "configuration_groups_settings": config_settings
             })
-            return microscope_status_settings
+            return result
         except Exception as e:
             logger.error(f"Error in get_microscope_settings: {e}", exc_info=True)
-            return {
+            result = {
                 "error": f"Failed to get microscope settings: {str(e)}",
                 "properties_schema": {},
                 "current_properties_status": {},
                 "configuration_groups_settings": {}
             }
+            return result
+        finally:
+            execution_time_ms = (time.time() - start_time) * 1000
+            if benchmark_logger and result is not None:
+                benchmark_logger.log_tool_call(
+                    tool_name="get_microscope_settings",
+                    input_params={"user_query": user_query},
+                    result=result,
+                    execution_time_ms=execution_time_ms
+                )
 
     @mcp.tool(
         name="answer_no_coding_query",
@@ -215,10 +306,20 @@ def create_mcp_server(
     def answer_no_coding_query(
             user_query: str = Field(..., description="The user original query")
     ):
-        return {
+        start_time = time.time()
+        result = {
             "user_query": user_query,
             "no_coding_query": True
         }
+        execution_time_ms = (time.time() - start_time) * 1000
+        if benchmark_logger:
+            benchmark_logger.log_tool_call(
+                tool_name="answer_no_coding_query",
+                input_params={"user_query": user_query},
+                result=result,
+                execution_time_ms=execution_time_ms
+            )
+        return result
     def _log_run(code, output, error, execution_mode, user_query, strategy):
         """Append a run record to microscope_toolset_runs.jsonl"""
         try:
@@ -290,27 +391,42 @@ def create_mcp_server(
         Prepares and executes Python code using the Execute agent.
         Returns a dictionary with 'output' (the execution result) and 'error' (if any).
         """
+        start_time = time.time()
+        result = None
         try:
             prepare_code_to_run = prepare_code(code)
             execution_output = executor.run_code_new(prepare_code_to_run, execution_mode)
             if "Error" in execution_output:
                 logger.error({"tool": "execute_python_code", "code": code, "error": execution_output})
                 _log_run(code, None, execution_output, execution_mode, user_query, strategy)
-                return {"code": code, "error": execution_output}
+                result = {"code": code, "error": execution_output}
+                return result
             elif 'viewer' in execution_output:
                 err_msg = "Code references 'viewer' or 'napari.current_viewer()'. These are blocked because MCP tools run on a daemon thread — accessing the napari GUI directly will crash it. Use viewer_* MCP tools instead, or get_layer_data to export layer data to a TIFF file."
                 logger.info({"tool": "execute_python_code", "code": code, "error": err_msg})
                 _log_run(code, None, err_msg, execution_mode, user_query, strategy)
-                return {"code": code, "error": err_msg}
+                result = {"code": code, "error": err_msg}
+                return result
             else:
                 logger.info({"tool": "execute_python_code", "code": code, "output": execution_output})
                 _log_run(code, execution_output, None, execution_mode, user_query, strategy)
-                return {"code": code, "output": execution_output}
+                result = {"code": code, "output": execution_output}
+                return result
         except Exception as e:
             err_msg = f"Code preparation/execution failed: {e}"
             logger.error({"tool": "execute_python_code", "code": code, "error": err_msg})
             _log_run(code, None, err_msg, execution_mode, user_query, strategy)
-            return {"code": code, "error": err_msg}
+            result = {"code": code, "error": err_msg}
+            return result
+        finally:
+            execution_time_ms = (time.time() - start_time) * 1000
+            if benchmark_logger and result is not None:
+                benchmark_logger.log_tool_call(
+                    tool_name="execute_python_code",
+                    input_params={"code": code[:100] + "..." if len(code) > 100 else code, "execution_mode": execution_mode, "user_query": user_query},
+                    result=result,
+                    execution_time_ms=execution_time_ms
+                )
 
     # ------------------------------------------#
     # Simple microscope tools
@@ -328,12 +444,16 @@ def create_mcp_server(
             "To access actual pixel data for analysis, use execute_python_code with mmc.snapImage() + mmc.getImage() instead."
         )
     )
-    def snap_image() -> dict[str, Any]:
+    def snap_image(
+        user_query: str = Field("", description="(Optional) The original user query, used for logging only.")
+    ) -> dict[str, Any]:
+        start_time = time.time()
+        result = None
         try:
             raw_mmc = _get_raw_mmc()
             raw_mmc.snapImage()
             img = raw_mmc.getImage()
-            return {
+            result = {
                 "status": "success",
                 "shape": list(img.shape),
                 "dtype": str(img.dtype),
@@ -341,8 +461,19 @@ def create_mcp_server(
                 "max": float(np.max(img)),
                 "mean": float(np.mean(img)),
             }
+            return result
         except Exception as e:
-            return {"status": "error", "message": str(e)}
+            result = {"status": "error", "message": str(e)}
+            return result
+        finally:
+            execution_time_ms = (time.time() - start_time) * 1000
+            if benchmark_logger and result is not None:
+                benchmark_logger.log_tool_call(
+                    tool_name="snap_image",
+                    input_params={"user_query": user_query},
+                    result=result,
+                    execution_time_ms=execution_time_ms
+                )
 
     @mcp.tool(
         name="move_stage",
@@ -359,7 +490,10 @@ def create_mcp_server(
         x: float = Field(..., description="X coordinate (absolute) or X displacement (relative), in micrometers. Stage X maps to image columns."),
         y: float = Field(..., description="Y coordinate (absolute) or Y displacement (relative), in micrometers. Stage Y maps to image rows."),
         relative: bool = Field(False, description="If True, move relative to current position. If False, move to absolute coordinates."),
+        user_query: str = Field("", description="(Optional) The original user query, used for logging only.")
     ) -> dict[str, Any]:
+        start_time = time.time()
+        result = None
         try:
             raw_mmc = _get_raw_mmc()
             if relative:
@@ -368,9 +502,20 @@ def create_mcp_server(
                 raw_mmc.setXYPosition(x, y)
             raw_mmc.waitForDevice(raw_mmc.getXYStageDevice())
             final_x, final_y = raw_mmc.getXPosition(), raw_mmc.getYPosition()
-            return {"status": "success", "x": final_x, "y": final_y}
+            result = {"status": "success", "x": final_x, "y": final_y}
+            return result
         except Exception as e:
-            return {"status": "error", "message": str(e)}
+            result = {"status": "error", "message": str(e)}
+            return result
+        finally:
+            execution_time_ms = (time.time() - start_time) * 1000
+            if benchmark_logger and result is not None:
+                benchmark_logger.log_tool_call(
+                    tool_name="move_stage",
+                    input_params={"x": x, "y": y, "relative": relative, "user_query": user_query},
+                    result=result,
+                    execution_time_ms=execution_time_ms
+                )
 
     @mcp.tool(
         name="set_objective",
@@ -378,7 +523,10 @@ def create_mcp_server(
     )
     def set_objective(
         label: str = Field(..., description="Objective label to switch to (e.g. 'Nikon 10X S Fluor', '20x'). Use get_microscope_settings to discover available labels."),
+        user_query: str = Field("", description="(Optional) The original user query, used for logging only.")
     ) -> dict[str, Any]:
+        start_time = time.time()
+        result = None
         try:
             raw_mmc = _get_raw_mmc()
             # Find the Objective state device
@@ -399,13 +547,25 @@ def create_mcp_server(
                     except Exception:
                         continue
             if obj_device is None:
-                return {"status": "error", "message": "Could not find an Objective device. Use get_microscope_settings to check available devices."}
+                result = {"status": "error", "message": "Could not find an Objective device. Use get_microscope_settings to check available devices."}
+                return result
             raw_mmc.setProperty(obj_device, "Label", label)
             raw_mmc.waitForDevice(obj_device)
             current = raw_mmc.getProperty(obj_device, "Label")
-            return {"status": "success", "device": obj_device, "objective": current}
+            result = {"status": "success", "device": obj_device, "objective": current}
+            return result
         except Exception as e:
-            return {"status": "error", "message": str(e)}
+            result = {"status": "error", "message": str(e)}
+            return result
+        finally:
+            execution_time_ms = (time.time() - start_time) * 1000
+            if benchmark_logger and result is not None:
+                benchmark_logger.log_tool_call(
+                    tool_name="set_objective",
+                    input_params={"label": label, "user_query": user_query},
+                    result=result,
+                    execution_time_ms=execution_time_ms
+                )
 
     @mcp.tool(
         name="get_stage_position",
@@ -416,7 +576,11 @@ def create_mcp_server(
             "where pixel_size_um depends on the current objective and camera configuration."
         )
     )
-    def get_stage_position() -> dict[str, Any]:
+    def get_stage_position(
+        user_query: str = Field("", description="(Optional) The original user query, used for logging only.")
+    ) -> dict[str, Any]:
+        start_time = time.time()
+        result = None
         try:
             raw_mmc = _get_raw_mmc()
             x = raw_mmc.getXPosition()
@@ -425,57 +589,97 @@ def create_mcp_server(
                 z = raw_mmc.getZPosition() if hasattr(raw_mmc, 'getZPosition') else raw_mmc.getPosition()
             except Exception:
                 z = None
-            return {"status": "success", "x": x, "y": y, "z": z}
+            result = {"status": "success", "x": x, "y": y, "z": z}
+            return result
         except Exception as e:
-            return {"status": "error", "message": str(e)}
+            result = {"status": "error", "message": str(e)}
+            return result
+        finally:
+            execution_time_ms = (time.time() - start_time) * 1000
+            if benchmark_logger and result is not None:
+                benchmark_logger.log_tool_call(
+                    tool_name="get_stage_position",
+                    input_params={"user_query": user_query},
+                    result=result,
+                    execution_time_ms=execution_time_ms
+                )
 
     @mcp.tool(
             name="get_microscope_events",
             description="Retrieve recent microscope activity events to check current state and discover user actions. Returns a chronological list of events (image captures, property changes, exposure adjustments, etc.) with timestamps. Use this to: verify that commanded actions completed successfully, discover manual user interactions with the GUI, check current microscope state, or debug timing issues. Each event includes type, timestamp, and relevant data."
     )
     def get_microscope_events(
-    limit: int = Field(100, description="Maximum number of recent events to retrieve (default 100).")
-    ) -> dict[str, Any]: #event_type: str | None = Field(None, description="Filter by specific event type: 'image_snapped', 'property_changed', 'exposure_changed', 'config_loaded', or None for all types.")
+        limit: int = Field(100, description="Maximum number of recent events to retrieve (default 100)."),
+        user_query: str = Field("", description="(Optional) The original user query, used for logging only.")
+    ) -> dict[str, Any]:
         """Get recent microscope events from the event cache"""
+        start_time = time.time()
+        result = None
         try:
-            events = event_cache.get_recent_events(limit=limit)#event_type=event_type
-            return {
+            events = event_cache.get_recent_events(limit=limit)
+            result = {
                 "status": "success",
                 "event_count": len(events),
                 "events": events
             }
+            return result
         except Exception as e:
-            return {
+            result = {
                 "status": "error",
                 "message": str(e)
             }
+            return result
+        finally:
+            execution_time_ms = (time.time() - start_time) * 1000
+            if benchmark_logger and result is not None:
+                benchmark_logger.log_tool_call(
+                    tool_name="get_microscope_events",
+                    input_params={"limit": limit, "user_query": user_query},
+                    result={"status": result.get("status"), "event_count": result.get("event_count")},
+                    execution_time_ms=execution_time_ms
+                )
         
     @mcp.tool(
     name="get_last_microscope_event",
     description="Get the most recent microscope event. Useful for quick checks like 'did my last snap() succeed?' or 'what was the last property change?'"
 )
     def get_last_microscope_event(
-        event_type: str | None = Field(None, description="Filter by event type or None for any event.")
+        event_type: str | None = Field(None, description="Filter by event type or None for any event."),
+        user_query: str = Field("", description="(Optional) The original user query, used for logging only.")
     ) -> dict[str, Any]:
         """Get the most recent event"""
+        start_time = time.time()
+        result = None
         try:
             event = event_cache.get_last_event(event_type=event_type)
             if event:
-                return {
+                result = {
                     "status": "success",
                     "event": event
                 }
+                return result
             else:
-                return {
+                result = {
                     "status": "success",
                     "event": None,
                     "message": "No events found"
                 }
+                return result
         except Exception as e:
-            return {
+            result = {
                 "status": "error",
                 "message": str(e)
             }
+            return result
+        finally:
+            execution_time_ms = (time.time() - start_time) * 1000
+            if benchmark_logger and result is not None:
+                benchmark_logger.log_tool_call(
+                    tool_name="get_last_microscope_event",
+                    input_params={"event_type": event_type, "user_query": user_query},
+                    result={"status": result.get("status")},
+                    execution_time_ms=execution_time_ms
+                )
             
     # New Tool added
     # ------------------------------------------#
@@ -485,7 +689,9 @@ def create_mcp_server(
         name="viewer_session_information",
         description="Retrieve detailed information about the current napari viewer session. Returns metadata about the napari-micromanager viewer state including window size, available layers, camera position, and current display settings. Use this to understand the current state of the microscopy viewer before making changes."
     )
-    def viewer_session_information():
+    def viewer_session_information(
+        user_query: str = Field("", description="(Optional) The original user query, used for logging only.")
+    ):
         """
         Return information regarding the viewer session of napari micromanager
         """
@@ -499,7 +705,9 @@ def create_mcp_server(
         name="viewer_list_of_layers",
         description="Get a list of all layers currently loaded in the napari viewer with their properties (name, type, visibility, opacity, colormap). Use this to understand what image layers, label layers, and other data layers are present in the viewer and plan layer manipulation operations."
     )
-    def viewer_list_of_layers():
+    def viewer_list_of_layers(
+        user_query: str = Field("", description="(Optional) The original user query, used for logging only.")
+    ):
         """
         Return a list of layers with all information
         """
@@ -514,7 +722,8 @@ def create_mcp_server(
         description="Capture a screenshot of the napari viewer's current state. This renders all visible layers and returns the image as an array. Set canvas_only=false to include GUI elements like scale bars and labels, or canvas_only=true to capture only the image data. Use this to visually inspect napari UI images.",
     )
     def viewer_screenshot(
-        canvas_only: bool = Field(..., description="If True, capture only the canvas (image data) without GUI elements. If False, include scale bars, labels, and other UI elements in the screenshot.")
+        canvas_only: bool = Field(..., description="If True, capture only the canvas (image data) without GUI elements. If False, include scale bars, labels, and other UI elements in the screenshot."),
+        user_query: str = Field("", description="(Optional) The original user query, used for logging only.")
     ):
         """
         Return the ImageContent to pass the image data to the LLM
@@ -530,7 +739,8 @@ def create_mcp_server(
         description="Capture the image data of a specific layer from the napari viewer. Provide the exact layer name to isolate and render only that layer's data. Useful for examining individual microscopy channels, labeled regions, or segmentation masks without interference from other layers."
     )
     def viewer_layer_screenshot(
-        layer_name: str = Field(..., description="The exact name of the layer to capture. Use viewer_list_of_layers to see available layer names.")
+        layer_name: str = Field(..., description="The exact name of the layer to capture. Use viewer_list_of_layers to see available layer names."),
+        user_query: str = Field("", description="(Optional) The original user query, used for logging only.")
     ):
         """
         Return the ImageContent of a specific layer to pass to the LLM
@@ -555,6 +765,7 @@ def create_mcp_server(
     def get_layer_data(
         layer_name: str = Field(..., description="Exact name of the layer to export. Use viewer_list_of_layers to see available names."),
         save_path: str | None = Field(None, description="Optional file path for the TIFF output. Defaults to /tmp/<sanitized_layer_name>.tif."),
+        user_query: str = Field("", description="(Optional) The original user query, used for logging only.")
     ) -> dict[str, Any]:
         """Export a layer's raw numpy data to a TIFF file."""
         if viewer_proxy is not None:
@@ -580,6 +791,7 @@ def create_mcp_server(
         overlay_path: str | None = Field(None, description="Optional path to a segmentation/label mask. Contours will be drawn as green outlines on the image."),
         frame_index: int = Field(0, description="For multi-frame TIFFs, which frame to display (0-indexed)."),
         query: str = Field("", description="Context about what to look for in the image. Returned alongside the image as text."),
+        user_query: str = Field("", description="(Optional) The original user query, used for logging only.")
     ):
         """
         Load an image from disk, optionally composite a segmentation overlay,
@@ -687,7 +899,8 @@ def create_mcp_server(
         name: str | None = Field(None, description="Optional name for the image layer. If not provided, the filename will be used."),
         colormap: str | None = Field(None, description="Colormap to apply to the image (e.g., 'gray', 'viridis', 'magma', 'red', 'green', 'blue'). Default is 'gray' for grayscale images."),
         blending: str | None = Field(None, description="Blending mode for layer compositing: 'translucent' (default), 'additive', or 'opaque'."),
-        channel_axis: int | str | None = Field(None, description="Axis index for multi-channel images. If provided, channels will be split into separate layers.")
+        channel_axis: int | str | None = Field(None, description="Axis index for multi-channel images. If provided, channels will be split into separate layers."),
+        user_query: str = Field("", description="(Optional) The original user query, used for logging only.")
     ):
         """
         Add an image layer from a file path
@@ -704,7 +917,8 @@ def create_mcp_server(
     def viewer_add_labels(
         path: str | None = Field(None, description="File path to the labels image file (TIFF, PNG, etc.). Use this if loading from disk. Mutually exclusive with img_data."),
         img_data: NDArray | None = Field(None, description="Labeled mask as a 2D, 3D, or 4D integer array where each unique value represents a different region/object. Supports Z-stacks and time series. Mutually exclusive with path."),
-        name: str | None = Field(None, description="Optional name for the labels layer in the viewer. If not provided, a default name will be generated.")
+        name: str | None = Field(None, description="Optional name for the labels layer in the viewer. If not provided, a default name will be generated."),
+        user_query: str = Field("", description="(Optional) The original user query, used for logging only.")
     ):
         """
         Add a labels layer from a file
@@ -719,9 +933,10 @@ def create_mcp_server(
         description="Add a points layer to the napari viewer for marking locations of interest. Provide a list of coordinate pairs (2D) or triples (3D) representing point positions in pixel/voxel space. Optionally set the layer name and point size for visualization. Use this to annotate cell locations, mark regions of interest, indicate measurement points, or overlay coordinate data on microscopy images."
     )
     def viewer_add_points(
-        points: list[list[float]] = Field(..., description="List of point coordinates. For 2D: [[y1, x1], [y2, x2], ...]. For 3D: [[z1, y1, x1], [z2, y2, x2], ...]. Coordinates are in pixel/voxel space."), 
+        points: list[list[float]] = Field(..., description="List of point coordinates. For 2D: [[y1, x1], [y2, x2], ...]. For 3D: [[z1, y1, x1], [z2, y2, x2], ...]. Coordinates are in pixel/voxel space."),
         name: str | None = Field(None, description="Optional name for the points layer."),
-        size: int | str = Field(10, description="Display size (diameter) of the points in pixels.")
+        size: int | str = Field(10, description="Display size (diameter) of the points in pixels."),
+        user_query: str = Field("", description="(Optional) The original user query, used for logging only.")
     ):
         """
         Add a points layer
@@ -737,7 +952,8 @@ def create_mcp_server(
         description="Remove a layer from the napari viewer by its exact name. Use this to clean up the viewer workspace by deleting intermediate processing results, redundant layers, or layers that are no longer needed for analysis. Check the current layers with viewer_list_of_layers before removing."
     )
     def viewer_remove_layer(
-        name: str = Field(..., description="The exact name of the layer to remove. Must match a layer name in the viewer.")
+        name: str = Field(..., description="The exact name of the layer to remove. Must match a layer name in the viewer."),
+        user_query: str = Field("", description="(Optional) The original user query, used for logging only.")
     ):
         """
         Remove an existince layer
@@ -753,14 +969,15 @@ def create_mcp_server(
         description="Modify visual properties of a layer in the napari viewer. Adjust visibility (True/False), opacity (0-1, where 0 is transparent), colormap ('viridis', 'magma', 'red', etc.), blending mode ('additive', 'translucent'), contrast limits for brightness/contrast adjustment, gamma for exposure, and optionally rename the layer. Use this to improve visualization, highlight specific features, or enhance contrast for better image analysis."
     )
     def viewer_set_layer_properties(
-        name: str = Field(..., description="The name of the layer to modify."), 
+        name: str = Field(..., description="The name of the layer to modify."),
         visible: bool | None = Field(None, description="Set layer visibility: True to show, False to hide."),
         opacity: float | None = Field(None, description="Layer opacity from 0 (transparent) to 1 (opaque)."),
         colormap: str | None = Field(None, description="Colormap name (e.g., 'gray', 'viridis', 'magma', 'red', 'green', 'blue')."),
         blending: str | None = Field(None, description="Blending mode: 'translucent', 'additive', or 'opaque'."),
         contrast_limits: list[float] | None = Field(None, description="Two-element list [min, max] for contrast/brightness adjustment."),
         gamma: float | str | None = Field(None, description="Gamma correction value for exposure adjustment (typically 0.5-2.0)."),
-        new_name: str | None = Field(None, description="New name to rename the layer to.")
+        new_name: str | None = Field(None, description="New name to rename the layer to."),
+        user_query: str = Field("", description="(Optional) The original user query, used for logging only.")
     ):
         """
         Set common properties on a layer name
@@ -777,7 +994,8 @@ def create_mcp_server(
         name: str = Field(..., description="Name of the layer to reorder."),
         index: int | str | None = Field(None, description="Absolute position index (0 = bottom). Mutually exclusive with before/after."),
         before: str | None = Field(None, description="Name of layer to position this layer before. Mutually exclusive with index/after."),
-        after: str | None = Field(None, description="Name of layer to position this layer after. Mutually exclusive with index/before.")
+        after: str | None = Field(None, description="Name of layer to position this layer after. Mutually exclusive with index/before."),
+        user_query: str = Field("", description="(Optional) The original user query, used for logging only.")
     ):
         """
         Reorder a layer by name
@@ -792,7 +1010,8 @@ def create_mcp_server(
         description="Select/activate a specific layer in the napari viewer by name. The active layer is highlighted in the layers panel and operations like drawing, annotation, or selection tools apply to this layer. Use this when you need to work with a specific layer or prepare a layer for editing."
     )
     def viewer_set_active_layer(
-        name: str = Field(..., description="Name of the layer to activate/select.")
+        name: str = Field(..., description="Name of the layer to activate/select."),
+        user_query: str = Field("", description="(Optional) The original user query, used for logging only.")
     ):
         """
         Set the selected/active layer by name
@@ -806,7 +1025,9 @@ def create_mcp_server(
         name="viewer_reset_view",
         description="Reset the camera view to fit all visible data layers optimally in the viewer window. This adjusts zoom and pan to show the entire image extent. Use this to get a complete overview of your data after zooming into specific regions, or to standardize the view between different analyses."
     )
-    def viewer_reset_view():
+    def viewer_reset_view(
+        user_query: str = Field("", description="(Optional) The original user query, used for logging only.")
+    ):
         """
         Reset the camera view to fit the data
         """
@@ -822,7 +1043,8 @@ def create_mcp_server(
     def viewer_set_camera(
         center: list[float] | None = Field(None, description="Center position coordinates [y, x] for 2D or [z, y, x] for 3D to pan the camera to."),
         zoom: float | str | None = Field(None, description="Zoom level (larger values = more magnification). Typical range: 0.5 to 10+."),
-        angle: float | str | None = Field(None, description="Rotation angle in degrees for 3D viewing mode.")
+        angle: float | str | None = Field(None, description="Rotation angle in degrees for 3D viewing mode."),
+        user_query: str = Field("", description="(Optional) The original user query, used for logging only.")
     ):
         """
         Set the camera properties: center, zoom, angle
@@ -837,7 +1059,8 @@ def create_mcp_server(
         description="Switch the napari viewer between 2D and 3D display modes. Set ndisplay=2 for standard 2D microscopy slice viewing, or ndisplay=3 for 3D volumetric visualization when working with Z-stack or 3D image data. Use this to toggle between 2D slice inspection and 3D volume rendering."
     )
     def viewer_set_ndisplay(
-        ndisplay: int | str = Field(..., description="Number of displayed dimensions: 2 for 2D view, 3 for 3D volumetric view.")
+        ndisplay: int | str = Field(..., description="Number of displayed dimensions: 2 for 2D view, 3 for 3D volumetric view."),
+        user_query: str = Field("", description="(Optional) The original user query, used for logging only.")
     ):
         """
         Set number of displayed dimension (2 or 3)
@@ -852,8 +1075,9 @@ def create_mcp_server(
         description="Navigate through a specific dimension (axis) of multi-dimensional image data. Provide the axis name/index (e.g., 'Z' for Z-stack depth, 0, 1, 2, etc.) and the step value. Use this to browse through Z-slices in a Z-stack, time frames in a time-lapse, or channels in multi-channel images. This is equivalent to moving the slider for that dimension."
     )
     def viewer_set_dims_current_step(
-        axis: int | str = Field(..., description="Axis identifier: integer index (0, 1, 2, ...) or axis name ('Z', 'T', 'C' for Z-stack, time, channel)."), 
-        value: int | str = Field(..., description="Step value (slice index) to navigate to along the specified axis. Must be within valid range for that dimension.")
+        axis: int | str = Field(..., description="Axis identifier: integer index (0, 1, 2, ...) or axis name ('Z', 'T', 'C' for Z-stack, time, channel)."),
+        value: int | str = Field(..., description="Step value (slice index) to navigate to along the specified axis. Must be within valid range for that dimension."),
+        user_query: str = Field("", description="(Optional) The original user query, used for logging only.")
     ):
         """
         Set the current step (slider position for a specific axis)
@@ -868,7 +1092,8 @@ def create_mcp_server(
         description="Toggle the display of a pixel grid overlay in the napari viewer. Set enabled=true to show the grid (useful for precise pixel-level measurements and alignment), or enabled=false to hide it for a cleaner view. Use this to switch between detailed pixel-level work and overview visualization modes."
     )
     def viewer_set_grid(
-        enabled: bool | str = Field(True, description="Enable (True) or disable (False) the pixel grid overlay.")
+        enabled: bool | str = Field(True, description="Enable (True) or disable (False) the pixel grid overlay."),
+        user_query: str = Field("", description="(Optional) The original user query, used for logging only.")
     ):
         """
         Enable or disable grid view
@@ -884,16 +1109,17 @@ def create_mcp_server(
             description="Add a tracks layer to the napari viewer for visualizing object trajectories over time."
     )
     def viewer_add_tracks(
-        track_data: NDArray = Field(description="""NxD+1 NumPy Array or list containig the coordinates of N vertices with a 
-                track ID and coordinats in D dimensions. The ordering of these dimensions is the same 
-                as the ordering of the dimensions for image layers. This array is always accessible through the 
+        track_data: NDArray = Field(description="""NxD+1 NumPy Array or list containig the coordinates of N vertices with a
+                track ID and coordinats in D dimensions. The ordering of these dimensions is the same
+                as the ordering of the dimensions for image layers. This array is always accessible through the
                 layer.data property and will grow or shrink as new tracks are either added or deleted.
-                The Tracks layer assumes the first column is the track_id, the second column is the time axis, 
-                and columns 3-5 are Z, Y, and X, respectively. Other feature can be added in other coloumns. 
+                The Tracks layer assumes the first column is the track_id, the second column is the time axis,
+                and columns 3-5 are Z, Y, and X, respectively. Other feature can be added in other coloumns.
                 Each row is one vertex in a track. All vertices with the same track_id are joined into a single track."""),
         features: dict[str, Any] | None = Field(None, description="Features table where each row corresponds to a point and each column is a feature."),
-        tail_width: float | None = Field(None, description="Float value representing the width of the track tails in pixels."), 
-        tail_length: float | None = Field(None, description="Float value representing the length of the positive (backward in time) tails in units of time.") 
+        tail_width: float | None = Field(None, description="Float value representing the width of the track tails in pixels."),
+        tail_length: float | None = Field(None, description="Float value representing the length of the positive (backward in time) tails in units of time."),
+        user_query: str = Field("", description="(Optional) The original user query, used for logging only.")
     ) -> dict[str, Any]:
         """It add a Track layer to the layer List."""
 
