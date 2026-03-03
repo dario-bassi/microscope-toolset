@@ -181,6 +181,10 @@ cython_debug/
 *.md
 !microscope_tool.md
 !tracking.md
+# Documentation files (always track)
+!src/CLAUDE.md
+!src/ARCHITECTURE.md
+!src/self-learn/knowledge/**/*.md
 
 # ignore database
 chroma_storage/
