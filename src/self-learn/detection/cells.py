@@ -1,7 +1,7 @@
 """Cell detection module for smart microscopy.
 
 Provides detection functions that work through standard pymmcore-plus API.
-Builds on lessons from challenges 1-4.
+Supports brightfield and fluorescence imaging across multiple magnifications.
 """
 
 import numpy as np

@@ -1,7 +1,7 @@
-"""Utility modules.
+"""Utility modules for experiment analysis and documentation.
 
 Modules:
-    diagnostics    -- Image saving for challenge submissions
+    diagnostics    -- Image saving and validation for analysis results
     image          -- Grayscale conversion, normalization, contrast
     showcase       -- Multi-panel showcase figures with annotations
     experiment_log -- Structured JSON experiment logging

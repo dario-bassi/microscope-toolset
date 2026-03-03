@@ -1,17 +1,16 @@
-"""Diagnostic image saving for challenge submissions.
+"""Diagnostic image saving for experiment analysis.
 
-Every submission must include at least one saved snapshot showing what
-the microscope acquired and what the analysis found. This is non-negotiable
-per orchestrator directive.
+Saves diagnostic snapshots and overlays for validation and troubleshooting.
+Useful for documenting image acquisition and analysis results.
 
 Usage:
-    from src.diagnostics import save_snapshot, save_overlay
+    from src.utils.diagnostics import save_snapshot, save_overlay
 
     # Save raw channel images
-    save_snapshot(img, 153, 'membrane_raw')
+    save_snapshot(img, 'exp_001', 'membrane_raw')
 
     # Save image with detected cell centroids overlaid
-    save_overlay(img, cells, 153, 'detected_cells')
+    save_overlay(img, cells, 'exp_001', 'detected_cells')
 """
 
 import numpy as np
@@ -19,18 +18,18 @@ import cv2
 import os
 
 
-def save_snapshot(img, challenge_id, label='snapshot'):
+def save_snapshot(img, experiment_id, label='snapshot'):
     """Save a grayscale image as PNG with auto-scaling.
 
     Args:
         img: 2D numpy array (any dtype).
-        challenge_id: Challenge number for filename.
+        experiment_id: Experiment identifier for filename (e.g., 'exp_001').
         label: Descriptive label for the image.
 
     Returns:
         str: Path to saved file.
     """
-    path = f'/tmp/ch{challenge_id}_{label}.png'
+    path = f'/tmp/{experiment_id}_{label}.png'
     img_f = img.astype(float)
     if img_f.max() > img_f.min():
         scaled = ((img_f - img_f.min()) / (img_f.max() - img_f.min()) * 255)
@@ -40,7 +39,7 @@ def save_snapshot(img, challenge_id, label='snapshot'):
     return path
 
 
-def save_overlay(img, cells, challenge_id, label='overlay',
+def save_overlay(img, cells, experiment_id, label='overlay',
                  marker_color=(0, 255, 0), marker_radius=8):
     """Save image with cell centroids marked as circles.
 
@@ -48,7 +47,7 @@ def save_overlay(img, cells, challenge_id, label='overlay',
         img: 2D grayscale image.
         cells: List of dicts with 'x', 'y' (pixel coords within image)
             or list of (x, y) tuples.
-        challenge_id: Challenge number for filename.
+        experiment_id: Experiment identifier for filename (e.g., 'exp_001').
         label: Descriptive label.
         marker_color: BGR color for markers.
         marker_radius: Circle radius in pixels.
@@ -56,7 +55,7 @@ def save_overlay(img, cells, challenge_id, label='overlay',
     Returns:
         str: Path to saved file.
     """
-    path = f'/tmp/ch{challenge_id}_{label}.png'
+    path = f'/tmp/{experiment_id}_{label}.png'
 
     # Auto-scale to 8-bit
     img_f = img.astype(float)
@@ -83,20 +82,20 @@ def save_overlay(img, cells, challenge_id, label='overlay',
     return path
 
 
-def save_composite(images, titles, challenge_id, label='composite', cols=3):
+def save_composite(images, titles, experiment_id, label='composite', cols=3):
     """Save a composite image showing multiple channels side by side.
 
     Args:
         images: List of 2D arrays.
         titles: List of title strings (same length as images).
-        challenge_id: Challenge number.
+        experiment_id: Experiment identifier for filename (e.g., 'exp_001').
         label: Descriptive label.
         cols: Number of columns in the grid.
 
     Returns:
         str: Path to saved file.
     """
-    path = f'/tmp/ch{challenge_id}_{label}.png'
+    path = f'/tmp/{experiment_id}_{label}.png'
 
     n = len(images)
     rows = (n + cols - 1) // cols

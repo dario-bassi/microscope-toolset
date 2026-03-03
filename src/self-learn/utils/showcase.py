@@ -1,7 +1,8 @@
-"""Showcase figure generator for challenge submissions.
+"""Showcase figure generator for experiment results.
 
 Creates multi-panel publication-style figures with annotations,
-scale bars, and result text. Saves to the showcase directory.
+scale bars, and result text. Ideal for documenting microscopy
+experiments and analysis results.
 
 Functions:
     make_showcase -- Build and save a multi-panel showcase figure
@@ -146,7 +147,7 @@ def annotate_image(img, centroids=None, contours=None, text=None,
     return bgr
 
 
-def make_showcase(panels, challenge_id, description='', cols=None,
+def make_showcase(panels, experiment_id, description='', cols=None,
                   panel_size=(256, 256), results_text=None, output_dir=None):
     """Build and save a multi-panel showcase figure.
 
@@ -157,7 +158,7 @@ def make_showcase(panels, challenge_id, description='', cols=None,
             Optional 'centroids': list for annotation.
             Optional 'contours': list for annotation.
             Optional 'scalebar': pixel_size_um for auto scale bar.
-        challenge_id: Challenge number or identifier.
+        experiment_id: Experiment identifier (e.g., 'exp_001' or descriptive name).
         description: Short description for filename.
         cols: Number of columns (default: auto based on panel count).
         panel_size: (width, height) to resize each panel.
@@ -241,8 +242,8 @@ def make_showcase(panels, challenge_id, description='', cols=None,
                         cv2.FONT_HERSHEY_SIMPLEX, 0.45, (200, 200, 200), 1)
 
     # Save
-    desc = description.replace(' ', '_')[:40] if description else 'showcase'
-    filename = f'agent_ch{challenge_id}_{desc}.png'
+    desc = description.replace(' ', '_')[:40] if description else 'result'
+    filename = f'{experiment_id}_{desc}.png'
     path = os.path.join(output_dir, filename)
     cv2.imwrite(path, canvas)
     return path
