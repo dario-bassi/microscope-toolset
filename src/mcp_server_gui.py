@@ -231,7 +231,15 @@ class MCPWorker(QObject):
                 # Initialize benchmark logger if needed
                 timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
                 run_id = f"benchmark_{timestamp}"
-                benchmark_logger = BenchmarkLogger(agent_type="untrained", run_id=run_id)
+                ui = get_user_information()
+                benchmark_agent = ui.get('benchmark_agent_enable', '')
+                if benchmark_agent == 'false':
+                    agent_type = 'untrained'
+                elif benchmark_agent == 'true':
+                    agent_type = 'trained'
+                else:
+                    agent_type = 'untrained' # default
+                benchmark_logger = BenchmarkLogger(agent_type=agent_type, run_id=run_id)
                 logger.info(f"Benchmark logger initialized: {run_id}")
 
                 mcp_server = create_mcp_server(

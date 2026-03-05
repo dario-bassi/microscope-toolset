@@ -57,6 +57,7 @@ def get_user_information() -> dict:
     user_information['micromanager_devices_collection'] = os.getenv("DEVDB")
     user_information['elastic_search_path_home'] = os.getenv("ELASTICSEARCH")
     user_information['fastmcp_server_path'] = os.getenv("FASTMCP_SERVER")
+    user_information['benchmark_agent_enable'] = os.getenv("BENCHMARK_KNOWLEDGE_ENABLED")
 
     return user_information
 
