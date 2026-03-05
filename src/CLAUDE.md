@@ -80,7 +80,7 @@ The agent has access to Python code execution via `execute_python_code`. Use the
 
 ```python
 from useq import MDASequence
-from src.hardware.core import run_events
+from src.self_learn.hardware.core import run_events
 
 seq = MDASequence(
     time_plan={"loops": <NUM_FRAMES>, "interval": <INTERVAL_SEC>},
@@ -131,7 +131,7 @@ When using `execute_python_code`:
 ### Fixed acquisitions → `MDASequence` + `run_events`
 ```python
 from useq import MDASequence
-from src.hardware.core import run_events
+from src.self_learn.hardware.core import run_events
 
 seq = MDASequence(
     time_plan={"loops": <NUM_FRAMES>, "interval": <INTERVAL_SEC>},
@@ -146,7 +146,7 @@ results = run_events(core, list(seq))
 ### Multi-position timelapse → `MDASequence`
 ```python
 from useq import MDASequence
-from src.hardware.core import run_events
+from src.self_learn.hardware.core import run_events
 
 positions = [{"x": <X1_UM>, "y": <Y1_UM>}, {"x": <X2_UM>, "y": <Y2_UM>}]
 seq = MDASequence(
@@ -250,17 +250,17 @@ Adjustments for real hardware:
 
 When using `execute_python_code`, you have access to:
 
-### Analysis Modules (`src/analysis/`)
+### Analysis Modules (`src/self-learn/analysis/`)
 Feature extraction and quantification. See `ARCHITECTURE.md` for complete list.
 
 Import in your code:
 ```python
-from src.analysis.<module> import <function>
+from src.self_learn.analysis.<module> import <function>
 
 # Examples:
-from src.analysis.morphometry import measure_morphometry
-from src.analysis.tracking import track_cells
-from src.analysis.intensity import classify_intensity
+from src.self_learn.analysis.morphometry import measure_morphometry
+from src.self_learn.analysis.tracking import track_cells
+from src.self_learn.analysis.intensity import classify_intensity
 ```
 
 Categories available:
@@ -269,39 +269,39 @@ Categories available:
 - Motion analysis (tracking, flow, migration)
 - Signal processing (spectral unmixing, kinetics)
 
-### Detection Modules (`src/detection/`)
+### Detection Modules (`src/self-learn/detection/`)
 Object segmentation and localization.
 
 ```python
-from src.detection.cells import detect_cells
-from src.detection.threshold import adaptive_threshold
-from src.detection.segmentation import watershed_segment
+from src.self_learn.detection.cells import detect_cells
+from src.self_learn.detection.threshold import adaptive_threshold
+from src.self_learn.detection.segmentation import watershed_segment
 ```
 
-### Hardware Module (`src/hardware/core.py`)
+### Hardware Module (`src/self-learn/hardware/core.py`)
 Pre-configured via `mmc` instance (already available):
 ```python
-from src.hardware.core import snap, move_to, set_objective, run_events
-from src.hardware.core import pixel_to_world, world_to_pixel
-from src.hardware.core import get_pixel_size, get_z, set_z
+from src.self_learn.hardware.core import snap, move_to, set_objective, run_events
+from src.self_learn.hardware.core import pixel_to_world, world_to_pixel
+from src.self_learn.hardware.core import get_pixel_size, get_z, set_z
 ```
 
-### Workflow Modules (`src/workflows/`)
+### Workflow Modules (`src/self-learn/workflows/`)
 High-level acquisition protocols.
 
 ```python
-from src.workflows.autofocus import autofocus_mda
-from src.workflows.adaptive import adaptive_survey_mda
+from src.self_learn.workflows.autofocus import autofocus_mda
+from src.self_learn.workflows.adaptive import adaptive_survey_mda
 # See ARCHITECTURE.md for full list
 ```
 
-### Utility Modules (`src/utils/`)
+### Utility Modules (`src/self-learn/utils/`)
 Logging and visualization.
 
 ```python
-from src.utils.showcase import make_showcase
-from src.utils.experiment_log import ExperimentLog
-from src.utils.diagnostics import save_snapshot
+from src.self_learn.utils.showcase import make_showcase
+from src.self_learn.utils.experiment_log import ExperimentLog
+from src.self_learn.utils.diagnostics import save_snapshot
 ```
 
 **All modules include ⚠️ "Real Microscope Considerations" sections.** Review before using on real hardware.
@@ -314,7 +314,7 @@ The agent can discover and use functions in three ways:
 Ask the agent to explore via `execute_python_code`:
 ```python
 # Agent executes this code:
-import src.analysis.morphometry as morph
+import src.self_learn.analysis.morphometry as morph
 help(morph)  # Prints module docstring with available functions
 ```
 
@@ -457,7 +457,7 @@ export MICROSCOPE_SHOWCASE_DIR=/data/experiments/my_project/figures
 
 Agent can specify output paths directly in code:
 ```python
-from src.utils.showcase import make_showcase
+from src.self_learn.utils.showcase import make_showcase
 
 make_showcase(
     panels=[...],
@@ -472,7 +472,7 @@ make_showcase(
 **Problem:** Z-position drifts over time, corrupting measurements
 **Solution:** Use autofocus between acquisition frames
 ```python
-from src.workflows.autofocus import autofocus_mda
+from src.self_learn.workflows.autofocus import autofocus_mda
 # Agent asks you to enable autofocus, runs this code in live mode
 gen, on_frame, state = autofocus_mda(mmc, channel="<FOCUS_CHANNEL>")
 results = run_mda_with_feedback(gen(), on_frame=on_frame)
@@ -483,7 +483,7 @@ best_z = state["best_z"]
 **Problem:** Signal intensity decreases over time due to fluorophore photodestruction
 **Solution:** Correct each frame using a reference ROI that doesn't move
 ```python
-from src.analysis.fluorescence import correct_photobleaching
+from src.self_learn.analysis.fluorescence import correct_photobleaching
 corrected = correct_photobleaching(target_frames, baseline_reference_frames)
 ```
 
@@ -491,7 +491,7 @@ corrected = correct_photobleaching(target_frames, baseline_reference_frames)
 **Problem:** Signal from one channel leaks into another, confounding analysis
 **Solution:** Apply unmixing using a pre-computed bleedthrough matrix
 ```python
-from src.analysis.spectral import unmix_channels
+from src.self_learn.analysis.spectral import unmix_channels
 ch1_corrected, ch2_corrected = unmix_channels(
     ch1_raw, ch2_raw, bleedthrough_matrix
 )
@@ -501,8 +501,8 @@ ch1_corrected, ch2_corrected = unmix_channels(
 **Problem:** Threshold-based detection fails with variable image quality
 **Solution:** Use adaptive thresholding and morphological preprocessing
 ```python
-from src.detection.threshold import adaptive_threshold
-from src.analysis.image import preprocess
+from src.self_learn.detection.threshold import adaptive_threshold
+from src.self_learn.analysis.image import preprocess
 
 img_prep = preprocess(img, method="clahe")  # Contrast-limited histogram equalization
 binary = adaptive_threshold(img_prep, sigma=2.5)
