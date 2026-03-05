@@ -1,4 +1,5 @@
 from pymmcore_plus import CMMCorePlus
+from pymmcore_plus.experimental.unicore import UniMMCore
 
 from src.virtual_microscope.microscope_sim_optimized import MicroscopeSimOptmized
 from src.virtual_microscope.pymmcore_camera_sim import SimCameraDevice
@@ -9,7 +10,6 @@ from src.virtual_microscope.pymmcore_slm_sim import SimSLMDevice
 import src.virtual_microscope.simulation_bridge as bridge_module
 from src.virtual_microscope.simulation_bridge import SimulationBridge
 from src.virtual_microscope.pymmcore_z_stage_sim import SimZStageDevice
-from pymmcore_plus.experimental.unicore.core._unicore import UniMMCore
 import logging
 import sys
 

@@ -94,10 +94,11 @@ results = run_events(mmc, list(seq))
 
 ```python
 from useq import MDAEvent
+from src.local.mda_helpers import run_mda_with_feedback
 
 state = {"measurement": 0}
 
-def on_frame(img, event):
+def on_frame(img, event, metadata):
     state["measurement"] = <analyze>(img)
 
 def my_generator():
@@ -106,7 +107,7 @@ def my_generator():
             return
         yield MDAEvent(channel={"config": "<CHANNEL>"})
 
-results = run_mda_with_feedback(my_generator(), on_frame=on_frame)
+results = run_mda_with_feedback(mmc, my_generator(), on_frame=on_frame)
 ```
 
 ## Code Execution Modes
@@ -160,11 +161,11 @@ results = run_events(core, list(seq))
 ### Adaptive/closed-loop → generator with feedback
 ```python
 from useq import MDAEvent
-from src.hardware.core import run_events
+from src.local.mda_helpers import run_mda_with_feedback
 
 state = {"measurement": 0}
 
-def on_frame(img, event):
+def on_frame(img, event, metadata):
     # Update state based on image analysis
     result = <your_analysis_function>(img)
     state["measurement"] = result
@@ -175,7 +176,7 @@ def my_generator():
             return  # Early termination condition
         yield MDAEvent(channel={"config": "<CHANNEL>"})
 
-results = run_events(core, my_generator(), on_frame=on_frame)
+results = run_mda_with_feedback(mmc, my_generator(), on_frame=on_frame)
 ```
 
 ## Common Agent Workflow Patterns
@@ -215,9 +216,10 @@ Visualize results in napari with viewer_add_image()
 ### Pattern 3: Adaptive Closed-Loop Acquisition
 
 ```python
-Execute Python (live mode) with run_mda_with_feedback():
+Execute Python (live mode) with run_mda_with_feedback(mmc, ...):
   - Define my_generator() yielding MDAEvent objects
-  - Define on_frame(img, event) callback for real-time analysis
+  - Define on_frame(img, event, metadata) callback for real-time analysis
+  - Pass mmc as first parameter: run_mda_with_feedback(mmc, generator, on_frame=callback)
   - Generator reads shared state updated by on_frame
   - Terminates when condition met (e.g., cell count > threshold)
 ```
@@ -335,7 +337,7 @@ These are available in the `execute_python_code` namespace (no import needed):
 
 ```python
 # Auto-center on brightest region, iteratively refining
-result = center_on_cell(pixel_size_um=0.25, threshold_sigma=2.5, max_iterations=2)
+result = center_on_cell(mmc, pixel_size_um=0.25, threshold_sigma=2.5, max_iterations=2)
 # Returns: {image, centered (bool), peak, offset_um, centroid_px}
 
 # Find bright region centroid in an image
@@ -345,10 +347,26 @@ cy, cx, area_px, peak = find_bright_centroid(image, threshold_sigma=2.5)
 cells = detect_cells(image, threshold_sigma=2.5, min_area_px=50,
                      pixel_size_um=1.0, fill_holes=True)
 # Returns: list of {centroid_px, area_um2, peak, bbox}
-
-# Feedback-based MDA execution
-results = run_mda_with_feedback(events, on_frame=callback_func)
 ```
+
+**Feedback-based MDA Execution** — For adaptive acquisition loops:
+
+```python
+from src.local.mda_helpers import run_mda_with_feedback
+from useq import MDAEvent
+
+def on_frame(img, event, metadata):
+    # Analyze image, update shared state for adaptive control
+    pass
+
+def my_generator():
+    for i in range(max_frames):
+        yield MDAEvent(index={'t': i}, exposure=50)
+
+# Run with real-time feedback: mmc is required as first parameter
+results = run_mda_with_feedback(mmc, my_generator(), on_frame=on_frame)
+```
+See `src/local/mda_helpers.py` for full documentation.
 
 Use these in your code instead of reimplementing common operations.
 
