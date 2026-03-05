@@ -179,9 +179,9 @@ cython_debug/
 
 # markdown
 *.md
+# Documentation files (always track)
 !microscope_tool.md
 !tracking.md
-# Documentation files (always track)
 !src/CLAUDE.md
 !src/ARCHITECTURE.md
 !src/self-learn/knowledge/**/*.md
@@ -222,3 +222,16 @@ vector-database/ca151909-59c6-4a6a-ba00-a2e1652f5669/data_level0.bin
 *.tiff
 # csv file
 *.csv
+
+# tif files
+*.tif
+
+# npy
+*.npy
+
+# ipynb
+*.ipynb
+!database_creation.ipynb
+
+# mp4
+*.mp4
