@@ -117,6 +117,8 @@ def create_mcp_server(
             return result
         finally:
             execution_time_ms = (time.time() - start_time) * 1000
+            if benchmark_logger and user_query:
+                benchmark_logger.set_query(user_query)
             if benchmark_logger and result is not None:
                 benchmark_logger.log_tool_call(
                     tool_name="pymmcore_api_database",
@@ -163,6 +165,8 @@ def create_mcp_server(
             return result
         finally:
             execution_time_ms = (time.time() - start_time) * 1000
+            if benchmark_logger and user_query:
+                benchmark_logger.set_query(user_query)
             if benchmark_logger and result is not None:
                 benchmark_logger.log_tool_call(
                     tool_name="micromanager_device_database",
@@ -208,6 +212,8 @@ def create_mcp_server(
             return result
         finally:
             execution_time_ms = (time.time() - start_time) * 1000
+            if benchmark_logger and user_query:
+                benchmark_logger.set_query(user_query)
             if benchmark_logger and result is not None:
                 benchmark_logger.log_tool_call(
                     tool_name="pdfs_publication_database",
@@ -235,6 +241,8 @@ def create_mcp_server(
              return result
          finally:
              execution_time_ms = (time.time() - start_time) * 1000
+             if benchmark_logger and user_query:
+                 benchmark_logger.set_query(user_query)
              if benchmark_logger and result is not None:
                  benchmark_logger.log_tool_call(
                      tool_name="reformulate_user_query",
@@ -291,6 +299,8 @@ def create_mcp_server(
             return result
         finally:
             execution_time_ms = (time.time() - start_time) * 1000
+            if benchmark_logger and user_query:
+                benchmark_logger.set_query(user_query)
             if benchmark_logger and result is not None:
                 benchmark_logger.log_tool_call(
                     tool_name="get_microscope_settings",
@@ -312,6 +322,8 @@ def create_mcp_server(
             "no_coding_query": True
         }
         execution_time_ms = (time.time() - start_time) * 1000
+        if benchmark_logger and user_query:
+            benchmark_logger.set_query(user_query)
         if benchmark_logger:
             benchmark_logger.log_tool_call(
                 tool_name="answer_no_coding_query",
@@ -420,6 +432,8 @@ def create_mcp_server(
             return result
         finally:
             execution_time_ms = (time.time() - start_time) * 1000
+            if benchmark_logger and user_query:
+                benchmark_logger.set_query(user_query)
             if benchmark_logger and result is not None:
                 benchmark_logger.log_tool_call(
                     tool_name="execute_python_code",
@@ -467,6 +481,8 @@ def create_mcp_server(
             return result
         finally:
             execution_time_ms = (time.time() - start_time) * 1000
+            if benchmark_logger and user_query:
+                benchmark_logger.set_query(user_query)
             if benchmark_logger and result is not None:
                 benchmark_logger.log_tool_call(
                     tool_name="snap_image",
@@ -509,6 +525,8 @@ def create_mcp_server(
             return result
         finally:
             execution_time_ms = (time.time() - start_time) * 1000
+            if benchmark_logger and user_query:
+                benchmark_logger.set_query(user_query)
             if benchmark_logger and result is not None:
                 benchmark_logger.log_tool_call(
                     tool_name="move_stage",
@@ -559,6 +577,8 @@ def create_mcp_server(
             return result
         finally:
             execution_time_ms = (time.time() - start_time) * 1000
+            if benchmark_logger and user_query:
+                benchmark_logger.set_query(user_query)
             if benchmark_logger and result is not None:
                 benchmark_logger.log_tool_call(
                     tool_name="set_objective",
@@ -596,6 +616,8 @@ def create_mcp_server(
             return result
         finally:
             execution_time_ms = (time.time() - start_time) * 1000
+            if benchmark_logger and user_query:
+                benchmark_logger.set_query(user_query)
             if benchmark_logger and result is not None:
                 benchmark_logger.log_tool_call(
                     tool_name="get_stage_position",
@@ -631,6 +653,8 @@ def create_mcp_server(
             return result
         finally:
             execution_time_ms = (time.time() - start_time) * 1000
+            if benchmark_logger and user_query:
+                benchmark_logger.set_query(user_query)
             if benchmark_logger and result is not None:
                 benchmark_logger.log_tool_call(
                     tool_name="get_microscope_events",
@@ -673,6 +697,8 @@ def create_mcp_server(
             return result
         finally:
             execution_time_ms = (time.time() - start_time) * 1000
+            if benchmark_logger and user_query:
+                benchmark_logger.set_query(user_query)
             if benchmark_logger and result is not None:
                 benchmark_logger.log_tool_call(
                     tool_name="get_last_microscope_event",
