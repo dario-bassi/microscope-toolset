@@ -1188,6 +1188,41 @@ def create_mcp_server(
             }
 
         return result_data
+    
+    @mcp.tool(
+        name="tool_for_segmenting",
+        description="Segment a cellular image from a microscope using Cellpose. This tools is ideal to segment" \
+        "single/multi-cells images from microscope. They can have single or multi channel fluorescence" \
+        "and can a"
+    )
+    def tool_for_segmenting(
+        path: str | None = Field(None, description="File path to the image or list of images (.tif)."),
+        img: NDArray | list[NDArray] | None = Field(None, description="It can be list of 2D/3D/4D images, or array of 2D/3D/4D images. Images must have 3 channels."),
+        mask_name: str | None = Field(None, description="Name of the mask that will use to describe the mask."),
+        batch_size: int = Field(8, description="Number of 256x256 patches to run simultaneously on the GPU (can make smaller or bigger depending on GPU memory usage). Defaults to 8"),
+        resample: bool = Field(True, description="Run dynamics at original image size (will be slower but create more accurate boundaries)."),
+        channels_axis: int | None = Field(None, description="Channel axis in element of list x, or of np.ndarray x. if None, channels dimension is attempted to be automatically determined. Defaults to None."), 
+        z_axis: int | None = Field(None, description="Z axis in element of list x, or of np.ndarray x. if None, z dimension is attempted to be automatically determined. Defaults to None."),
+        normalize: bool = Field(True, description="if True, normalize data so 0.0=1st percentile and 1.0=99th percentile of image intensities in each channel; can also pass dictionary of parameters (all keys are optional, default values shown): " \
+        "- ”lowhigh”=None : pass in normalization values for 0.0 and 1.0 as list [low, high] (if not None, all following parameters ignored) " \
+        "- ”sharpen”=0 ; sharpen image with high pass filter, recommended to be 1/4-1/8 diameter of cells in pixels " \
+        "- ”normalize”=True ; run normalization (if False, all following parameters ignored) " \
+        "- ”percentile”=None : pass in percentiles to use as list [perc_low, perc_high] " \
+        "- ”tile_norm_blocksize”=0 ; compute normalization in tiles across image to brighten dark areas, to turn on set to window size in pixels (e.g. 100) " \
+        "- ”norm3D”=True ; compute normalization across entire z-stack rather than plane-by-plane in stitching mode. " \
+        "Defaults to True."),
+        rescale: float | None = Field(None, description="Resize factor for each image, if None, set to 1.0; (only used if diameter is None). Defaults to None."),
+        diameter: float | list[float] | None = Field(None, description="diameters are used to rescale the image to 30 pix cell diameter."),
+        flow_threshold: float = Field(0.4, description="Flow error threshold (all cells with errors below threshold are kept) (not used for 3D). Defaults to 0.4."),
+        cellprob_threshold: float = Field(0.0, description="All pixels with value above threshold kept for masks, decrease to find more and larger masks. Defaults to 0.0."),
+        augment: bool = Field(False, description="Tiles image with overlapping tiles and flips overlapped regions to augment. Defaults to False.")
+    ) -> dict[str, Any]:
+        
+        return viewer.segment_image(path=path,img=img, mask_name=mask_name,
+                                                batch_size=batch_size, resample=resample, channels_axis=channels_axis,
+                                                z_axis=z_axis, normalize=normalize, rescale=rescale,
+                                                diameter=diameter, flow_threshold=flow_threshold,
+                                                cellprob_threshold=cellprob_threshold, augment=augment)
 
 
     return mcp

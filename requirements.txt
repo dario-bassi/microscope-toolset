@@ -35,3 +35,4 @@ opencv-python
 pre-commit
 vulture
 converage
+cellpose

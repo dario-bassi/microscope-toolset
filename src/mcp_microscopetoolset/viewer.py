@@ -12,6 +12,9 @@ from napari import Viewer
 from typing import Any
 import contextlib
 import tifffile
+from cellpose import models
+from cellpose.io import imread, imsave
+import torch
 
 
 #  logger
@@ -665,4 +668,110 @@ class NapariViewerMC:
             return {
                 "status": "error",
                 "message": f"Failed to add tracks: {e}"
+            }
+        
+    
+    def segment_image(self,
+                       path: str | None = None,
+                       img: np.ndarray | list[np.ndarray] | None = None,
+                       mask_name: str | None = None,
+                       batch_size: int = 8,
+                       resample: bool = True,
+                       channels_axis: int | None = None, 
+                       z_axis: int | None = None,
+                       normalize: bool = True,
+                       rescale: float | None = None,
+                       diameter: float | list[float] | None = None,
+                       flow_threshold: float = 0.4,
+                       cellprob_threshold: float = 0.0,
+                       augment: bool = False):
+        """
+        This function segment a cell using cellpose
+        """
+        try:
+            # chek if GPU is available
+            if torch.cuda.is_available():
+                gpu_available = True
+            else:
+                gpu_available = False
+
+            # select cellpose model
+            model = models.CellposeModel(gpu=gpu_available)
+
+            # read an image
+            if path is not None:
+                img_array = imread(path)
+            else:
+                img_array = img
+            
+            # check if the image is a 2d,3d,4d image
+            # define CHANNELS to run segementation on
+            # grayscale=0, R=1, G=2, B=3
+            # channels = [cytoplasm, nucleus]
+            # if NUCLEUS channel does not exist, set the second channel to 0
+            # channels = [0,0]
+            # IF ALL YOUR IMAGES ARE THE SAME TYPE, you can give a list with 2 elements
+            # channels = [0,0] # IF YOU HAVE GRAYSCALE
+            # channels = [2,3] # IF YOU HAVE G=cytoplasm and B=nucleus
+            # channels = [2,1] # IF YOU HAVE G=cytoplasm and R=nucleus
+            # OR if you have different types of channels in each image
+            # channels = [[2,3], [0,0], [0,0]]
+
+            # if you have a nuclear channel, you can use the nuclei restore model on the nuclear channel with
+            # model = denoise.CellposeDenoiseModel(..., chan2_restore=True)
+
+            masks, flows, styles = model.eval(img_array, 
+                                              batch_size=batch_size, 
+                                              resample=resample, 
+                                              channel_axis=channels_axis,
+                                              z_axis=z_axis,
+                                              normalize=normalize, 
+                                              rescale=rescale,
+                                              diameter=diameter,
+                                              flow_threshold=flow_threshold,
+                                              cellprob_threshold=cellprob_threshold,
+                                              augment=augment)
+            
+            # save the masks
+            if mask_name is not None:
+                name = mask_name
+            else:
+                name = "Segmentation"
+            
+            # checks if img is a np.ndarray or list of arrays
+            if isinstance(masks, np.ndarray):
+                # create tmp folder
+                default_path = f"/tmp/{name}_mask.tif"
+                # save mask in .tif file
+                imsave(default_path, masks)
+
+                # add labels in napari gui
+                self._viewer.add_labels(masks, name=name)
+
+                return {
+                    "status": "success",
+                    "mask_file_path": default_path,
+                    "masks": masks,
+                    "number_of_masks": len(masks)
+                }
+            else: # list of arrays
+                for i,img in enumerate(masks):
+                    default_path = f"/tmp/{name}_mask_{i}.tif"
+                    # save mask in .tif file
+                    imsave(default_path, img)
+                    # add labels in napari gui
+                    self._viewer.add_labels(masks, name=name)
+                
+                return {
+                    "status": "success",
+                    "mask_file_path": f"/tmp/{name}_mask_*",
+                    "masks": masks,
+                    "number_of_masks": len(masks)
+                    
+                }
+
+        except Exception as e:
+            return {
+                "status": "error",
+                "message": f"Failed to segment the image using cellpose"
             }
