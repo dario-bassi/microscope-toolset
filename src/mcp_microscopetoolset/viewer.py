@@ -15,6 +15,8 @@ import tifffile
 from cellpose import models
 from cellpose.io import imread, imsave
 import torch
+import tempfile
+import os
 
 
 #  logger
@@ -720,12 +722,13 @@ class NapariViewerMC:
             # if you have a nuclear channel, you can use the nuclei restore model on the nuclear channel with
             # model = denoise.CellposeDenoiseModel(..., chan2_restore=True)
 
-            masks, flows, styles = model.eval(img_array, 
-                                              batch_size=batch_size, 
-                                              resample=resample, 
+            masks, flows, styles = model.eval(img_array,
+                                              batch_size=batch_size,
+                                              resample=resample,
+                                              channels=None,
                                               channel_axis=channels_axis,
                                               z_axis=z_axis,
-                                              normalize=normalize, 
+                                              normalize=normalize,
                                               rescale=rescale,
                                               diameter=diameter,
                                               flow_threshold=flow_threshold,
@@ -737,41 +740,39 @@ class NapariViewerMC:
                 name = mask_name
             else:
                 name = "Segmentation"
-            
+
             # checks if img is a np.ndarray or list of arrays
             if isinstance(masks, np.ndarray):
-                # create tmp folder
-                default_path = f"/tmp/{name}_mask.tif"
+                # create tmp folder with cross-platform path
+                temp_dir = tempfile.gettempdir()
+                default_path = os.path.join(temp_dir, f"{name}_mask.tif")
                 # save mask in .tif file
                 imsave(default_path, masks)
-
-                # add labels in napari gui
-                self._viewer.add_labels(masks, name=name)
 
                 return {
                     "status": "success",
                     "mask_file_path": default_path,
-                    "masks": masks,
-                    "number_of_masks": len(masks)
+                    "number_of_masks": int(masks.max())
                 }
             else: # list of arrays
-                for i,img in enumerate(masks):
-                    default_path = f"/tmp/{name}_mask_{i}.tif"
+                temp_dir = tempfile.gettempdir()
+                saved_paths = []
+                for i, mask in enumerate(masks):
+                    default_path = os.path.join(temp_dir, f"{name}_mask_{i}.tif")
                     # save mask in .tif file
-                    imsave(default_path, img)
-                    # add labels in napari gui
-                    self._viewer.add_labels(masks, name=name)
-                
+                    imsave(default_path, mask)
+                    saved_paths.append(default_path)
+
                 return {
                     "status": "success",
-                    "mask_file_path": f"/tmp/{name}_mask_*",
-                    "masks": masks,
+                    "mask_file_paths": saved_paths,
                     "number_of_masks": len(masks)
-                    
+
                 }
 
         except Exception as e:
+            logger.error(f"Cellpose segmentation failed: {type(e).__name__}: {e}", exc_info=True)
             return {
                 "status": "error",
-                "message": f"Failed to segment the image using cellpose"
+                "message": f"Failed to segment the image using cellpose: {str(e)}"
             }
