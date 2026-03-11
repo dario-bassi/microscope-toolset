@@ -58,6 +58,7 @@ The single entry point for all hardware interaction.
 | `zstack.py` | Z-stack acquisition, best-focus plane detection |
 | `drift.py` | Drift detection/correction via phase correlation and centroid tracking |
 | `validate.py` | Preflight checks — channels, objectives, SLM, stage availability |
+| `slm_calibration.py` | SLM/DMD ↔ camera affine calibration: `find_slm_conjugate_z()`, `calibrate_slm()`, `camera_mask_to_slm()`, `save_calibration()`, `load_calibration()` |
 
 ---
 
@@ -220,9 +221,9 @@ knowledge/
   strategies/    (8 files) — universal principles (read BEFORE every challenge)
   playbooks/    (37+ files) — per-sample-type step-by-step guides
   pymmcore/      (4 files) — pymmcore-plus / useq API reference
-  patterns/      (5 files) — acquisition / detection decision trees
+  patterns/      (7 files) — acquisition / detection / calibration decision trees
   workflows/     (8 files) — category-specific workflow patterns
-  failures/      (4 files) — post-mortem lessons (read to avoid repeating)
+  failures/      (8 files) — post-mortem lessons (read to avoid repeating)
   prompts/       (2 files) — LLM vision classification prompts
 ```
 
