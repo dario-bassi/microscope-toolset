@@ -278,12 +278,18 @@ from src.self_learn.detection.threshold import adaptive_threshold
 from src.self_learn.detection.segmentation import watershed_segment
 ```
 
-### Hardware Module (`src/self-learn/hardware/core.py`)
+### Hardware Module (`src/self-learn/hardware/`)
 Pre-configured via `mmc` instance (already available):
 ```python
 from src.self_learn.hardware.core import snap, move_to, set_objective, run_events
 from src.self_learn.hardware.core import pixel_to_world, world_to_pixel
 from src.self_learn.hardware.core import get_pixel_size, get_z, set_z
+
+# SLM/DMD calibration and coordinate mapping
+from src.self_learn.hardware.slm_calibration import (
+    find_slm_conjugate_z, calibrate_slm, camera_mask_to_slm,
+    save_calibration, load_calibration,
+)
 ```
 
 ### Workflow Modules (`src/self-learn/workflows/`)
