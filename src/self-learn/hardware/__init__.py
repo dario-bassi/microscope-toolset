@@ -1,11 +1,12 @@
 """Hardware abstraction layer.
 
 Modules:
-    config   -- runtime microscope configuration discovery
-    core     -- microscope control (snap, move, objectives, autofocus)
-    quality  -- image quality assessment, SNR, focus metrics
-    zstack   -- Z-stack acquisition and focal-plane analysis
-    drift    -- drift detection and correction (phase/FFT correlation, centroid tracking)
+    config          -- runtime microscope configuration discovery
+    core            -- microscope control (snap, move, objectives, autofocus)
+    quality         -- image quality assessment, SNR, focus metrics
+    zstack          -- Z-stack acquisition and focal-plane analysis
+    drift           -- drift detection and correction (phase/FFT correlation, centroid tracking)
+    slm_calibration -- SLM/DMD ↔ camera affine calibration
 """
 
 from .config import MicroscopeConfig, get_config, refresh_config, clear_config_cache
@@ -23,4 +24,8 @@ from .drift import (
 from .validate import (
     ValidationResult, validate_channels, validate_objectives,
     validate_slm, validate_stage, validate_z, validate_experiment,
+)
+from .slm_calibration import (
+    find_slm_conjugate_z, calibrate_slm, camera_mask_to_slm,
+    save_calibration, load_calibration,
 )
