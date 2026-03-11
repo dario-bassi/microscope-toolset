@@ -57,9 +57,31 @@ Higher magnification = smaller pixel size = smaller FOV. Always verify before co
 - `analysis/morphometry.py`, `workflows/adaptive.py`: accept `pixel_size` parameter
 - Both are in micrometers. No conversion needed — just pass `config.pixel_size_um` as `pixel_size`.
 
-## SLM Coordinates
+## SLM / DMD Coordinates
 
-- SLM mask is uint8, matching SLM resolution (query from hardware, or match camera resolution)
-- Aligned with camera/viewport space
-- (0,0) = top-left of camera FOV
-- Apply SLM mask BEFORE each snap (not just once)
+- **Device name**: discover at runtime via `core.getSLMDevice()` (do NOT hardcode)
+- **Resolution**: query via `core.getSLMWidth(dev)`, `core.getSLMHeight(dev)` — independent of camera
+- **Coordinate origin**: (0,0) = top-left of SLM
+- SLM is generally NOT aligned with camera space — requires affine calibration
+- **Conjugate plane**: SLM pattern may only be visible at a Z offset from sample focus
+- **Timeout**: some SLMs turn off after ~2 min — always re-upload mask before use
+- **Channel-specific**: only channels routed through the SLM will show patterns
+- **Calibration is objective/channel/binning specific** — re-calibrate after any change
+- **Preferred API**: `MDAEvent.slm_image=SLMImage(data=mask, device=dev)` handles coordination
+- **Manual API**: `core.setSLMImage(dev, mask); core.displaySLMImage(dev)`
+- **Full protocol**: see `knowledge/patterns/dmd_calibration.md`
+- **Apply SLM mask BEFORE each snap (not just once)**
+
+### Camera ↔ SLM Conversion
+
+```python
+from src.self_learn.hardware.slm_calibration import (
+    load_calibration, camera_mask_to_slm,
+)
+
+calib = load_calibration("dmd_calibration.json")
+fwd = calib["dmd_to_camera"]["matrix"]  # SLM -> Camera (numpy array)
+slm_mask = camera_mask_to_slm(camera_binary_mask, fwd,
+                               slm_w=calib["slm_size"][0],
+                               slm_h=calib["slm_size"][1])
+```
