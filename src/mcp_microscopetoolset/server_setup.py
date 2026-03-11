@@ -465,8 +465,25 @@ def create_mcp_server(
         result = None
         try:
             raw_mmc = _get_raw_mmc()
-            raw_mmc.snapImage()
-            img = raw_mmc.getImage()
+            try:
+                raw_mmc.snapImage()
+                img = raw_mmc.getImage()
+            except RuntimeError:
+                # Fallback: some cameras (e.g. Photometrics PVCAM) fail on
+                # snapImage() but work with single-frame sequence acquisition.
+                logger.warning("snapImage() failed, falling back to single-frame sequence acquisition")
+                raw_mmc.clearCircularBuffer()
+                raw_mmc.startSequenceAcquisition(1, 0, True)
+                timeout_ms = raw_mmc.getExposure() + 5000
+                start_wait = time.time()
+                while raw_mmc.isSequenceRunning():
+                    time.sleep(0.05)
+                    if (time.time() - start_wait) * 1000 > timeout_ms:
+                        raw_mmc.stopSequenceAcquisition()
+                        raise RuntimeError("Sequence acquisition timed out")
+                if raw_mmc.getRemainingImageCount() < 1:
+                    raise RuntimeError("No image returned from sequence acquisition fallback")
+                img = raw_mmc.popNextImage()
             result = {
                 "status": "success",
                 "shape": list(img.shape),
@@ -1159,35 +1176,57 @@ def create_mcp_server(
     
     @mcp.tool(
             name="request_user_clarification",
-            description="Allow the MCP Client to interact with the user asking for clarification or some new input to asnwer the user's request."
+            description="Allow the MCP Client to interact with the user asking for clarification or some new input to answer the user's request."
     )
     async def request_user_clarification(
-        message: str,
-        ctx: Context
+        message: str = Field(..., description="The clarification message to present to the user."),
+        ctx: Context = None,
+        user_query: str = Field("", description="(Optional) The original user query, used for logging only.")
     ) -> dict[str, Any]:
         """Request user clarification from MCP client"""
+        start_time = time.time()
+        result = None
+        try:
+            # clarification
+            class elicitClarification(BaseModel):
+                agent_message: str = Field(description="The original Main Agent message.")
+                user_answer: str = Field(description="The user answer directed to the Main Agent.")
 
-        # clarification
-        class elicitClarification(BaseModel):
-            agent_message: str = Field(description="The original Main Agent message.")
-            user_answer: str = Field(description="The user answer directed to the Main Agent.")
+            result_elicit = await ctx.elicit(message, elicitClarification)
 
-        result = await ctx.elicit(message, elicitClarification)
+            if result_elicit.action == "accept":
+                result = result_elicit.data
+            elif result_elicit.action == "decline":
+                result = {
+                    "agent_message": message,
+                    "user_answer": "Operation declined"
+                }
+            elif result_elicit.action == "cancel":
+                result = {
+                    "agent_message": message,
+                    "user_answer": "Operation cancelled"
+                }
 
-        if result.action == "accept":
-            result_data = result.data
-        elif result.action == "decline":
-            result_data = {
+            return result
+        except Exception as e:
+            logger.error(f"Error in request_user_clarification: {e}", exc_info=True)
+            result = {
                 "agent_message": message,
-                "user_answer": "Operation declined"
+                "user_answer": f"Elicitation not supported by this MCP client: {str(e)}. "
+                               "Note: ctx.elicit() is supported by some MCP clients (e.g., VS Code Copilot) but not all."
             }
-        elif result.action == "cancel":
-            result_data = {
-                "agent_message": message,
-                "user_asnwer": "Operation cancelled"
-            }
-
-        return result_data
+            return result
+        finally:
+            execution_time_ms = (time.time() - start_time) * 1000
+            if benchmark_logger and user_query:
+                benchmark_logger.set_query(user_query)
+            if benchmark_logger and result is not None:
+                benchmark_logger.log_tool_call(
+                    tool_name="request_user_clarification",
+                    input_params={"message": message, "user_query": user_query},
+                    result=result,
+                    execution_time_ms=execution_time_ms
+                )
     
     @mcp.tool(
         name="tool_for_segmenting",
