@@ -94,7 +94,7 @@ results = run_events(mmc, list(seq))
 
 ```python
 from useq import MDAEvent
-from src.local.mda_helpers import run_mda_with_feedback
+from useq import MDAEvent
 
 state = {"measurement": 0}
 
@@ -107,7 +107,8 @@ def my_generator():
             return
         yield MDAEvent(channel={"config": "<CHANNEL>"})
 
-results = run_mda_with_feedback(mmc, my_generator(), on_frame=on_frame)
+# NOTE: In the MCP sandbox, mmc is pre-bound. Do NOT pass mmc as first arg.
+results = run_mda_with_feedback(my_generator(), on_frame=on_frame)
 ```
 
 ## Code Execution Modes
@@ -161,7 +162,6 @@ results = run_events(core, list(seq))
 ### Adaptive/closed-loop → generator with feedback
 ```python
 from useq import MDAEvent
-from src.local.mda_helpers import run_mda_with_feedback
 
 state = {"measurement": 0}
 
@@ -176,7 +176,8 @@ def my_generator():
             return  # Early termination condition
         yield MDAEvent(channel={"config": "<CHANNEL>"})
 
-results = run_mda_with_feedback(mmc, my_generator(), on_frame=on_frame)
+# NOTE: In the MCP sandbox, mmc is pre-bound. Do NOT pass mmc as first arg.
+results = run_mda_with_feedback(my_generator(), on_frame=on_frame)
 ```
 
 ## Common Agent Workflow Patterns
@@ -216,10 +217,11 @@ Visualize results in napari with viewer_add_image()
 ### Pattern 3: Adaptive Closed-Loop Acquisition
 
 ```python
-Execute Python (live mode) with run_mda_with_feedback(mmc, ...):
+Execute Python (live mode) with run_mda_with_feedback(...):
   - Define my_generator() yielding MDAEvent objects
   - Define on_frame(img, event, metadata) callback for real-time analysis
-  - Pass mmc as first parameter: run_mda_with_feedback(mmc, generator, on_frame=callback)
+  - In MCP sandbox, mmc is pre-bound: run_mda_with_feedback(generator, on_frame=callback)
+  - Do NOT pass mmc as first arg — it causes "multiple values for on_frame" error
   - Generator reads shared state updated by on_frame
   - Terminates when condition met (e.g., cell count > threshold)
 ```
@@ -358,7 +360,6 @@ cells = detect_cells(image, threshold_sigma=2.5, min_area_px=50,
 **Feedback-based MDA Execution** — For adaptive acquisition loops:
 
 ```python
-from src.local.mda_helpers import run_mda_with_feedback
 from useq import MDAEvent
 
 def on_frame(img, event, metadata):
@@ -369,8 +370,8 @@ def my_generator():
     for i in range(max_frames):
         yield MDAEvent(index={'t': i}, exposure=50)
 
-# Run with real-time feedback: mmc is required as first parameter
-results = run_mda_with_feedback(mmc, my_generator(), on_frame=on_frame)
+# In MCP sandbox, mmc is pre-bound — do NOT pass mmc as first arg
+results = run_mda_with_feedback(my_generator(), on_frame=on_frame)
 ```
 See `src/local/mda_helpers.py` for full documentation.
 

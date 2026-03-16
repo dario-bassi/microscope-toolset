@@ -107,11 +107,36 @@ core.displaySLMImage(slm_device)
 - A grid of dots can additionally be used for a least-squares fit if higher
   robustness is desired, but requires careful matching (see Common Mistakes).
 
-## Important: SLM Timeout
+## Calibration Exposure
 
-Some SLMs (e.g., Andor Mosaic III) **turn off after a timeout** (typically ~2 minutes).
+At the conjugate plane, all SLM light is sharply focused into small spots — much brighter
+than at the sample plane. Using the same exposure/power as normal imaging will **saturate**
+the camera, making centroid detection inaccurate. Reduce LED power and exposure during
+calibration (e.g., 10-20% power, 2-20ms exposure). Start low and increase until dots are
+bright but not clipped at the camera's max value.
+
+## Calibration Accuracy
+
+A good 3-point affine calibration should achieve **< 1 px max error** on the 3 independent
+verification points. If errors are > 5 px, something is wrong (wrong Z, drift, saturation).
+Re-run `find_slm_conjugate_z()` and recalibrate.
+
+## SLM Timeout
+
+Some SLMs turn off after an inactivity timeout (device-dependent, often 1-2 minutes).
 Always re-upload the mask before each use during experiments. If using MDAEvent with
-SLMImage, this is handled automatically per frame.
+`SLMImage`, this is handled automatically per frame.
+
+## setSLMExposure
+
+`core.setSLMExposure(device, ms)` controls how long the SLM stays active after
+`displaySLMImage()`. Units are **milliseconds**.
+
+- For **manual snaps** (outside MDA): set long enough to cover the camera exposure
+  (e.g., 2000-5000 ms). Too short → SLM turns off before the camera captures.
+  Too long → may cause `waitForSystem()` timeout on some devices.
+- For **MDA with SLMImage**: the engine handles timing automatically via the `exposure`
+  field on `SLMImage`. No manual `setSLMExposure` needed.
 
 ## Common Mistakes
 
@@ -127,3 +152,9 @@ SLMImage, this is handled automatically per frame.
    calibration module falls back to sequence acquisition automatically.
 6. **Confusing coordinate conventions** — camera centroids from `center_of_mass()` are
    (row, col) = (y, x). The affine uses (x, y). Pay attention to order.
+7. **Passing mask.tobytes()** — `setSLMImage()` takes a numpy array directly, NOT bytes.
+8. **Forgetting DMD for imaging** — If DMD is in the excitation path, ALL channels need
+   the DMD active (white mask) to produce signal. This is not just for stimulation.
+9. **Wrong setSLMExposure** — Too short: DMD turns off before camera fires. Too long
+   (60s): causes `waitForSystem()` timeout. Match to acquisition needs.
+

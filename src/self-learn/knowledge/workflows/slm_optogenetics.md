@@ -147,6 +147,59 @@ Neurons expressing ChR2 + GCaMP. SLM activates ChR2 → depolarization → GCaMP
 
 See `knowledge/playbooks/neurons.md` for full protocol.
 
+## Dynamic Mask Tracking (Closed-Loop Migration)
+
+For experiments where the stimulation mask follows a moving cell:
+
+```python
+from useq import MDAEvent, SLMImage
+
+# Shared state updated by on_frame
+state = {"current_tip": start_tip, "stim_mask_slm": initial_mask}
+
+def on_frame(image, event, metadata):
+    if event.channel.config == "mScarlet3":
+        # Re-detect cell tip toward target
+        new_tip = find_cell_tip(image, state["centroid"], target_b)
+        state["current_tip"] = new_tip
+        # Update stim mask for next stimulation event
+        cam_mask = make_circular_mask(new_tip, radius=15)
+        state["stim_mask_slm"] = camera_mask_to_slm(cam_mask, calibration_matrix)
+
+def event_generator():
+    for tick in range(n_stim):
+        t = tick * stim_interval_s
+        if t % imaging_interval_s == 0:
+            # Imaging with white DMD mask (full-field illumination)
+            yield MDAEvent(channel={"group": "TTL_ERK", "config": "mScarlet3"},
+                          exposure=500, min_start_time=t,
+                          slm_image=SLMImage(data=white_mask, device="Mosaic3"))
+        # Stimulation with current tracking mask
+        yield MDAEvent(channel={"group": "TTL_ERK", "config": "CyanStim"},
+                      exposure=100, min_start_time=t + 2.0,
+                      slm_image=SLMImage(data=state["stim_mask_slm"],
+                                        device="Mosaic3", exposure=100))
+
+run_mda_with_feedback(event_generator(), on_frame=on_frame)
+```
+
+### Key learning from 60h tracking experiment (2026-03-16)
+- Stimulating the cell's **leading edge** caused the cell to migrate AWAY from the target
+- The cell moved 75 um in the opposite direction at ~1.26 um/h
+- Consider stimulating the REAR of the cell, or AHEAD of the leading edge
+- For long experiments: save frames incrementally in on_frame, not after MDA finishes
+
+## DMD in Excitation Path
+
+On some microscopes (e.g., with Andor Mosaic III), the DMD is in the **excitation light
+path for ALL channels**, not just the stimulation channel. This means:
+
+- **ALL imaging events need a white DMD mask** — without it, no fluorescence signal
+  reaches the camera (only background ~130 counts)
+- Use `SLMImage(data=white_mask, device="Mosaic3")` for imaging events
+- Use `SLMImage(data=targeted_mask, device="Mosaic3", exposure=100)` for stimulation
+- For manual snaps: `setSLMExposure()` + `setSLMImage()` + `displaySLMImage()` before acquiring
+
 ## Common Pitfalls
 
 - **Mask dtype**: Must be `np.uint8`. Other dtypes fail silently.
@@ -155,3 +208,6 @@ See `knowledge/playbooks/neurons.md` for full protocol.
 - **Reactive vs proactive**: For fast processes, intervene BEFORE the event arrives.
 - **Wrong calcium channel**: GCaMP uses GFP filter → may appear in structural marker channel, not a dedicated calcium channel. Always verify by test stimulation.
 - **Calcium decay**: Wait ≥10s between experiment phases for full decay to baseline.
+- **DMD in excitation path**: On some setups, DMD must be active (white mask) for ALL imaging, not just stimulation. Without it, images show only background.
+- **setSLMImage takes numpy arrays**: Pass the array directly, NOT `.tobytes()`.
+- **run_mda_with_feedback in MCP sandbox**: Do NOT pass `mmc` as first arg — it's pre-bound.
