@@ -115,4 +115,5 @@ And select the microscope MCP server either connecting the server or enabling th
 - [ ] Add the possibility to use a remote core. This will replace the part of executing it on the mcp tool execution code, but for other image analysis, will need to stay.
 - [ ] Plan the experiments to do on the real microscope to show the train & untrained Agent.
 - [ ] Plan to create additional metadata from the microscope session
+- [ ] Build a chatbox for visualising user-agent conversation, including time, tool calls, ect.
 
