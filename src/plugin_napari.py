@@ -18,7 +18,7 @@ if not logger.handlers:
 
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser(description="Microscope Toolset – napari + MCP server")
+    parser = argparse.ArgumentParser(description="Microscope Toolset - napari + MCP server")
     parser.add_argument(
         "--auto-start", action="store_true", default=False,
         help="Automatically start the MCP server and load the config file (no manual clicks needed)."
@@ -26,6 +26,10 @@ if __name__ == "__main__":
     parser.add_argument(
         "--config", type=str, default="configs/virtual_optogenetic.cfg",
         help="Path to the .cfg file to load (default: configs/virtual_optogenetic.cfg). Only used with --auto-start."
+    )
+    parser.add_argument(
+        "--review", type=str, default=False,
+        help="Path to the .jsonl file to review to full conversation of the experiment with the Agent."
     )
     args, _unknown = parser.parse_known_args()
 
