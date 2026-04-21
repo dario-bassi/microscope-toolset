@@ -29,22 +29,61 @@ if __name__ == "__main__":
     )
     parser.add_argument(
         "--review", type=str, default=False,
-        help="Path to the .jsonl file to review to full conversation of the experiment with the Agent."
+        help="Path to the .jsonl file to review the full conversation of the experiment with the Agent."
+    )
+    parser.add_argument(
+        "--log", type=str, default=None,
+        help="Path to pymmcore-plus.log. Auto-detected if omitted."
     )
     args, _unknown = parser.parse_known_args()
 
-    try:
-        logger.info("Start napari window")
-        viewer = napari.Viewer()
-        logger.info(viewer.window)
-        logger.info("start mcp server widget")
+    if args.review:
+        from src.benchmarking.review_conversation import (
+            read_file, parse_log_file, merge_logs, default_log_path,
+        )
+        from src.benchmarking.dashboard import launch_dashboard
+        try:
+            messages, stats = read_file(args.review)
+            logger.info(
+                f"Loaded {len(messages)} messages | "
+                f"turns: user={stats.num_user_turns} agent={stats.num_assistant_turns} | "
+                f"tool calls: {stats.num_tool_calls} | cost: ${stats.estimated_cost_usd:.4f}"
+            )
 
-        auto_config = args.config if args.auto_start else None
-        main_window = MCPServer(auto_config=auto_config)
-        viewer.window.add_dock_widget(widget=main_window, name="MCP Server", area="top", allowed_areas=["right"])
+            # Merge hardware logs
+            log_path = args.log or default_log_path()
+            if log_path:
+                try:
+                    log_entries = parse_log_file(log_path)
+                    messages = merge_logs(messages, log_entries)
+                    n_blocks = sum(1 for m in messages
+                                   if hasattr(m, "entries") and hasattr(m, "timestamp"))
+                    logger.info(f"Merged {n_blocks} hardware log block(s) from {log_path}")
+                except Exception as e:
+                    logger.warning(f"Could not load hardware log: {e}")
+            else:
+                logger.info("No pymmcore-plus.log found — skipping hardware log merge")
 
-        napari.run()
+            launch_dashboard(messages, stats)
+        except FileNotFoundError as e:
+            logger.error(str(e))
+        except Exception as e:
+            logger.info(e)
+            print(e)
+        #return
+    else:
+        try:
+            logger.info("Start napari window")
+            viewer = napari.Viewer()
+            logger.info(viewer.window)
+            logger.info("start mcp server widget")
 
-        logger.info("Napari finished")
-    except Exception as e:
-        logger.info(f"Error starting napari: {e}")
+            auto_config = args.config if args.auto_start else None
+            main_window = MCPServer(auto_config=auto_config)
+            viewer.window.add_dock_widget(widget=main_window, name="MCP Server", area="top", allowed_areas=["right"])
+
+            napari.run()
+
+            logger.info("Napari finished")
+        except Exception as e:
+            logger.info(f"Error starting napari: {e}")
