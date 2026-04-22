@@ -59,19 +59,6 @@ Agent chooses strategy:
 Results appear in napari + console output
 ```
 
-## Before Each Experiment
-
-Read the relevant playbook for your sample type:
-
-```
-knowledge/playbooks/          — step-by-step protocols per sample type
-knowledge/strategies/         — universal microscopy principles
-knowledge/patterns/           — decision trees for detection/acquisition
-knowledge/failures/           — post-mortem analysis of common mistakes
-```
-
-Use `knowledge/prompts/` for visual classification if you have images.
-
 ## MDA (Multi-Dimensional Acquisition) Patterns
 
 The agent has access to Python code execution via `execute_python_code`. Use these patterns to define acquisition strategies:
@@ -80,20 +67,19 @@ The agent has access to Python code execution via `execute_python_code`. Use the
 
 ```python
 from useq import MDASequence
-from src.self_learn.hardware.core import run_events
 
 seq = MDASequence(
     time_plan={"loops": <NUM_FRAMES>, "interval": <INTERVAL_SEC>},
     channels=[{"config": "<CHANNEL_NAME>", "exposure": <EXPOSURE_MS>}],
     stage_positions=[{"x": <X_UM>, "y": <Y_UM>}],
 )
-results = run_events(mmc, list(seq))
+# mmc is pre-configured in the execution namespace
+results = run_mda_with_feedback(iter(seq))
 ```
 
 ### Adaptive/Closed-Loop with Generators
 
 ```python
-from useq import MDAEvent
 from useq import MDAEvent
 
 state = {"measurement": 0}
@@ -129,25 +115,21 @@ When using `execute_python_code`:
 
 **Rule:** If your code has `move() then snap()` or any loop with hardware calls, use `live` mode.
 
-### Fixed acquisitions → `MDASequence` + `run_events`
+### Fixed acquisitions → `MDASequence` + `run_mda_with_feedback`
 ```python
 from useq import MDASequence
-from src.self_learn.hardware.core import run_events
 
 seq = MDASequence(
     time_plan={"loops": <NUM_FRAMES>, "interval": <INTERVAL_SEC>},
     channels=[{"config": "<CHANNEL>", "exposure": <EXPOSURE_MS>}],
     stage_positions=[{"x": <X_UM>, "y": <Y_UM>}],
 )
-results = run_events(core, list(seq))
-# run_events() delegates to core.mda.run() via frameReady signal
-# Works for both local CMMCorePlus and remote pymmcore-proxy
+results = run_mda_with_feedback(iter(seq))
 ```
 
 ### Multi-position timelapse → `MDASequence`
 ```python
 from useq import MDASequence
-from src.self_learn.hardware.core import run_events
 
 positions = [{"x": <X1_UM>, "y": <Y1_UM>}, {"x": <X2_UM>, "y": <Y2_UM>}]
 seq = MDASequence(
@@ -156,7 +138,7 @@ seq = MDASequence(
     channels=[{"config": "<CHANNEL>"}],
     axis_order="tpc",  # time → position → channel
 )
-results = run_events(core, list(seq))
+results = run_mda_with_feedback(iter(seq))
 ```
 
 ### Adaptive/closed-loop → generator with feedback
@@ -230,114 +212,13 @@ This is the preferred approach over manual `time.sleep()` loops — uses hardwar
 
 ### Pattern 4: Real Hardware Considerations
 
-**Each module in `src/self-learn/` includes ⚠️ "Real Microscope Considerations" sections** explaining:
+When deploying code on real hardware, account for:
 - Simulation assumptions that don't hold on real hardware
 - Hardware timing requirements (settling times, thermal drift, focus drift)
 - Calibration steps needed before use
-- Suggested parameter adjustments
+- Suggested parameter adjustments for your specific setup
 
-**Always read these sections before using a module on real hardware.**
-
-Example from `analysis/confluency.py`:
-```markdown
-## ⚠️ Real Microscope Considerations
-Real cells have halos, shadows, and uneven illumination.
-Adjustments for real hardware:
-- Add morphological preprocessing (erosion/dilation)
-- Use adaptive thresholding instead of global Otsu
-- Validate threshold direction on actual samples first
-```
-
-## Available Modules in Code Execution
-
-When using `execute_python_code`, you have access to:
-
-### Analysis Modules (`src/self-learn/analysis/`)
-Feature extraction and quantification. See `ARCHITECTURE.md` for complete list.
-
-Import in your code:
-```python
-from src.self_learn.analysis.<module> import <function>
-
-# Examples:
-from src.self_learn.analysis.morphometry import measure_morphometry
-from src.self_learn.analysis.tracking import track_cells
-from src.self_learn.analysis.intensity import classify_intensity
-```
-
-Categories available:
-- Morphological analysis (size, shape, contours)
-- Intensity-based measurements (fluorescence, classification)
-- Motion analysis (tracking, flow, migration)
-- Signal processing (spectral unmixing, kinetics)
-
-### Detection Modules (`src/self-learn/detection/`)
-Object segmentation and localization.
-
-```python
-from src.self_learn.detection.cells import detect_cells
-from src.self_learn.detection.threshold import adaptive_threshold
-from src.self_learn.detection.segmentation import watershed_segment
-```
-
-### Hardware Module (`src/self-learn/hardware/`)
-Pre-configured via `mmc` instance (already available):
-```python
-from src.self_learn.hardware.core import snap, move_to, set_objective, run_events
-from src.self_learn.hardware.core import pixel_to_world, world_to_pixel
-from src.self_learn.hardware.core import get_pixel_size, get_z, set_z
-
-# SLM/DMD calibration and coordinate mapping
-from src.self_learn.hardware.slm_calibration import (
-    find_slm_conjugate_z, calibrate_slm, camera_mask_to_slm,
-    save_calibration, load_calibration,
-)
-```
-
-### Workflow Modules (`src/self-learn/workflows/`)
-High-level acquisition protocols.
-
-```python
-from src.self_learn.workflows.autofocus import autofocus_mda
-from src.self_learn.workflows.adaptive import adaptive_survey_mda
-# See ARCHITECTURE.md for full list
-```
-
-### Utility Modules (`src/self-learn/utils/`)
-Logging and visualization.
-
-```python
-from src.self_learn.utils.showcase import make_showcase
-from src.self_learn.utils.experiment_log import ExperimentLog
-from src.self_learn.utils.diagnostics import save_snapshot
-```
-
-**All modules include ⚠️ "Real Microscope Considerations" sections.** Review before using on real hardware.
-
-## Discovering Available Functions
-
-The agent can discover and use functions in three ways:
-
-### 1. Direct Code Execution
-Ask the agent to explore via `execute_python_code`:
-```python
-# Agent executes this code:
-import src.self_learn.analysis.morphometry as morph
-help(morph)  # Prints module docstring with available functions
-```
-
-### 2. Search ARCHITECTURE.md
-Use this as a reference for:
-- All available analysis modules and what they measure
-- All available detection methods
-- All available workflows and their purposes
-
-### 3. Look at Real Microscope Considerations
-Before asking the agent to use a function on real hardware, they should review the module's ⚠️ sections which document:
-- Hardware assumptions and limitations
-- Calibration steps required
-- Timing requirements
-- Parameter adjustments for real data
+**Always validate acquisition parameters on a small pilot dataset before full acquisition.**
 
 ## Smart Acquisition Helpers (Pre-configured)
 
@@ -373,27 +254,8 @@ def my_generator():
 # In MCP sandbox, mmc is pre-bound — do NOT pass mmc as first arg
 results = run_mda_with_feedback(my_generator(), on_frame=on_frame)
 ```
-See `src/local/mda_helpers.py` for full documentation.
 
 Use these in your code instead of reimplementing common operations.
-
-## Knowledge Base
-
-The `knowledge/` directory survives across sessions. Use it to:
-
-1. **Before each experiment:**
-   - Read the relevant playbook for your sample type
-   - Review universal strategies in `knowledge/strategies/`
-   - Check `knowledge/failures/` for common pitfalls to avoid
-
-2. **Document learnings after each experiment:**
-   - What parameters worked well on your hardware?
-   - What thresholds did you need to adjust?
-   - Did you discover a new detection strategy?
-   - What caused failures, and how did you fix them?
-   - Update playbooks if you discover improvements
-
-**Critical:** Only document knowledge that generalizes to real microscopes. If something only works due to hardware quirks, document the workaround but also consider fixing the hardware setup.
 
 ## MCP Tools Quick Reference
 
@@ -409,33 +271,21 @@ The `knowledge/` directory survives across sessions. Use it to:
 | `viewer_screenshot()` | Capture napari view | Document results |
 | `pymmcore_api_database(query)` | Search API docs | "How do I...?" questions |
 | `pdfs_publication_database(query)` | Search papers | Scientific background |
-| `request_user_clarification(message)` | Ask user | Need human input | 
+| `request_user_clarification(message)` | Ask user | Need human input |
 
 ## Codebase Structure
 
-**Code + Knowledge working together:**
-
 ```
 src/                  — Computation modules for hardware, detection, analysis, workflows
-knowledge/
-  playbooks/          — Step-by-step protocols per sample type (START HERE)
-  strategies/         — Universal microscopy principles (read first)
-  patterns/           — Decision trees for detection/acquisition strategy
-  failures/           — Post-mortem analysis (learn from mistakes)
-  pymmcore/           — pymmcore-plus API reference and patterns
-  prompts/            — LLM vision prompts for image classification
 tests/                — Unit tests (pytest tests/ -v with synthetic data)
 scratch/              — Archived solve scripts (may reference old functions)
 ```
 
 **Agent workflow:**
 1. User submits request
-2. Agent reads relevant `knowledge/playbooks/` for sample type
-3. Agent checks `ARCHITECTURE.md` for available modules
-4. Agent uses MCP tools to inspect microscope state
-5. Agent writes Python code to execute via `execute_python_code`
-6. Agent visualizes results in napari
-7. Agent learns and updates knowledge base
+2. Agent uses MCP tools to inspect microscope state
+3. Agent writes Python code to execute via `execute_python_code`
+4. Agent visualizes results in napari
 
 ## Core Design Principles
 
@@ -462,57 +312,32 @@ Set environment variables before running (or ask agent to set them in code):
 export MICROSCOPE_SHOWCASE_DIR=/data/experiments/my_project/figures
 ```
 
-Agent can specify output paths directly in code:
-```python
-from src.self_learn.utils.showcase import make_showcase
-
-make_showcase(
-    panels=[...],
-    experiment_id="exp_001",
-    output_dir="/data/results/"
-)
-```
-
 ## Common Real Hardware Issues & Solutions
 
 ### Focus Drift During Timelapse
 **Problem:** Z-position drifts over time, corrupting measurements
-**Solution:** Use autofocus between acquisition frames
-```python
-from src.self_learn.workflows.autofocus import autofocus_mda
-# Agent asks you to enable autofocus, runs this code in live mode
-gen, on_frame, state = autofocus_mda(mmc, channel="<FOCUS_CHANNEL>")
-results = run_mda_with_feedback(gen(), on_frame=on_frame)
-best_z = state["best_z"]
-```
+**Solution:** Use autofocus between acquisition frames — implement an `on_frame` callback that measures focus quality and adjusts Z before yielding the next event in your generator.
 
 ### Photobleaching Corrupts Intensity Measurements
 **Problem:** Signal intensity decreases over time due to fluorophore photodestruction
-**Solution:** Correct each frame using a reference ROI that doesn't move
-```python
-from src.self_learn.analysis.fluorescence import correct_photobleaching
-corrected = correct_photobleaching(target_frames, baseline_reference_frames)
-```
+**Solution:** Correct each frame using a reference ROI that doesn't move. Measure the mean intensity of a stable reference region and normalize subsequent frames to the first frame's reference value.
 
 ### Spectral Bleedthrough Between Channels
 **Problem:** Signal from one channel leaks into another, confounding analysis
-**Solution:** Apply unmixing using a pre-computed bleedthrough matrix
-```python
-from src.self_learn.analysis.spectral import unmix_channels
-ch1_corrected, ch2_corrected = unmix_channels(
-    ch1_raw, ch2_raw, bleedthrough_matrix
-)
-```
+**Solution:** Apply linear unmixing using a pre-computed bleedthrough matrix. Measure pure single-channel controls to determine bleedthrough coefficients, then solve the linear system per pixel.
 
 ### Low Contrast or Uneven Illumination
 **Problem:** Threshold-based detection fails with variable image quality
-**Solution:** Use adaptive thresholding and morphological preprocessing
+**Solution:** Use adaptive thresholding and morphological preprocessing:
 ```python
-from src.self_learn.detection.threshold import adaptive_threshold
-from src.self_learn.analysis.image import preprocess
+import skimage.filters as sf
+import skimage.morphology as sm
 
-img_prep = preprocess(img, method="clahe")  # Contrast-limited histogram equalization
-binary = adaptive_threshold(img_prep, sigma=2.5)
+# CLAHE for contrast normalization
+img_eq = sf.rank.equalize(img, footprint=sm.disk(50))
+# Local threshold instead of global Otsu
+thresh = sf.threshold_local(img_eq, block_size=51)
+binary = img_eq > thresh
 ```
 
 ## When to Ask for Help
@@ -529,19 +354,16 @@ If the agent encounters issues:
 1. **Ask for microscope state** — Agent should use `get_microscope_settings()` to confirm configuration
 2. **Inspect pilot data** — Use `snap_image()` and `viewer_screenshot()` to visualize sample
 3. **Test detection parameters** — Run analysis on small dataset before full acquisition
-4. **Read relevant playbook** — Check `knowledge/playbooks/` for your sample type
 
 ### During Execution
 1. **Use `live` mode for hardware sequences** — Buffered mode is only for analysis
 2. **Enable feedback-based termination** — Use `run_mda_with_feedback()` to avoid unnecessary exposure
-3. **Save intermediate results** — Use `ExperimentLog` to track progress
-4. **Monitor for drift/artifacts** — Ask agent to check images periodically with `snap_image()`
+3. **Monitor for drift/artifacts** — Ask agent to check images periodically with `snap_image()`
 
 ### After Acquisition
 1. **Visualize in napari** — Use `viewer_add_image()`, `viewer_add_labels()` to inspect results
 2. **Log metadata** — Save configuration, timing, and parameter values
-3. **Document learnings** — Update `knowledge/playbooks/` if you discover improvements
-4. **Version control** — Save any custom analysis scripts to git for reproducibility
+3. **Version control** — Save any custom analysis scripts to git for reproducibility
 
 ### Hardware-Specific Calibration
 Before using modules on real hardware, agent should:
