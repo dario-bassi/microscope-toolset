@@ -387,7 +387,7 @@ def _log_ts_to_utc(ts_str: str) -> str:
 def default_log_path() -> str | None:
     """Return the default pymmcore-plus log path for the current OS."""
     if sys.platform == "win32":
-        base = os.environ.get("LOCALAPPDATA", "")
+        base = os.environ.get("LOCALAPPDATA", "") # to change. It depends where micromanager is installed. Make it more flexible.
     elif sys.platform == "darwin":
         base = os.path.expanduser("~/Library/Logs")
     else:
