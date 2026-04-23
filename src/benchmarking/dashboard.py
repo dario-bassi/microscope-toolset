@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import base64
 import json
 import re
 import sys
@@ -14,8 +15,8 @@ try:
 except ImportError:
     _HAS_MARKDOWN = False
 
-from PyQt6.QtCore import Qt, QSize, QSizeF
-from PyQt6.QtGui import QFont, QTextOption
+from PyQt6.QtCore import Qt, QByteArray, QSize, QSizeF
+from PyQt6.QtGui import QFont, QPixmap, QTextOption
 from PyQt6.QtWidgets import (
     QApplication,
     QFrame,
@@ -378,6 +379,47 @@ def _render_tool_use_block(name: str, inp: dict[str, Any], layout: QVBoxLayout) 
     layout.addWidget(frame)
 
 
+def _make_image_widget(b64_data: str) -> QLabel:
+    """Render a base64-encoded PNG/JPEG image as a scaled QLabel."""
+    raw = base64.b64decode(b64_data)
+    ba = QByteArray(raw)
+    pixmap = QPixmap()
+    pixmap.loadFromData(ba)
+    if not pixmap.isNull() and pixmap.width() > _CONTENT_WIDTH - 20:
+        pixmap = pixmap.scaledToWidth(
+            _CONTENT_WIDTH - 20, Qt.TransformationMode.SmoothTransformation
+        )
+    label = QLabel()
+    label.setPixmap(pixmap)
+    label.setAlignment(Qt.AlignmentFlag.AlignLeft)
+    return label
+
+
+_PERSISTED_RE = re.compile(
+    r"<persisted-output>\s*Output too large \(([^)]+)\)[^\n]*\n"
+    r".*?Preview \([^)]+\):\n(.*)",
+    re.DOTALL,
+)
+
+
+def _clean_persisted_output(text: str) -> tuple[str, bool]:
+    """Strip <persisted-output> wrapper and return (cleaned_text, was_truncated).
+
+    If the text is a persisted-output placeholder, returns the preview with a
+    short header noting the truncation. Otherwise returns the original text.
+    """
+    stripped = text.strip()
+    if not stripped.startswith("<persisted-output>"):
+        return text, False
+    m = _PERSISTED_RE.search(stripped)
+    if m:
+        size, preview = m.group(1), m.group(2).rstrip()
+        return f"[Output truncated — full size {size}]\n\n{preview}", True
+    # Malformed tag — just strip the XML markers
+    cleaned = re.sub(r"</?persisted-output>", "", stripped).strip()
+    return cleaned, True
+
+
 def _render_tool_result(result: ToolResult, layout: QVBoxLayout) -> None:
     color    = TOOL_ERR_BG if result.is_error else TOOL_OK_BG
     txt_col  = "#991B1B"   if result.is_error else "#065F46"
@@ -404,19 +446,59 @@ def _render_tool_result(result: ToolResult, layout: QVBoxLayout) -> None:
     hdr.addStretch()
     fl.addLayout(hdr)
 
-    content_str = (
-        result.content if isinstance(result.content, str)
-        else json.dumps(result.content, ensure_ascii=False)
-    )
-    if content_str.strip():
-        # Separator
+    # Normalise content into renderable segments.
+    # Each segment is one of:
+    #   ('text',  str,  bool)   — text string, True if should render as markdown
+    #   ('image', str)          — base64 image data
+    segments: list[tuple] = []
+
+    if isinstance(result.content, list):
+        text_parts: list[str] = []
+        for item in result.content:
+            if not isinstance(item, dict):
+                continue
+            itype = item.get("type", "")
+            if itype == "text":
+                text_parts.append(item.get("text", ""))
+            elif itype == "image":
+                # Flush accumulated text first
+                if text_parts:
+                    joined = "\n\n".join(text_parts).strip()
+                    segments.append(("text", joined, True))   # markdown
+                    text_parts = []
+                segments.append(("image", item.get("data", "")))
+        if text_parts:
+            joined = "\n\n".join(text_parts).strip()
+            segments.append(("text", joined, True))
+    else:
+        # Plain string — may be a <persisted-output> placeholder
+        cleaned, was_truncated = _clean_persisted_output(result.content)
+        segments.append(("text", cleaned, False))   # plain text
+
+    if not segments or all(
+        (s[0] == "text" and not s[1].strip()) for s in segments
+    ):
+        fl.addWidget(QLabel("<i>(empty response)</i>"))
+    else:
         sep = QFrame()
         sep.setFrameShape(QFrame.Shape.HLine)
         sep.setStyleSheet("color:rgba(0,0,0,0.08);")
         fl.addWidget(sep)
-        fl.addWidget(_make_plain_text_widget(content_str, color))
-    else:
-        fl.addWidget(QLabel("<i>(empty response)</i>"))
+        for seg in segments:
+            if seg[0] == "image":
+                try:
+                    fl.addWidget(_make_image_widget(seg[1]))
+                except Exception:
+                    fl.addWidget(QLabel("<i>[image — could not decode]</i>"))
+            else:
+                _, text, as_markdown = seg
+                if not text.strip():
+                    continue
+                if as_markdown:
+                    fl.addWidget(CollapsibleWidget(text, bg=color))
+                else:
+                    fl.addWidget(_make_plain_text_widget(text, color))
+
     layout.addWidget(frame)
 
 
@@ -739,4 +821,4 @@ def launch_dashboard(messages: list[ParsedMessage], stats: ConversationStats) ->
     app = QApplication.instance() or QApplication(sys.argv)
     window = ConversationDashboard(messages, stats)
     window.show()
-    app.exec()
+    sys.exit(app.exec())
