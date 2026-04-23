@@ -37,3 +37,4 @@ pre-commit
 vulture
 coverage
 cellpose
+git+https://github.com/hinderling/virtual-microscope
