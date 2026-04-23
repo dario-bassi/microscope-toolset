@@ -110,10 +110,10 @@ And select the microscope MCP server either connecting the server or enabling th
 ### TO DO LIST
 
 - [ ] Fix use of Elasticsearch and PostgresSQL database
-- [ ] Add summary of Claude Code Agent session
+- [x] Add summary of Claude Code Agent session
 - [ ] Calculate some Analysis insight as: nb tokens, duration, final code, whole conversation between user and agent. Was planning to do it on a jupyter notebook but if a better way exists then lets implement it
 - [ ] Add the possibility to use a remote core. This will replace the part of executing it on the mcp tool execution code, but for other image analysis, will need to stay.
 - [ ] Plan the experiments to do on the real microscope to show the train & untrained Agent.
 - [ ] Plan to create additional metadata from the microscope session
-- [ ] Build a chatbox for visualising user-agent conversation, including time, tool calls, ect.
+- [x] Build a chatbox for visualising user-agent conversation, including time, tool calls, ect.
 
