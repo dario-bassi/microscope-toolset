@@ -13,7 +13,6 @@ import napari
 from PyQt6.QtCore import Qt, QObject, pyqtSlot, QThread, pyqtSignal, QTimer
 from PyQt6.QtWidgets import QWidget, QVBoxLayout, QHBoxLayout, QPushButton, QLabel, QSizePolicy
 from pymmcore_plus import CMMCorePlus
-from pymmcore_plus.core import _mmcore_plus as _mmcore_plus_module
 from pymmcore_plus.experimental.unicore import UniMMCore
 
 from src.mcp_microscopetoolset.utils import get_user_information
@@ -160,8 +159,7 @@ class MCPWorker(QObject):
 
             # Phase 1: Create UniMMCore and set as CMMCorePlus singleton
             self.status_update.emit("Setting up virtual microscope core...")
-            self._mmc = UniMMCore()
-            _mmcore_plus_module._instance = self._mmc  # napari-micromanager will use this singleton
+            self._mmc = UniMMCore()  # auto-registers as CMMCorePlus singleton via weakref
 
             # Wrap loadSystemConfiguration to track the loaded config path
             # and initialize SimulationBridge BEFORE devices are loaded
@@ -306,9 +304,8 @@ class MCPWorker(QObject):
                 self._uvicorn_server = None
                 logger.info("MCP server thread stopped")
 
-            # Clear the singleton
+            # Clear the local reference; weakref in CMMCorePlus.instance() auto-expires
             if self._mmc is not None:
-                _mmcore_plus_module._instance = None
                 self._mmc = None
 
             logger.info("All servers stopped")
@@ -478,12 +475,16 @@ class MCPServer(QWidget):
     @pyqtSlot()
     def add_napari_micromanager_plugin(self):
         """Add a new napari micromanager plugin"""
+        import traceback
         try:
             logger.info("Adding new napari micromanager plugin...")
             self.viewer.window.add_plugin_dock_widget(plugin_name="napari-micromanager")
             logger.info("Successfully added napari micromanager plugin")
         except Exception as e:
-            logger.error(f"Failed to add new napari micromanager plugin: {e}")
+            logger.error(
+                f"Failed to add new napari micromanager plugin: {e}\n"
+                + traceback.format_exc()
+            )
 
     def closeEvent(self, event):
         """Handle window close event"""

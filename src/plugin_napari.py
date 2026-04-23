@@ -1,6 +1,4 @@
 import argparse
-import napari
-from src.mcp_server_gui import MCPServer
 import logging
 import sys
 
@@ -34,6 +32,10 @@ if __name__ == "__main__":
     parser.add_argument(
         "--log", type=str, default=None,
         help="Path to pymmcore-plus.log. Auto-detected if omitted."
+    )
+    parser.add_argument(
+        "--test", type=str, nargs="?", const="", default=None,
+        help="Test name to run (e.g. test_1). Omit the name to list available tests."
     )
     args, _unknown = parser.parse_known_args()
 
@@ -72,13 +74,28 @@ if __name__ == "__main__":
             print(e)
         #return
     else:
+        # Resolve test / auto_config before importing napari
+        if args.test is not None and args.test == "":
+            from src.benchmarking.test_runner import print_tests
+            print_tests()
+            sys.exit(0)
+        elif args.test:
+            from src.benchmarking.test_runner import run_test
+            logger.info(f"Setting up test: {args.test}")
+            auto_config = str(run_test(args.test))
+            logger.info(f"Test cfg: {auto_config}")
+        else:
+            auto_config = args.config if args.auto_start else None
+
         try:
+            import napari
+            from src.mcp_server_gui import MCPServer
+
             logger.info("Start napari window")
             viewer = napari.Viewer()
             logger.info(viewer.window)
             logger.info("start mcp server widget")
 
-            auto_config = args.config if args.auto_start else None
             main_window = MCPServer(auto_config=auto_config)
             viewer.window.add_dock_widget(widget=main_window, name="MCP Server", area="top", allowed_areas=["right"])
 

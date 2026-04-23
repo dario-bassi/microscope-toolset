@@ -22,6 +22,15 @@ Then go into the folder of this repository and install all the packages using th
 pip install -r requirements.txt
 ```
 
+### Installation
+```
+pip install -e .
+```
+or 
+```
+python -m compileall src/
+```
+
 #### Postgresql
 To improve our agents, we created a *Postgresql* database that will collect all the results obtained by our differents tool. To use it, you will need to download [Postgressql](https://www.postgresql.org/download/) based on your OS.
 
