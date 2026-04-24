@@ -71,7 +71,6 @@ if __name__ == "__main__":
             logger.error(str(e))
         except Exception as e:
             logger.info(e)
-            print(e)
         #return
     else:
         # Resolve test / auto_config before importing napari

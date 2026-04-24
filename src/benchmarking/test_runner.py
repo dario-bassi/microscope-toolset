@@ -139,14 +139,16 @@ _PHASE_CONTRAST_CHANNEL = """\
 
 
 def _generate_cfg(backend: str, channels: list[dict], output_dir: Path,
-                  cell_type: str = "normal") -> Path:
+                  cell_type: str = "normal", phase_contrast: bool = False) -> Path:
     """Write a .cfg with custom channel names and return its path.
 
     The filename uses the pattern ``virtual_<cell_type>.cfg`` so that
     ``_extract_cell_type()`` in mcp_server_gui.py returns the right value
     when pre-initialising the legacy SimulationBridge.
     """
-    lines = [_CFG_HEADER.format(backend=backend), _PHASE_CONTRAST_CHANNEL]
+    lines = [_CFG_HEADER.format(backend=backend)]
+    if phase_contrast:
+        lines.append(_PHASE_CONTRAST_CHANNEL)
     for ch in channels:
         name = ch["name"]
         led = ch["led"]
@@ -217,9 +219,11 @@ def run_test(test_name: str) -> Path:
 
     # Generate cfg in a persistent temp dir (survives until process exits)
     cell_type: str = cfg.get("cell_type", "normal")
+    phase_contrast: bool = cfg.get("phase_contrast", False)
     output_dir = _BENCHMARKING_DIR / test_name
     output_dir.mkdir(parents=True, exist_ok=True)
-    cfg_path = _generate_cfg(backend, channels, output_dir, cell_type=cell_type)
+    cfg_path = _generate_cfg(backend, channels, output_dir, cell_type=cell_type,
+                             phase_contrast=phase_contrast)
 
     print(f"[test_runner] Test '{test_name}' ready:")
     print(f"  backend     : {backend}")
