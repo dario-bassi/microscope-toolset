@@ -125,4 +125,5 @@ And select the microscope MCP server either connecting the server or enabling th
 - [ ] Plan the experiments to do on the real microscope to show the train & untrained Agent.
 - [ ] Plan to create additional metadata from the microscope session
 - [x] Build a chatbox for visualising user-agent conversation, including time, tool calls, ect.
+- [ ] Switch local virtual simulation to virtual simulation from the package virtual_microscope
 
