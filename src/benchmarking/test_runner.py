@@ -137,9 +137,15 @@ _PHASE_CONTRAST_CHANNEL = """\
 #py ConfigGroup,Channel,phase-contrast,Filter Wheel,Label,Electra1(402/454)
 """
 
+_SLM_DEVICE = """\
+#py pyDevice,SLM,virtual_microscope.devices.slm,SimSLMDevice
+#py Property,Core,SLM,SLM
+"""
+
 
 def _generate_cfg(backend: str, channels: list[dict], output_dir: Path,
-                  cell_type: str = "normal", phase_contrast: bool = False) -> Path:
+                  cell_type: str = "normal", phase_contrast: bool = False,
+                  slm: bool = False) -> Path:
     """Write a .cfg with custom channel names and return its path.
 
     The filename uses the pattern ``virtual_<cell_type>.cfg`` so that
@@ -147,6 +153,8 @@ def _generate_cfg(backend: str, channels: list[dict], output_dir: Path,
     when pre-initialising the legacy SimulationBridge.
     """
     lines = [_CFG_HEADER.format(backend=backend)]
+    if slm:
+        lines.append(_SLM_DEVICE)
     if phase_contrast:
         lines.append(_PHASE_CONTRAST_CHANNEL)
     for ch in channels:
@@ -220,10 +228,11 @@ def run_test(test_name: str) -> Path:
     # Generate cfg in a persistent temp dir (survives until process exits)
     cell_type: str = cfg.get("cell_type", "normal")
     phase_contrast: bool = cfg.get("phase_contrast", False)
+    slm: bool = cfg.get("slm", False)
     output_dir = _BENCHMARKING_DIR / test_name
     output_dir.mkdir(parents=True, exist_ok=True)
     cfg_path = _generate_cfg(backend, channels, output_dir, cell_type=cell_type,
-                             phase_contrast=phase_contrast)
+                             phase_contrast=phase_contrast, slm=slm)
 
     print(f"[test_runner] Test '{test_name}' ready:")
     print(f"  backend     : {backend}")
