@@ -236,10 +236,13 @@ def run_test(test_name: str) -> Path:
     set_global_bridge(bridge)
 
     # SimServer.initialize() returns early when bridge is pre-set, so start the
-    # engine here instead.  time_scale controls speed: sim-s per real second.
-    # time_scale=0.05 → full 27 sim-s cycle = 540 real seconds = 9 min.
+    # engine here instead.  time_scale and tick_hz are read from TEST_CONFIG so
+    # each test can tune simulation speed independently.
+    # Default time_scale=0.05 preserves existing cell-cycle timing (9 min/cycle).
     if getattr(sim, 'continuous', False) and hasattr(sim, 'step'):
-        engine = RealtimeEngine(sim, time_scale=0.05, tick_hz=10,
+        time_scale: float = cfg.get("time_scale", 0.05)
+        tick_hz: int = cfg.get("tick_hz", 10)
+        engine = RealtimeEngine(sim, time_scale=time_scale, tick_hz=tick_hz,
                                 idle_timeout=30.0, bridge=bridge)
         engine.patch_snap_frame()
         engine.start()
