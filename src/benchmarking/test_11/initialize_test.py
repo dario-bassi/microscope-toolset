@@ -39,7 +39,7 @@ TEST_CONFIG = {
     "backend": "histology",
     "cell_type": "histology",
     "tissue_type": "glandular",
-    "grade": 1,
+    "grade": 2,
     "n_nuclei": 200,
     "world_size": 700,
     "internal_scale": 4,
