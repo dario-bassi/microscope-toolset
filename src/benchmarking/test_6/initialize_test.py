@@ -1,7 +1,7 @@
 """Test 6: multi-channel fluorescence — acquire, merge and segment.
 
 Acquire DAPI and mCherry channels separately, merge them, then segment cells.
-Cells are static and start out of focus (focal_plane = 50.0 µm).
+Cells are static and start out of focus (ZStage = 50.0 µm).
 
 Channels:
   DAPI    — nucleus    — filter SCFP2(434/474)     + LED UV
@@ -35,7 +35,10 @@ TEST_CONFIG = {
     "width": 1500,
     "height": 1500,
     "brownian_d": 0.0,
-    "focal_plane": 50.0,
+    "focal_plane": 0.0,
+    "initial_properties": [
+        ("ZStage", "Position", "50.0"),   # start 50 µm out of focus; GUI reflects this
+    ],
     "channels": [
         {
             "name": "DAPI",

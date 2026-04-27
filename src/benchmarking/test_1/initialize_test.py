@@ -25,8 +25,10 @@ TEST_CONFIG = {
     "cell_type": "normal",
     "n_cells": 50,
     "seed": 0,
-    # Start 10 µm above tissue (tissue_z=0), DOF=6 µm → clearly out of focus
-    "focal_plane": 10.0,
+    "focal_plane": 0.0,
+    "initial_properties": [
+        ("ZStage", "Position", "10.0"),   # start 10 µm out of focus; GUI reflects this
+    ],
     "channels": [
         {
             "name": "DAPI",
