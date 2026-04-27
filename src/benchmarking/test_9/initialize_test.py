@@ -94,7 +94,7 @@ TEST_CONFIG = {
     "backend": "particle",
     "cell_type": "cycle",
     "n_cells": 100,
-    "seed": 42,
+    "seed": 11,
     "width": 1500,
     "height": 1500,
     "brownian_d": 0.0,
