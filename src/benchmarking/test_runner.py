@@ -145,12 +145,17 @@ _SLM_DEVICE = """\
 
 def _generate_cfg(backend: str, channels: list[dict], output_dir: Path,
                   cell_type: str = "normal", phase_contrast: bool = False,
-                  slm: bool = False) -> Path:
+                  slm: bool = False,
+                  initial_properties: list[tuple[str, str, str]] | None = None) -> Path:
     """Write a .cfg with custom channel names and return its path.
 
     The filename uses the pattern ``virtual_<cell_type>.cfg`` so that
     ``_extract_cell_type()`` in mcp_server_gui.py returns the right value
     when pre-initialising the legacy SimulationBridge.
+
+    ``initial_properties`` is an optional list of (device, property, value)
+    tuples appended as ``#py Property,<device>,<property>,<value>`` lines
+    after channels — e.g. [("Objective", "Label", "40x")].
     """
     lines = [_CFG_HEADER.format(backend=backend)]
     if slm:
@@ -163,6 +168,10 @@ def _generate_cfg(backend: str, channels: list[dict], output_dir: Path,
         filt = ch["filter"]
         lines.append(f"#py ConfigGroup,Channel,{name},LED,Label,{led}\n")
         lines.append(f"#py ConfigGroup,Channel,{name},Filter Wheel,Label,{filt}\n")
+
+    if initial_properties:
+        for device, prop, value in initial_properties:
+            lines.append(f"#py Property,{device},{prop},{value}\n")
 
     cfg_text = "".join(lines)
     cfg_path = output_dir / f"virtual_{cell_type}.cfg"
@@ -240,10 +249,12 @@ def run_test(test_name: str) -> Path:
     cell_type: str = cfg.get("cell_type", "normal")
     phase_contrast: bool = cfg.get("phase_contrast", False)
     slm: bool = cfg.get("slm", False)
+    initial_properties: list = cfg.get("initial_properties", [])
     output_dir = _BENCHMARKING_DIR / test_name
     output_dir.mkdir(parents=True, exist_ok=True)
     cfg_path = _generate_cfg(backend, channels, output_dir, cell_type=cell_type,
-                             phase_contrast=phase_contrast, slm=slm)
+                             phase_contrast=phase_contrast, slm=slm,
+                             initial_properties=initial_properties)
 
     print(f"[test_runner] Test '{test_name}' ready:")
     print(f"  backend     : {backend}")
