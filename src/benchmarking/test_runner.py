@@ -222,8 +222,19 @@ def run_test(test_name: str) -> Path:
 
     # Pre-set GLOBAL_BRIDGE so SimServer.initialize() skips creating its own sim
     from virtual_microscope.engine.simulation_bridge import SimulationBridge, set_global_bridge
+    from virtual_microscope.engine.realtime import RealtimeEngine
     bridge = SimulationBridge(sim)
     set_global_bridge(bridge)
+
+    # SimServer.initialize() returns early when bridge is pre-set, so start the
+    # engine here instead.  time_scale controls speed: sim-s per real second.
+    # time_scale=0.05 → full 27 sim-s cycle = 540 real seconds = 9 min.
+    if getattr(sim, 'continuous', False) and hasattr(sim, 'step'):
+        engine = RealtimeEngine(sim, time_scale=0.05, tick_hz=10,
+                                idle_timeout=30.0, bridge=bridge)
+        engine.patch_snap_frame()
+        engine.start()
+        bridge._engine = engine
 
     # Generate cfg in a persistent temp dir (survives until process exits)
     cell_type: str = cfg.get("cell_type", "normal")
