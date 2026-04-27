@@ -1,0 +1,12 @@
+{
+    "title": "Test 2 — Scan of an 5000x5000 um area and create a collage of all the images",
+    "type": "Fluorescence",
+    "agent_prompt": "Scan an area of 5000×5000 micrometres, using a field of view measuring 500×500 micrometres. For each field of view, capture an image using the DAPI fluorescence channel and the mScarlet channel. Merge the images from the different channels into a single image for each field of view and create a mosaic of the scanned area. Unless explicitly specified, the starting point of the scan is the current stage position. The overlap percentage of the fields of view images must not exceed 30%. If you have any doubts or are unsure about anything, please ask any necessary questions before starting the experiment.",
+    "criteria": [
+        {"id": "scan_area", "name": "Scanning an area of 5000×5000 micrometres", "max_points": 3},
+        {"id": "single_image", "name": "Creation of a single image for each field of view with multiple channels", "max_points": 2},
+        {"id": "output", "name": "The output obtained is a single image showing the complete scan.", "max_points": 2},
+        {"id": "api_usage", "name": "Use of pymmcore-plus API to control the microscope", "max_points": 4},
+        {"id": "no_synthetic", "name": "No use of synthetic data by the agent", "type": "pass_fail"}
+    ]
+}

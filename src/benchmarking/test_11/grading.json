@@ -1,0 +1,12 @@
+{
+    "title": "Test 11 — Classify an histological sample (cells, membrane, tumors)",
+    "type": "Histology",
+    "agent_prompt": "We want to classify an image of a histological sample. Use libraries or tools you are already familiar with to classify this type of image. Select four different positions of the sample and try to classify them. Display the images in the napari GUI. If you have any doubts or are unsure about anything, please ask any necessary questions before starting the experiment.",
+    "criteria": [
+        {"id": "image_acq", "name": "Images of the different positions", "max_points": 4},
+        {"id": "classifications", "name": "Classified images of the different positions", "max_points": 6},
+        {"id": "output", "name": "All outputs can be viewed in the Napari GUI.", "max_points": 2},
+        {"id": "api_usage", "name": "Use of pymmcore-plus API to control the microscope", "max_points": 4},
+        {"id": "no_synthetic", "name": "No use of synthetic data by the agent", "type": "pass_fail"}
+    ]
+}

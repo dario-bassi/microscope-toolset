@@ -1,0 +1,12 @@
+{
+    "title": "Test 20 — Autofocus and show the plot of the z-axis where the focus plane is found",
+    "type": "Brightfield",
+    "agent_prompt": "The current sample is out of the focal plane. Try to locate the focal plane of the image using the brightfield channel. Plot the tested z-axis positions vs. the focus metric and highlight the value at which the focal plane was found. Take an image at the best z-position and display it in the napari GUI. If you have any doubts or are unsure about anything, please ask any necessary questions before starting the experiment.",
+    "criteria": [
+        {"id": "focus_image", "name": "Image of the sample in focus", "max_points": 4},
+        {"id": "focus_plot", "name": "Plot of z-axis positions vs. focus metric", "max_points": 4},
+        {"id": "output", "name": "All outputs can be viewed in the Napari GUI.", "max_points": 2},
+        {"id": "api_usage", "name": "Use of pymmcore-plus API to control the microscope", "max_points": 4},
+        {"id": "no_synthetic", "name": "No use of synthetic data by the agent", "type": "pass_fail"}
+    ]
+}
