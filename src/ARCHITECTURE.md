@@ -8,20 +8,20 @@
 
 | Task | Location |
 |------|----------|
-| Snap an image, move stage, set objective | `src/hardware/core.py` |
-| Run a timelapse / Z-stack / multi-position | `src/hardware/core.py:run_events()` |
-| Detect cells / tissue / neurons | `src/detection/` |
-| Measure intensity / morphology / kinetics | `src/analysis/` |
-| High-level protocol (adaptive survey, tracking, optogenetics) | `src/workflows/` |
-| Channel discovery, pixel size, config group | `src/hardware/config.py` |
-| Autofocus | `src/workflows/autofocus.py` |
-| FUCCI cell cycle | `src/analysis/cell_cycle.py` |
-| Bacterial light trap | `src/workflows/bacteria_trap.py` |
-| Q10 / temperature growth | `src/workflows/temperature_experiment.py` |
-| Save overlay / showcase image | `src/utils/diagnostics.py`, `src/utils/showcase.py` |
-| Per-sample-type step-by-step guide | `knowledge/playbooks/` |
-| Universal microscopy strategies | `knowledge/strategies/` |
-| pymmcore-plus / useq API reference | `knowledge/pymmcore/` |
+| Snap an image, move stage, set objective | `src/self-learn/hardware/core.py` |
+| Run a timelapse / Z-stack / multi-position | `src/self-learn/hardware/core.py:run_events()` |
+| Detect cells / tissue / neurons | `src/self-learn/detection/` |
+| Measure intensity / morphology / kinetics | `src/self-learn/analysis/` |
+| High-level protocol (adaptive survey, tracking, optogenetics) | `src/self-learn/workflows/` |
+| Channel discovery, pixel size, config group | `src/self-learn/hardware/config.py` |
+| Autofocus | `src/self-learn/workflows/autofocus.py` |
+| FUCCI cell cycle | `src/self-learn/analysis/cell_cycle.py` |
+| Bacterial light trap | `src/self-learn/workflows/bacteria_trap.py` |
+| Q10 / temperature growth | `src/self-learn/workflows/temperature_experiment.py` |
+| Save overlay / showcase image | `src/self-learn/utils/diagnostics.py`, `src/utils/showcase.py` |
+| Per-sample-type step-by-step guide | `src/self-learn/knowledge/playbooks/` |
+| Universal microscopy strategies | `src/self-learn/knowledge/strategies/` |
+| pymmcore-plus / useq API reference | `src/self-learn/knowledge/pymmcore/` |
 
 ---
 
@@ -46,7 +46,7 @@ LLM Agent  (reasoning + vision)
 
 ---
 
-## src/hardware/ — Microscope Control
+## src/self-learn/hardware/ — Microscope Control
 
 The single entry point for all hardware interaction.
 
@@ -62,7 +62,7 @@ The single entry point for all hardware interaction.
 
 ---
 
-## src/detection/ — Object Detection & Segmentation
+## src/self-learn/detection/ — Object Detection & Segmentation
 
 | Module | What it detects |
 |--------|----------------|
@@ -75,7 +75,7 @@ The single entry point for all hardware interaction.
 
 ---
 
-## src/analysis/ — Feature Extraction
+## src/self-learn/analysis/ — Feature Extraction
 
 ### Cell Biology & Physiology
 | Module | What it measures |
@@ -175,7 +175,7 @@ The single entry point for all hardware interaction.
 
 ---
 
-## src/workflows/ — Acquisition & Analysis Protocols
+## src/self-learn/workflows/ — Acquisition & Analysis Protocols
 
 All adaptive workflows return `(generator_factory, on_frame_callback, shared_state_dict)` so they compose cleanly with `run_events()`.
 
@@ -202,7 +202,7 @@ All adaptive workflows return `(generator_factory, on_frame_callback, shared_sta
 
 ---
 
-## src/utils/ — Utilities
+## src/self-learn/utils/ — Utilities
 
 | Module | What it does |
 |--------|-------------|
@@ -254,7 +254,7 @@ Both accept any iterable of `MDAEvent` (generator, list, `MDASequence`, `Queue`-
 
 ```python
 from useq import MDASequence, MDAEvent
-from src.hardware.core import snap, run_events
+from src.self_learn.hardware.core import snap, run_events
 
 # --- Single frame ---
 img = snap(core, channel='GFP')
@@ -309,34 +309,34 @@ results = run_events(core, gen(), on_frame=on_frame)
 
 ```python
 # Hardware
-from src.hardware.core import snap, move_to, set_objective, run_events, pixel_to_world
-from src.hardware.config import get_config
-from src.hardware.autofocus import autofocus_mda  # actually in workflows/
+from src.self_learn.hardware.core import snap, move_to, set_objective, run_events, pixel_to_world
+from src.self_learn.hardware.config import get_config
+from src.self_learn.hardware.autofocus import autofocus_mda  # actually in workflows/
 
 # Detection
-from src.detection.cells import detect_cells
-from src.detection.neurons import detect_foci         # returns list of dicts: {cy, cx, sigma, area}
-from src.detection.tissue import segment_tissue
+from src.self_learn.detection.cells import detect_cells
+from src.self_learn.detection.neurons import detect_foci         # returns list of dicts: {cy, cx, sigma, area}
+from src.self_learn.detection.tissue import segment_tissue
 
 # Analysis
-from src.analysis.kinetics import measure_growth_rate_series, fit_q10_with_ci
-from src.analysis.tracking import track_cells
-from src.analysis.cell_cycle import classify_fucci_phase
-from src.analysis.color_analysis import rgb2hed       # H&E stain separation
-from src.analysis.morphometry import measure_morphometry
-from src.analysis.intensity import classify_intensity_multiclass
-from src.analysis.flow import estimate_flow_velocity
+from src.self_learn.analysis.kinetics import measure_growth_rate_series, fit_q10_with_ci
+from src.self_learn.analysis.tracking import track_cells
+from src.self_learn.analysis.cell_cycle import classify_fucci_phase
+from src.self_learn.analysis.color_analysis import rgb2hed       # H&E stain separation
+from src.self_learn.analysis.morphometry import measure_morphometry
+from src.self_learn.analysis.intensity import classify_intensity_multiclass
+from src.self_learn.analysis.flow import estimate_flow_velocity
 
 # Workflows
-from src.workflows.adaptive import adaptive_survey_mda
-from src.workflows.scanning import scan_and_detect_mda
-from src.workflows.autofocus import autofocus_mda
-from src.workflows.bacteria_trap import run_bacteria_trap_mda, measure_bacteria_intensity
-from src.workflows.temperature_experiment import temperature_response_curve_v2
+from src.self_learn.workflows.adaptive import adaptive_survey_mda
+from src.self_learn.workflows.scanning import scan_and_detect_mda
+from src.self_learn.workflows.autofocus import autofocus_mda
+from src.self_learn.workflows.bacteria_trap import run_bacteria_trap_mda, measure_bacteria_intensity
+from src.self_learn.workflows.temperature_experiment import temperature_response_curve_v2
 
 # Utils
-from src.utils.diagnostics import save_snapshot
-from src.utils.showcase import make_showcase_figure
+from src.self_learn.utils.diagnostics import save_snapshot
+from src.self_learn.utils.showcase import make_showcase_figure
 ```
 
 ---
@@ -351,38 +351,3 @@ from src.utils.showcase import make_showcase_figure
 - `event.properties` for per-event device property changes: `[('Camera', 'Gain', '4')]` — native MDAEvent field, handled by the MDA engine
 
 ---
-
-## Statistics (Feb 2026)
-
-- **104 Python modules** across hardware / detection / analysis / workflows / utils
-- **333 scratch** challenge scripts (solve_153 → solve_546+)
-- **107+ tests** in `tests/` — run with `pytest tests/ -v`
-- **75+ knowledge files** in `knowledge/`
-
----
-
-## Migration Notes (Feb 2026)
-
-> **When adapting code from old `scratch/` challenge scripts**, check `knowledge/pymmcore/migration_notes.md`.
-
-The following were removed. Old scripts using them need updating:
-
-| Removed | Replacement |
-|---------|-------------|
-| `run_mda()` in `src.hardware.core` | `run_events()` |
-| `execute_mda()` in `src.workflows.mda` | `run_events()` |
-| `run_bacteria_trap()` | `run_bacteria_trap_mda()` |
-| `MDAEvent(metadata={'properties': {'Camera.Gain': 4.0}})` | `MDAEvent(properties=[('Camera', 'Gain', '4.0')])` |
-
-`run_events()` now delegates to `core.mda.run()` (real MDA engine, works with proxy via WebSocket) instead of a manual `snapImage()` loop.
-
----
-
-## Research References
-
-- [Smart Microscopy Roadmap (bioRxiv 2025)](https://www.biorxiv.org/content/10.1101/2025.08.18.670881v2.full)
-- [Event-driven acquisition (Nature Methods 2022)](https://www.nature.com/articles/s41592-022-01589-x)
-- [pymmcore-plus event-driven guide](https://pymmcore-plus.github.io/pymmcore-plus/guides/event_driven_acquisition/)
-- [pymmcore-plus MDA engine](https://pymmcore-plus.github.io/pymmcore-plus/guides/mda_engine/)
-- [useq-schema MDASequence](https://pymmcore-plus.github.io/useq-schema/schema/sequence/)
-- [useq-schema MDAEvent](https://pymmcore-plus.github.io/useq-schema/schema/event/)

@@ -416,7 +416,7 @@ The `knowledge/` directory survives across sessions. Use it to:
 **Code + Knowledge working together:**
 
 ```
-src/                  — Computation modules for hardware, detection, analysis, workflows
+src/self-learn/              — Computation modules for hardware, detection, analysis, workflows
 knowledge/
   playbooks/          — Step-by-step protocols per sample type (START HERE)
   strategies/         — Universal microscopy principles (read first)
