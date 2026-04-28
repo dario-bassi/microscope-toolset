@@ -278,7 +278,6 @@ Use these in your code instead of reimplementing common operations.
 ```
 src/                  — Computation modules for hardware, detection, analysis, workflows
 tests/                — Unit tests (pytest tests/ -v with synthetic data)
-scratch/              — Archived solve scripts (may reference old functions)
 ```
 
 **Agent workflow:**
