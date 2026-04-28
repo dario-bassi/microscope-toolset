@@ -1,0 +1,12 @@
+{
+    "title": "Test 17 — 3D organoid or volvox. Measure areas.",
+    "type": "organoid",
+    "agent_prompt": "Create a 3D scan of an organoid in the sample. Once the scan is complete, measure its total volume. Add the scan images to the napari GUI. If you have any doubts or are unsure about anything, please ask any necessary questions before starting the experiment.",
+    "criteria": [
+        {"id": "zstack_acq", "name": "Images of the organoid along the z-axis", "max_points": 4},
+        {"id": "volume_measurement", "name": "Volume measurement of the organoid reported", "max_points": 4},
+        {"id": "output", "name": "All outputs can be viewed in the Napari GUI.", "max_points": 2},
+        {"id": "api_usage", "name": "Use of pymmcore-plus API to control the microscope", "max_points": 4},
+        {"id": "no_synthetic", "name": "No use of synthetic data by the agent", "type": "pass_fail"}
+    ]
+}

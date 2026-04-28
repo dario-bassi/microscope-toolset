@@ -1,0 +1,16 @@
+{
+    "title": "Test 14 — Scan an area and identify the smaller and bigger cell. Scan at least 500 cells and plot the distribution. Show the 10% of the biggest cells with higher magnifications.",
+    "type": "Fluorescence",
+    "agent_prompt": "Scan an area of the sample containing at least 500 cells. Take one image for each field of view of 500x500 micrometers in the DAPI channel and the mScarlet channel. Segment the identified cells and create a plot of the cell area distribution. From the distribution plot, select all cells that fall within the top 10% by area and acquire new images of these cells using a higher magnification. Use the DAPI channel and the mScarlet channel, and finally merge both channels into a new image for each cell. Save the acquired images in separate folders and display only the cells that fall within the top 10% of the largest cells in the napari GUI. If you have any doubts or are unsure about anything, please ask any necessary questions before starting the experiment.",
+    "criteria": [
+        {"id": "dapi_images", "name": "Images of the scan in DAPI channel", "max_points": 4},
+        {"id": "mscarlet_images", "name": "Images of the scan cells in mscarlet channel", "max_points": 4},
+        {"id": "area_distribution", "name": "the area’s distribution plot", "max_points": 2},
+        {"id": "dapi_10_images", "name": "10% of the biggest cells in the scan in DAPI channel ", "max_points": 4},
+        {"id": "mscarlet_10_images", "name": "10% of the biggest cells in the scan in mscarlet channel", "max_points": 4},
+        {"id":"merged_10_images", "name": "Merged images of 10% biggest cell", "max_points": 4},
+        {"id": "api_usage", "name": "Use of pymmcore-plus API to control the microscope", "max_points": 4},
+        {"id": "no_synthetic", "name": "No use of synthetic data by the agent", "type": "pass_fail"},
+        {"id": "output", "name": "All outputs can be viewed in the Napari GUI.", "max_points": 2}
+    ]
+}

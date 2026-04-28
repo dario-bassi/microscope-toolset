@@ -2,10 +2,12 @@
 
 from __future__ import annotations
 
+import base64
 import json
 import re
 import sys
 from datetime import datetime
+from pathlib import Path
 from typing import Any
 
 try:
@@ -14,23 +16,30 @@ try:
 except ImportError:
     _HAS_MARKDOWN = False
 
-from PyQt6.QtCore import Qt, QSize, QSizeF
-from PyQt6.QtGui import QFont, QTextOption
+from PyQt6.QtCore import Qt, QByteArray, QSize, QSizeF
+from PyQt6.QtGui import QFont, QPixmap, QTextOption
 from PyQt6.QtWidgets import (
     QApplication,
+    QCheckBox,
+    QComboBox,
     QFrame,
     QHBoxLayout,
     QLabel,
     QMainWindow,
+    QMessageBox,
     QPushButton,
     QScrollArea,
     QSizePolicy,
+    QSpinBox,
     QSplitter,
     QTextBrowser,
     QTextEdit,
+    QToolBar,
     QVBoxLayout,
     QWidget,
 )
+
+_BENCHMARKING_DIR = Path(__file__).parent
 
 from src.benchmarking.review_conversation import (
     ConversationStats,
@@ -378,6 +387,47 @@ def _render_tool_use_block(name: str, inp: dict[str, Any], layout: QVBoxLayout) 
     layout.addWidget(frame)
 
 
+def _make_image_widget(b64_data: str) -> QLabel:
+    """Render a base64-encoded PNG/JPEG image as a scaled QLabel."""
+    raw = base64.b64decode(b64_data)
+    ba = QByteArray(raw)
+    pixmap = QPixmap()
+    pixmap.loadFromData(ba)
+    if not pixmap.isNull() and pixmap.width() > _CONTENT_WIDTH - 20:
+        pixmap = pixmap.scaledToWidth(
+            _CONTENT_WIDTH - 20, Qt.TransformationMode.SmoothTransformation
+        )
+    label = QLabel()
+    label.setPixmap(pixmap)
+    label.setAlignment(Qt.AlignmentFlag.AlignLeft)
+    return label
+
+
+_PERSISTED_RE = re.compile(
+    r"<persisted-output>\s*Output too large \(([^)]+)\)[^\n]*\n"
+    r".*?Preview \([^)]+\):\n(.*)",
+    re.DOTALL,
+)
+
+
+def _clean_persisted_output(text: str) -> tuple[str, bool]:
+    """Strip <persisted-output> wrapper and return (cleaned_text, was_truncated).
+
+    If the text is a persisted-output placeholder, returns the preview with a
+    short header noting the truncation. Otherwise returns the original text.
+    """
+    stripped = text.strip()
+    if not stripped.startswith("<persisted-output>"):
+        return text, False
+    m = _PERSISTED_RE.search(stripped)
+    if m:
+        size, preview = m.group(1), m.group(2).rstrip()
+        return f"[Output truncated — full size {size}]\n\n{preview}", True
+    # Malformed tag — just strip the XML markers
+    cleaned = re.sub(r"</?persisted-output>", "", stripped).strip()
+    return cleaned, True
+
+
 def _render_tool_result(result: ToolResult, layout: QVBoxLayout) -> None:
     color    = TOOL_ERR_BG if result.is_error else TOOL_OK_BG
     txt_col  = "#991B1B"   if result.is_error else "#065F46"
@@ -404,19 +454,59 @@ def _render_tool_result(result: ToolResult, layout: QVBoxLayout) -> None:
     hdr.addStretch()
     fl.addLayout(hdr)
 
-    content_str = (
-        result.content if isinstance(result.content, str)
-        else json.dumps(result.content, ensure_ascii=False)
-    )
-    if content_str.strip():
-        # Separator
+    # Normalise content into renderable segments.
+    # Each segment is one of:
+    #   ('text',  str,  bool)   — text string, True if should render as markdown
+    #   ('image', str)          — base64 image data
+    segments: list[tuple] = []
+
+    if isinstance(result.content, list):
+        text_parts: list[str] = []
+        for item in result.content:
+            if not isinstance(item, dict):
+                continue
+            itype = item.get("type", "")
+            if itype == "text":
+                text_parts.append(item.get("text", ""))
+            elif itype == "image":
+                # Flush accumulated text first
+                if text_parts:
+                    joined = "\n\n".join(text_parts).strip()
+                    segments.append(("text", joined, True))   # markdown
+                    text_parts = []
+                segments.append(("image", item.get("data", "")))
+        if text_parts:
+            joined = "\n\n".join(text_parts).strip()
+            segments.append(("text", joined, True))
+    else:
+        # Plain string — may be a <persisted-output> placeholder
+        cleaned, was_truncated = _clean_persisted_output(result.content)
+        segments.append(("text", cleaned, False))   # plain text
+
+    if not segments or all(
+        (s[0] == "text" and not s[1].strip()) for s in segments
+    ):
+        fl.addWidget(QLabel("<i>(empty response)</i>"))
+    else:
         sep = QFrame()
         sep.setFrameShape(QFrame.Shape.HLine)
         sep.setStyleSheet("color:rgba(0,0,0,0.08);")
         fl.addWidget(sep)
-        fl.addWidget(_make_plain_text_widget(content_str, color))
-    else:
-        fl.addWidget(QLabel("<i>(empty response)</i>"))
+        for seg in segments:
+            if seg[0] == "image":
+                try:
+                    fl.addWidget(_make_image_widget(seg[1]))
+                except Exception:
+                    fl.addWidget(QLabel("<i>[image — could not decode]</i>"))
+            else:
+                _, text, as_markdown = seg
+                if not text.strip():
+                    continue
+                if as_markdown:
+                    fl.addWidget(CollapsibleWidget(text, bg=color))
+                else:
+                    fl.addWidget(_make_plain_text_widget(text, color))
+
     layout.addWidget(frame)
 
 
@@ -670,6 +760,209 @@ class StatsPanel(QWidget):
 
 
 # ---------------------------------------------------------------------------
+# Grading window
+# ---------------------------------------------------------------------------
+
+class GradingWindow(QMainWindow):
+    """Popup window for scoring a test run against grading.json criteria."""
+
+    def __init__(self, parent: QWidget | None = None) -> None:
+        super().__init__(parent)
+        self.setWindowTitle("Test Grading")
+        self.resize(680, 780)
+
+        self._spinboxes:  dict[str, tuple[QSpinBox, int]] = {}
+        self._checkboxes: dict[str, QCheckBox] = {}
+        self._current_test: Path | None = None
+        self._criteria: list[dict] = []
+
+        central = QWidget()
+        self.setCentralWidget(central)
+        root = QVBoxLayout(central)
+        root.setContentsMargins(20, 16, 20, 16)
+        root.setSpacing(12)
+
+        # ── Test selector ────────────────────────────────────────────────────
+        sel_row = QHBoxLayout()
+        sel_row.addWidget(QLabel("<b>Test:</b>"))
+        self._combo = QComboBox()
+        self._combo.currentIndexChanged.connect(self._on_test_selected)
+        sel_row.addWidget(self._combo, 1)
+        root.addLayout(sel_row)
+
+        # ── Agent prompt (read-only) ─────────────────────────────────────────
+        root.addWidget(QLabel("<b>Agent Prompt:</b>"))
+        self._prompt_display = QTextEdit()
+        self._prompt_display.setReadOnly(True)
+        self._prompt_display.setFixedHeight(110)
+        self._prompt_display.setStyleSheet(
+            "background:#F3F4F6; border:1px solid #D1D5DB; border-radius:4px; font-size:11px;"
+        )
+        root.addWidget(self._prompt_display)
+
+        # ── Criteria scroll area ─────────────────────────────────────────────
+        root.addWidget(QLabel("<b>Criteria:</b>"))
+        self._criteria_widget = QWidget()
+        self._criteria_layout = QVBoxLayout(self._criteria_widget)
+        self._criteria_layout.setContentsMargins(0, 0, 0, 0)
+        self._criteria_layout.setSpacing(4)
+
+        crit_scroll = QScrollArea()
+        crit_scroll.setWidgetResizable(True)
+        crit_scroll.setWidget(self._criteria_widget)
+        crit_scroll.setStyleSheet("border:1px solid #E5E7EB; border-radius:4px;")
+        root.addWidget(crit_scroll, 1)
+
+        # ── Score summary ────────────────────────────────────────────────────
+        self._score_label = QLabel("Score: 0 / 0  (0%)")
+        self._score_label.setStyleSheet(
+            "font-size:13px; font-weight:bold; color:#111827;"
+        )
+        root.addWidget(self._score_label)
+
+        # ── Notes ────────────────────────────────────────────────────────────
+        root.addWidget(QLabel("<b>Notes:</b>"))
+        self._notes = QTextEdit()
+        self._notes.setFixedHeight(72)
+        self._notes.setPlaceholderText("Optional notes about this grading…")
+        self._notes.setStyleSheet(
+            "border:1px solid #D1D5DB; border-radius:4px; font-size:11px;"
+        )
+        root.addWidget(self._notes)
+
+        # ── Save button ──────────────────────────────────────────────────────
+        save_btn = QPushButton("Save Grade")
+        save_btn.setStyleSheet(
+            "QPushButton{background:#2563EB;color:white;font-weight:bold;"
+            "border-radius:6px;padding:6px 18px;font-size:12px;}"
+            "QPushButton:hover{background:#1D4ED8;}"
+        )
+        save_btn.clicked.connect(self._save_grade)
+        root.addWidget(save_btn, alignment=Qt.AlignmentFlag.AlignRight)
+
+        self._populate_tests()
+
+    # ── Helpers ──────────────────────────────────────────────────────────────
+
+    def _populate_tests(self) -> None:
+        self._combo.blockSignals(True)
+        self._combo.clear()
+        tests = sorted(
+            (p.parent for p in _BENCHMARKING_DIR.glob("test_*/grading.json")),
+            key=lambda p: int(p.name.split("_")[1]),
+        )
+        for test_dir in tests:
+            self._combo.addItem(test_dir.name, userData=test_dir)
+        self._combo.blockSignals(False)
+        if self._combo.count():
+            self._on_test_selected(0)
+
+    def _on_test_selected(self, index: int) -> None:
+        test_dir: Path | None = self._combo.itemData(index)
+        if test_dir is None:
+            return
+        grading_path = test_dir / "grading.json"
+        try:
+            data: dict = json.loads(grading_path.read_text(encoding="utf-8"))
+        except Exception as exc:
+            QMessageBox.warning(self, "Error", f"Could not read grading.json:\n{exc}")
+            return
+
+        self._current_test = test_dir
+        self._criteria = data.get("criteria", [])
+        self._prompt_display.setPlainText(data.get("agent_prompt", ""))
+
+        # Rebuild criteria widgets
+        while self._criteria_layout.count():
+            item = self._criteria_layout.takeAt(0)
+            if item.widget():
+                item.widget().deleteLater()
+        self._spinboxes.clear()
+        self._checkboxes.clear()
+
+        for crit in self._criteria:
+            cid   = crit["id"]
+            name  = crit["name"]
+            ctype = crit.get("type", "scored")
+
+            row_w = QWidget()
+            row_w.setStyleSheet(
+                "QWidget{background:#F9FAFB; border-radius:4px;}"
+                " QLabel{background:transparent;}"
+            )
+            rl = QHBoxLayout(row_w)
+            rl.setContentsMargins(10, 6, 10, 6)
+            rl.setSpacing(10)
+
+            name_lbl = QLabel(name)
+            name_lbl.setWordWrap(True)
+            name_lbl.setStyleSheet("font-size:11px;")
+            rl.addWidget(name_lbl, 1)
+
+            if ctype == "pass_fail":
+                cb = QCheckBox("Pass")
+                cb.setStyleSheet("font-size:11px;")
+                cb.toggled.connect(self._update_score)
+                rl.addWidget(cb)
+                self._checkboxes[cid] = cb
+            else:
+                max_pts = int(crit.get("max_points", 10))
+                sb = QSpinBox()
+                sb.setMinimum(0)
+                sb.setMaximum(max_pts)
+                sb.setFixedWidth(70)
+                sb.setSuffix(f" / {max_pts}")
+                sb.valueChanged.connect(self._update_score)
+                rl.addWidget(sb)
+                self._spinboxes[cid] = (sb, max_pts)
+
+            self._criteria_layout.addWidget(row_w)
+
+        self._criteria_layout.addStretch()
+        self._update_score()
+
+    def _update_score(self) -> None:
+        total  = sum(mp for _, mp in self._spinboxes.values())
+        earned = sum(sb.value() for sb, _ in self._spinboxes.values())
+        pct    = int(100 * earned / total) if total else 0
+        self._score_label.setText(f"Score: {earned} / {total}  ({pct}%)")
+
+    def _save_grade(self) -> None:
+        if self._current_test is None:
+            return
+        grades_dir = self._current_test / "grades"
+        grades_dir.mkdir(exist_ok=True)
+
+        result: dict = {
+            "test":      self._current_test.name,
+            "timestamp": datetime.now().isoformat(),
+            "criteria":  {},
+            "notes":     self._notes.toPlainText().strip(),
+        }
+        for crit in self._criteria:
+            cid = crit["id"]
+            if crit.get("type") == "pass_fail":
+                result["criteria"][cid] = {
+                    "type":   "pass_fail",
+                    "passed": self._checkboxes[cid].isChecked(),
+                }
+            else:
+                sb, max_pts = self._spinboxes[cid]
+                result["criteria"][cid] = {
+                    "type":  "scored",
+                    "score": sb.value(),
+                    "max":   max_pts,
+                }
+
+        stamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        out_path = grades_dir / f"grade_{stamp}.json"
+        out_path.write_text(
+            json.dumps(result, indent=4, ensure_ascii=False), encoding="utf-8"
+        )
+        QMessageBox.information(self, "Saved", f"Grade saved to:\n{out_path}")
+
+
+# ---------------------------------------------------------------------------
 # Main window
 # ---------------------------------------------------------------------------
 
@@ -679,6 +972,22 @@ class ConversationDashboard(QMainWindow):
         self.setWindowTitle("Claude Code — Conversation Review")
         self.resize(1440, 920)
         self.setMinimumSize(QSize(800, 500))
+
+        # ── Toolbar ──────────────────────────────────────────────────────────
+        toolbar = QToolBar("Actions")
+        toolbar.setMovable(False)
+        toolbar.setStyleSheet(
+            "QToolBar{background:#F9FAFB;border-bottom:1px solid #E5E7EB;spacing:6px;}"
+        )
+        grade_btn = QPushButton("Grade")
+        grade_btn.setStyleSheet(
+            "QPushButton{background:#2563EB;color:white;font-weight:bold;"
+            "border-radius:5px;padding:4px 14px;font-size:11px;}"
+            "QPushButton:hover{background:#1D4ED8;}"
+        )
+        grade_btn.clicked.connect(self._open_grading)
+        toolbar.addWidget(grade_btn)
+        self.addToolBar(Qt.ToolBarArea.TopToolBarArea, toolbar)
 
         splitter = QSplitter(Qt.Orientation.Horizontal)
         self.setCentralWidget(splitter)
@@ -729,6 +1038,16 @@ class ConversationDashboard(QMainWindow):
         splitter.setSizes([1110, 330])
         splitter.setCollapsible(0, False)
 
+        self._grading_window: GradingWindow | None = None
+
+    def _open_grading(self) -> None:
+        if self._grading_window is None or not self._grading_window.isVisible():
+            self._grading_window = GradingWindow(parent=self)
+            self._grading_window.show()
+        else:
+            self._grading_window.raise_()
+            self._grading_window.activateWindow()
+
 
 # ---------------------------------------------------------------------------
 # Entry point
@@ -739,4 +1058,4 @@ def launch_dashboard(messages: list[ParsedMessage], stats: ConversationStats) ->
     app = QApplication.instance() or QApplication(sys.argv)
     window = ConversationDashboard(messages, stats)
     window.show()
-    app.exec()
+    sys.exit(app.exec())

@@ -201,6 +201,8 @@ vector-database/
 
 # json
 *.json
+# json
+!src/benchmarking/test_*/grading.json
 
 logs
 
