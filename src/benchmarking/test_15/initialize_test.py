@@ -16,7 +16,7 @@ before running its detection workflow.
 
 Channels:
   DAPI    — nucleus  — filter SCFP2(434/474)    + LED UV
-  mCherry — nucleus  — filter mScarlet3(569/582) + LED ORANGE
+  mScarlet — nucleus  — filter mScarlet3(569/582) + LED ORANGE
 
 Simulation area: 1500x1500 µm, 50 static normal cells, in focus.
 """
@@ -70,7 +70,7 @@ TEST_CONFIG = {
             "led": "UV",
         },
         {
-            "name": "mCherry",
+            "name": "mScarlet",
             "filter": "mScarlet3(569/582)",
             "led": "ORANGE",
         },

@@ -10,7 +10,7 @@ photobleach_rate controls fractional signal loss per exposure:
 
 Channels:
   DAPI    — nucleus — filter SCFP2(434/474)    + LED UV
-  mCherry — nucleus — filter mScarlet3(569/582) + LED ORANGE
+  mScarlet — nucleus — filter mScarlet3(569/582) + LED ORANGE
 
 Simulation area: 1500x1500 µm, 80 normal cells, out of focus.
 """
@@ -55,7 +55,7 @@ TEST_CONFIG = {
             "led": "UV",
         },
         {
-            "name": "mCherry",
+            "name": "mScarlet",
             "filter": "mScarlet3(569/582)",
             "led": "ORANGE",
         },
