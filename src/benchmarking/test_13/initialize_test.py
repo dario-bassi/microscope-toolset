@@ -58,6 +58,8 @@ TEST_CONFIG = {
     "radius_min": 17.0,   # µm
     "radius_max": 22.0,   # µm
     "brownian_d": 0.5,
+    "time_scale": 5.0,    # 5x real-time so optogenetic migration is visible within seconds
+    "tick_hz": 10,
     "focal_plane": 0.0,
     "phase_contrast": True,
     "slm": True,

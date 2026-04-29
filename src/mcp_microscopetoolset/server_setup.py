@@ -1178,59 +1178,59 @@ def create_mcp_server(
     # TODO: add timelapse_screenshot later
 
     
-    @mcp.tool(
-            name="request_user_clarification",
-            description="Allow the MCP Client to interact with the user asking for clarification or some new input to answer the user's request."
-    )
-    async def request_user_clarification(
-        message: str = Field(..., description="The clarification message to present to the user."),
-        ctx: Context = None,
-        user_query: str = Field("", description="(Optional) The original user query, used for logging only.")
-    ) -> dict[str, Any]:
-        """Request user clarification from MCP client"""
-        start_time = time.time()
-        result = None
-        try:
+    #@mcp.tool(
+    #        name="request_user_clarification",
+    #        description="Allow the MCP Client to interact with the user asking for clarification or some new input to answer the user's request."
+    #)
+    #async def request_user_clarification(
+    #    message: str = Field(..., description="The clarification message to present to the user."),
+    #    ctx: Context = None,
+    #    user_query: str = Field("", description="(Optional) The original user query, used for logging only.")
+    #) -> dict[str, Any]:
+    #    """Request user clarification from MCP client"""
+    #    start_time = time.time()
+    #    result = None
+    #    try:
             # clarification
-            class elicitClarification(BaseModel):
-                agent_message: str = Field(description="The original Main Agent message.")
-                user_answer: str = Field(description="The user answer directed to the Main Agent.")
+    #        class elicitClarification(BaseModel):
+    #            agent_message: str = Field(description="The original Main Agent message.")
+    #            user_answer: str = Field(description="The user answer directed to the Main Agent.")
 
-            result_elicit = await ctx.elicit(message, elicitClarification)
+     #       result_elicit = await ctx.elicit(message, elicitClarification)
 
-            if result_elicit.action == "accept":
-                result = result_elicit.data
-            elif result_elicit.action == "decline":
-                result = {
-                    "agent_message": message,
-                    "user_answer": "Operation declined"
-                }
-            elif result_elicit.action == "cancel":
-                result = {
-                    "agent_message": message,
-                    "user_answer": "Operation cancelled"
-                }
+     #       if result_elicit.action == "accept":
+     #           result = result_elicit.data
+     #       elif result_elicit.action == "decline":
+     #           result = {
+     #               "agent_message": message,
+     #               "user_answer": "Operation declined"
+     #           }
+     #       elif result_elicit.action == "cancel":
+     #           result = {
+     #               "agent_message": message,
+     #               "user_answer": "Operation cancelled"
+     #           }
 
-            return result
-        except Exception as e:
-            logger.error(f"Error in request_user_clarification: {e}", exc_info=True)
-            result = {
-                "agent_message": message,
-                "user_answer": f"Elicitation not supported by this MCP client: {str(e)}. "
-                               "Note: ctx.elicit() is supported by some MCP clients (e.g., VS Code Copilot) but not all."
-            }
-            return result
-        finally:
-            execution_time_ms = (time.time() - start_time) * 1000
-            if benchmark_logger and user_query:
-                benchmark_logger.set_query(user_query)
-            if benchmark_logger and result is not None:
-                benchmark_logger.log_tool_call(
-                    tool_name="request_user_clarification",
-                    input_params={"message": message, "user_query": user_query},
-                    result=result,
-                    execution_time_ms=execution_time_ms
-                )
+      #      return result
+      #  except Exception as e:
+      #      logger.error(f"Error in request_user_clarification: {e}", exc_info=True)
+      #      result = {
+      #          "agent_message": message,
+      #          "user_answer": f"Elicitation not supported by this MCP client: {str(e)}. "
+      #                         "Note: ctx.elicit() is supported by some MCP clients (e.g., VS Code Copilot) but not all."
+      #      }
+      #      return result
+      #  finally:
+      #      execution_time_ms = (time.time() - start_time) * 1000
+      #      if benchmark_logger and user_query:
+      #          benchmark_logger.set_query(user_query)
+        #    if benchmark_logger and result is not None:
+        #        benchmark_logger.log_tool_call(
+        #            tool_name="request_user_clarification",
+        #            input_params={"message": message, "user_query": user_query},
+        #            result=result,
+        #            execution_time_ms=execution_time_ms
+        #        )
     
     #@mcp.tool(
     #    name="tool_for_segmenting",
