@@ -61,7 +61,7 @@ TEST_CONFIG = {
             "led": "UV",
         },
         {
-            "name": "mCherry",
+            "name": "mScarlet",
             "filter": "mScarlet3(569/582)",
             "led": "ORANGE",
         },
