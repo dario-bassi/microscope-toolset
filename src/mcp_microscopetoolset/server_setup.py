@@ -2,7 +2,6 @@ from typing import Any, Annotated, Literal
 from mcp.server.fastmcp import FastMCP, Context
 from mcp.types import ImageContent, TextContent
 from pydantic import Field, BeforeValidator, PlainSerializer, WithJsonSchema
-from src.local.prepare_code import prepare_code
 import logging
 import sys
 import json
@@ -549,7 +548,7 @@ def create_mcp_server(
         start_time = time.time()
         result = None
         try:
-            prepare_code_to_run = prepare_code(code)
+            prepare_code_to_run = code
 
             # Check for missing packages before running — require explicit approval
             missing = executor._get_missing_imports(prepare_code_to_run)
