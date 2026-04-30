@@ -312,8 +312,10 @@ class MCPServer(QWidget):
         self._viewer_proxy = None
         self._mmwin = None
         self._last_cfg_path = None
+        self._proxy_thread = None
+        self._proxy_worker = None
         # Prevents _capturing_load from triggering Phase 2 on the recursive inner call
-        # that napari-micromanager makes during a CMMCorePlus↔UniMMCore core swap.
+        # that napari-micromanager makes during set_core / _auto_detect_load.
         self._in_user_load = False
 
         if self._auto_config is not None:
@@ -416,10 +418,10 @@ class MCPServer(QWidget):
                 _nm_load = core.loadSystemConfiguration
 
                 def _capturing_load(path):
-                    # During a CMMCorePlus↔UniMMCore swap, napari-micromanager's
-                    # _auto_detect_load calls loadSystemConfiguration on the new core
-                    # from inside _nm_load — which hits our wrapper again. The flag
-                    # lets that inner call pass through without starting a second Phase 2.
+                    # _in_user_load is True while we are inside a user-initiated load.
+                    # napari-micromanager may call loadSystemConfiguration again on the
+                    # remote core during set_core() — the flag lets those pass straight
+                    # through without launching a second proxy.
                     if self._in_user_load:
                         _nm_load(path)
                         return
@@ -436,12 +438,10 @@ class MCPServer(QWidget):
                             )
                             return
 
-                        # TODO (task A3): 'virtual' branch will start CoreProxyWorker
-                        # instead of calling _nm_load. For now both paths fall through to
-                        # _nm_load so existing behaviour is preserved during the refactor.
-                        _nm_load(path)
-                        # Load fully complete (including any core swap) — start Phase 2 once.
-                        self._start_phase2()
+                        # Both virtual and real cfgs go through the proxy: CoreProxyWorker
+                        # loads the cfg into the right core type and starts the HTTP server.
+                        # Phase 2 runs in _on_proxy_ready once the server is up.
+                        self._start_proxy_worker(str(path))
                     finally:
                         self._in_user_load = False
 
@@ -462,6 +462,44 @@ class MCPServer(QWidget):
                 f"Failed to add napari-micromanager plugin: {e}\n"
                 + traceback.format_exc()
             )
+
+    _PROXY_PORT = 5601  # single proxy per session; real port allocation deferred to Task E
+
+    def _start_proxy_worker(self, cfg_path: str) -> None:
+        """Spin up CoreProxyWorker in a QThread; Phase 2 runs when server_ready fires."""
+        self.status_update.emit("Starting microscope proxy server…")
+        thread = QThread()
+        worker = CoreProxyWorker(cfg_path=cfg_path, port=self._PROXY_PORT)
+        worker.moveToThread(thread)
+        worker.server_ready.connect(self._on_proxy_ready)
+        worker.server_error.connect(self._on_proxy_error)
+        thread.started.connect(worker.run)
+        # Keep references so Python doesn't GC the thread before it finishes.
+        self._proxy_thread = thread
+        self._proxy_worker = worker
+        thread.start()
+
+    @pyqtSlot(str)
+    def _on_proxy_ready(self, url: str) -> None:
+        """Runs on the main Qt thread when the proxy server is accepting connections."""
+        from pymmcore_proxy import connect
+        logger.info(f"Proxy ready at {url} — connecting RemoteMMCore")
+        self.status_update.emit("Proxy ready — connecting core…")
+        remote_core = connect(url)
+        # Guard against napari-mm calling loadSystemConfiguration on the new core
+        # during set_core (which would re-enter _capturing_load).
+        self._in_user_load = True
+        try:
+            self._mmwin.set_core(remote_core)
+        finally:
+            self._in_user_load = False
+        self._start_phase2()
+
+    @pyqtSlot(str)
+    def _on_proxy_error(self, msg: str) -> None:
+        """Runs on the main Qt thread when the proxy server fails to start."""
+        logger.error(f"Proxy server failed: {msg}")
+        self.status_update.emit(f"Error: proxy server failed — {msg}")
 
     def _start_phase2(self) -> None:
         """Called once per user-initiated cfg load; hands the loaded core to the worker."""
