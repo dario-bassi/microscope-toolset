@@ -77,23 +77,55 @@ class Execute:
             logger.error(f"Unexpected error installing {module}: {e}")
             return False
         
-    def _preimport_dependencies(self, code: str):
-        """Parse AST for import an ensure modules are available (install if needed)."""
-        tree = ast.parse(code)
+    def _get_missing_imports(self, code: str) -> list[str]:
+        """Parse AST and return top-level module names that are not currently installed."""
+        missing = []
+        try:
+            tree = ast.parse(code)
+        except SyntaxError:
+            return []
         for node in ast.walk(tree):
             if isinstance(node, ast.Import):
-                for n in node.names:
-                    mod = n.name.split('.')[0]
-                    if importlib.util.find_spec(mod) is None:
-                        if not self._install_library(mod):
-                            raise ModuleNotFoundError(mod)
-                    importlib.import_module(mod)
+                for alias in node.names:
+                    mod = alias.name.split('.')[0]
+                    if importlib.util.find_spec(mod) is None and mod not in missing:
+                        missing.append(mod)
             elif isinstance(node, ast.ImportFrom) and node.module:
                 mod = node.module.split('.')[0]
-                if importlib.util.find_spec(mod) is None:
-                    if not self._install_library(mod):
-                        raise ModuleNotFoundError(node)
-                importlib.import_module(mod)
+                if importlib.util.find_spec(mod) is None and mod not in missing:
+                    missing.append(mod)
+        return missing
+
+    def _preimport_dependencies(self, code: str) -> list[str]:
+        """Validate imports, auto-install missing packages, return list of any that still failed."""
+        missing = self._get_missing_imports(code)
+        failed = []
+        for mod in missing:
+            logger.info(f"Package '{mod}' not found — attempting install.")
+            if not self._install_library(mod):
+                failed.append(mod)
+        # pre-import all top-level modules so they are in sys.modules before exec
+        try:
+            tree = ast.parse(code)
+        except SyntaxError:
+            return failed
+        for node in ast.walk(tree):
+            if isinstance(node, ast.Import):
+                for alias in node.names:
+                    mod = alias.name.split('.')[0]
+                    if mod not in failed:
+                        try:
+                            importlib.import_module(mod)
+                        except Exception:
+                            pass
+            elif isinstance(node, ast.ImportFrom) and node.module:
+                mod = node.module.split('.')[0]
+                if mod not in failed:
+                    try:
+                        importlib.import_module(mod)
+                    except Exception:
+                        pass
+        return failed
 
     
 
@@ -108,14 +140,13 @@ class Execute:
         if not self.is_safe_viewer(code):
             return "viewer"
         
-        # Ensure dependencies present
+        # Validate and pre-import dependencies
         try:
-            self._preimport_dependencies(code)
-        except ModuleNotFoundError as e:
-            return f"Dependency error: {e}"
-        
+            failed = self._preimport_dependencies(code)
         except Exception as e:
             return f"Dependency parsing error: {e}"
+        if failed:
+            return f"Missing packages that could not be installed: {', '.join(failed)}. Install them manually and retry."
         
         # Execute code in specif mode
         if execution_mode == "live":
