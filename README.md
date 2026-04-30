@@ -67,13 +67,6 @@ DB_PASSWORD="<your password>"
 
 If any of the `DB_*` variables are absent, the PostgreSQL logger is skipped automatically.
 
-### Create the vector database with pdf files
-To help the different agents to avoid hallucination, it's advised to create a vector database with the different "knowledge". We have the documentation of *pymmcore_plus* and the publications of the *Pertz Lab*. If you want to add other pdfs file you can run this command:
-```
-python .\src\create_database_from_publication.py --db <path to db> --doc <path to pdf(s)>
-```
-In the folder that you choose were to save the database, at the moment two directories will be created: *pages_png* and *pages_markdown*. The first will contain the png files of each page of the document and in the second the markdown files of the text extracted. 
-
 ### Model configuration
 
 The toolset uses two models, both configurable via the `.env` file:
@@ -119,7 +112,7 @@ python -m src.plugin_napari
 On the right there is the panel control that will start or stop the MCP Microscope Toolset server.
 
 ```
-Example of claude code
+Add the mcp server to you claude code account
 
 $ claude code add --transport http microscope http://127.0.0.1:5500/mcp
 
@@ -130,6 +123,9 @@ $ /mcp + enter
 And select the microscope MCP server either connecting the server or enabling the server, and from the terminal whery you started the napari-plugin you will see if the server correctly connected.
 ```
 After you added the *mcp.json* configuration file, you can start the MCP Client that will connect to the server.
+
+### Project structure
+To add
 
 
 ### Execution guardrails
@@ -169,10 +165,10 @@ If you need a guardrail for a library that is not yet covered, please [open an i
 
 ### TO DO LIST
 
-- [ ] Fix use of Elasticsearch and PostgresSQL database
+- [x] Fix use of Elasticsearch and PostgresSQL database
 - [x] Add summary of Claude Code Agent session
 - [ ] Calculate some Analysis insight as: nb tokens, duration, final code, whole conversation between user and agent. Was planning to do it on a jupyter notebook but if a better way exists then lets implement it
-- [ ] Add the possibility to use a remote core. This will replace the part of executing it on the mcp tool execution code, but for other image analysis, will need to stay.
+- [x] Add the possibility to use a remote core. This will replace the part of executing it on the mcp tool execution code, but for other image analysis, will need to stay.
 - [ ] Plan the experiments to do on the real microscope to show the train & untrained Agent.
 - [ ] Plan to create additional metadata from the microscope session
 - [x] Build a chatbox for visualising user-agent conversation, including time, tool calls, ect.
