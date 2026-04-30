@@ -19,6 +19,7 @@ from src.mcp_microscopetoolset.agents_init import initialize_agents
 from src.mcp_microscopetoolset.viewer import NapariViewerMC
 from src.microscope.microscope_event_cache import MicroscopeEventCache
 from src.benchmarking.benchmark_logger import BenchmarkLogger
+from src.utils.cfg_utils import classify_cfg as _classify_cfg
 
 logger = logging.getLogger("MCPServer")
 if not logger.handlers:
@@ -31,19 +32,6 @@ if not logger.handlers:
     logger.addHandler(fh)
 
 
-def _extract_cell_type(cfg_path: str) -> str:
-    """'virtual_optogenetic.cfg' → 'optogenetic'."""
-    basename = os.path.splitext(os.path.basename(cfg_path))[0]
-    return basename.split("_", 1)[1] if "_" in basename else "normal"
-
-
-def _is_old_style_virtual_cfg(cfg_path: str) -> bool:
-    """True when the cfg loads devices from src.virtual_microscope (old simulation)."""
-    try:
-        with open(cfg_path) as f:
-            return any("src.virtual_microscope" in line for line in f)
-    except Exception:
-        return False
 
 
 class ThreadSafeViewerProxy(QObject):
@@ -439,15 +427,19 @@ class MCPServer(QWidget):
                     self._in_user_load = True
                     try:
                         self._last_cfg_path = str(path)
-                        if _is_old_style_virtual_cfg(str(path)):
-                            from src.virtual_microscope.initialize_virtual_microscope import (
-                                initialize_virtual_microscope_from_configuration,
+                        cfg_type = _classify_cfg(str(path))
+                        logger.info(f"cfg classification: {cfg_type!r} for {path}")
+
+                        if cfg_type == "mixed":
+                            logger.error("Mixed C++/Python cfg not supported yet.")
+                            self.status_update.emit(
+                                "Error: cfg file mixes C++ and Python (#py) devices — not supported yet."
                             )
-                            cell_type = _extract_cell_type(str(path))
-                            logger.info(f"Pre-init old simulation bridge: cell_type={cell_type}")
-                            initialize_virtual_microscope_from_configuration(
-                                core=core, cell_type=cell_type
-                            )
+                            return
+
+                        # TODO (task A2/A3): 'virtual' branch will start SimServerWorker
+                        # instead of calling _nm_load. For now both paths fall through to
+                        # _nm_load so existing behaviour is preserved during the refactor.
                         _nm_load(path)
                         # Load fully complete (including any core swap) — start Phase 2 once.
                         self._start_phase2()
