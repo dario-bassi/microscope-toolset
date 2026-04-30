@@ -20,6 +20,7 @@ from src.mcp_microscopetoolset.viewer import NapariViewerMC
 from src.microscope.microscope_event_cache import MicroscopeEventCache
 from src.benchmarking.benchmark_logger import BenchmarkLogger
 from src.utils.cfg_utils import classify_cfg as _classify_cfg
+from src.utils.core_proxy_worker import CoreProxyWorker
 
 logger = logging.getLogger("MCPServer")
 if not logger.handlers:
@@ -30,8 +31,6 @@ if not logger.handlers:
         datefmt="%Y-%m-%d %H:%M:%S",
     ))
     logger.addHandler(fh)
-
-
 
 
 class ThreadSafeViewerProxy(QObject):
@@ -437,7 +436,7 @@ class MCPServer(QWidget):
                             )
                             return
 
-                        # TODO (task A2/A3): 'virtual' branch will start SimServerWorker
+                        # TODO (task A3): 'virtual' branch will start CoreProxyWorker
                         # instead of calling _nm_load. For now both paths fall through to
                         # _nm_load so existing behaviour is preserved during the refactor.
                         _nm_load(path)

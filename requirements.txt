@@ -39,3 +39,5 @@ coverage
 cellpose
 git+https://github.com/hinderling/virtual-microscope
 git+https://github.com/hinderling/pymmcore-proxy.git
+pytest
+pytest-qt
