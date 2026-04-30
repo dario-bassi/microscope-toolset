@@ -6,7 +6,7 @@ from sentence_transformers import SentenceTransformer
 from src.agentsNormal.specialized_agent import DatabaseAgent
 from src.databases.elasticsearch_db import ElasticSearchDB
 from src.local.execute import Execute
-from src.mcp_microscopetoolset.utils import get_user_information
+from src.mcp_microscopetoolset.utils import get_user_information, logger_database_exists
 from src.microscope.microscope_status import MicroscopeStatus
 from src.postqrl.connection import DBConnection
 from src.postqrl.log_db import LoggerDB
@@ -44,18 +44,22 @@ def initialize_agents(mmc: CMMCorePlus, cfg_file: str | None = None):
     logger.info("Initializing Microscope Status...")
     microscope_status = MicroscopeStatus(executor=executor)
     logger.info("Microscope Status Initialized")
-    # initialize Logger database and his connection
+    # initialize Logger database and his connection (optional — requires DB_* env-vars)
     logger.info("Initializing Logger database...")
-    logger.info("Initializing connection...")
-    #db_connection = DBConnection() # for the moment comment this part for testing
-    #db_log = LoggerDB(db_connection)
-
-    # check if the logger database already exist
-    #logger.info("Checking if logger database exists...")
-    #if not logger_database_exists(db_log, system_user_information['log_collection']):
-        # it doesn't exist. We create a new one
-    #    db_log.create_collection(system_user_information['log_collection'])
-    #    logger.info(f"A new collection named {system_user_information['log_collection']} has been created.")
+    if os.getenv("DB_HOST") and os.getenv("DB_NAME") and os.getenv("DB_USER") and os.getenv("DB_PASSWORD") and os.getenv("DB_PORT"):
+        try:
+            db_connection = DBConnection()
+            db_log = LoggerDB(db_connection)
+            logger.info("Logger database initialized")
+            if not logger_database_exists(db_log, system_user_information['log_collection']):
+                db_log.create_collection(system_user_information['log_collection'])
+                logger.info(f"A new collection named {system_user_information['log_collection']} has been created.")
+        except Exception as e:
+            logger.warning(f"PostgreSQL initialization failed: {e}. Continuing without logger database.")
+            db_log = None
+    else:
+        logger.info("DB_HOST not set — skipping PostgreSQL logger database.")
+        db_log = None
 
     # Try to connect to Elasticsearch (optional — skip entirely when not configured)
     es_client = None
@@ -65,7 +69,8 @@ def initialize_agents(mmc: CMMCorePlus, cfg_file: str | None = None):
         logger.info("ELASTICSEARCH not set in .env — skipping database tools.")
     else:
         try:
-            es_client = ElasticSearchDB()
+            es_url = system_user_information.get('elasticsearch_url')
+            es_client = ElasticSearchDB(url=es_url)
             logger.info("Initialed ElasticSearch Python Client")
             max_retries = 5
             retry_delay = 1  # seconds
@@ -77,7 +82,7 @@ def initialize_agents(mmc: CMMCorePlus, cfg_file: str | None = None):
                     break
                 time.sleep(retry_delay)
                 retry_delay = min(retry_delay * 2, 8)
-                es_client = ElasticSearchDB()
+                es_client = ElasticSearchDB(url=es_url)
             else:
                 logger.warning("Could not connect to Elasticsearch. Database tools will be unavailable.")
                 es_client = None
@@ -120,7 +125,7 @@ def initialize_agents(mmc: CMMCorePlus, cfg_file: str | None = None):
                     pdf_collection=pdf_publication,
                     micromanager_collection=micromanager_collection,
                     api_collection=api_collection,
-                    db_log=None,
+                    db_log=db_log,
                     db_log_collection_name=system_user_information.get('log_collection', ''),
                     tokenizer=tokenizer,
                     model=reranker_model,
@@ -137,7 +142,7 @@ def initialize_agents(mmc: CMMCorePlus, cfg_file: str | None = None):
         "executor": executor,
         "microscope_status": microscope_status,
         "database_agent": database_agent,
-        "db_log": None,
+        "db_log": db_log,
         "es_client": es_client,
     }
 

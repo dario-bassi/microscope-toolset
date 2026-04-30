@@ -31,47 +31,28 @@ or
 python -m compileall src/
 ```
 
-#### Postgresql
-To improve our agents, we created a *Postgresql* database that will collect all the results obtained by our differents tool. To use it, you will need to download [Postgressql](https://www.postgresql.org/download/) based on your OS.
+#### Optional databases: Elasticsearch and PostgreSQL
 
-*Window installation*
+Both Elasticsearch and PostgreSQL are **optional**. The toolset starts and runs without them — database-backed features (semantic search, session logging) are simply skipped when the services are not configured.
 
-There are plenty of tutorial for the installation available online, just follow the most appropriate one. After the installation go in your terminal and digit the following:
-```
- > psql -U postgres -p 5410
-```
-*-U* is the username of the user. The default one is **postgres** and is the one with the most privilige. *-p* is to specify the port number: if during the installation, you changed the port number from **5432**(the default one) to another, specify the correct one. After this, you will be asked to insert the password for the user *postgres*
-```
-Insert the password for the user postgres:
-```
-Here you need to put the password you used as a *master password*.
-Finally, you will see the psql console:
-```
-postgres=# ...
-```
-Now before continuing, you need to:
+A full setup and usage guide for both databases is under implementation. For now, set the relevant variables in your `.env` file to enable them:
 
-1. Create a new *user* with a new *password*
-2. Create a new *database* owned by the new user
+**Elasticsearch** — used for semantic search over API docs and publications:
+```
+ELASTICSEARCH="<path to your elasticsearch installation>"   # enables auto-start of the ES server
+ELASTICSEARCH_URL="http://localhost:4500"                   # connection URL (default shown)
+```
 
-In this way the data will be saved into a 'local' user and not the 'admin' one called postgres.
+**PostgreSQL** — used for logging agent sessions:
 ```
-> postgres=# CREATE USER <new_user> WITH PASSWORD '<newly_password>';
-> CREATE ROLE
-> postgres=# CREATE DATABASE <database name> OWNER <new_user>;      
-> CREATE DATABASE
+DB_HOST="localhost"
+DB_PORT=5432
+DB_NAME="<your database name>"
+DB_USER="<your user>"
+DB_PASSWORD="<your password>"
 ```
-After this you can quit
-```
-> postgres=# \q
-```
-and save the new information into the *.env* file.
 
- - DB_NAME=<_The name of the database_>
- - DB_USER=<_The new user name created_>
- - DB_PASSWORD=<_The new password of the new user_>
-
-*DB_HOST* still remains _localhost_ and *DB_PORT* still remains the one you choosed during the installation. If an error occured, you should not be able to connect at your database and you will not able to start the GUI.
+If any of the `DB_*` variables are absent, the PostgreSQL logger is skipped automatically.
 
 ### Create the vector database with pdf files
 To help the different agents to avoid hallucination, it's advised to create a vector database with the different "knowledge". We have the documentation of *pymmcore_plus* and the publications of the *Pertz Lab*. If you want to add other pdfs file you can run this command:
@@ -124,20 +105,6 @@ python -m src.plugin_napari
 ```
 On the right there is the panel control that will start or stop the MCP Microscope Toolset server.
 
-In the UI at your choice (e.g. vs-code, Claude Desktop) add the configuration file of the mcp server.
-```
-Example of vs-code
-{
-	"servers": {
-		"microscope": {
-			"url": "http://127.0.0.1:5500/mcp",
-			"type": "http"
-		}
-	}
-}
-```
-After you added the *mcp.json* configuration file, you can start the MCP Client that will connect to the server.
-
 ```
 Example of claude code
 
@@ -149,6 +116,8 @@ $ /mcp + enter
 
 And select the microscope MCP server either connecting the server or enabling the server, and from the terminal whery you started the napari-plugin you will see if the server correctly connected.
 ```
+After you added the *mcp.json* configuration file, you can start the MCP Client that will connect to the server.
+
 
 ### TO DO LIST
 

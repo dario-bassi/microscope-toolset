@@ -1,11 +1,13 @@
+import os
 from elasticsearch import Elasticsearch
 
 
 class ElasticSearchDB:
 
-    def __init__(self) -> None:
-
-        self.es = Elasticsearch("http://localhost:4500")
+    def __init__(self, url: str | None = None) -> None:
+        if url is None:
+            url = os.getenv("ELASTICSEARCH_URL", "http://localhost:4500")
+        self.es = Elasticsearch(url)
         #self.index_name = index_name
 
     def is_connected(self) -> bool:
