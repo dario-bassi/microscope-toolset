@@ -1,19 +1,19 @@
 import os
-import subprocess
 import sys
 import logging
 import threading
-import signal
 import time
 from datetime import datetime
-
 from typing import Any
 
 import napari
 from PyQt6.QtCore import Qt, QObject, pyqtSlot, QThread, pyqtSignal, QTimer
-from PyQt6.QtWidgets import QWidget, QVBoxLayout, QHBoxLayout, QPushButton, QLabel, QSizePolicy
+from PyQt6.QtWidgets import (
+    QWidget, QVBoxLayout, QHBoxLayout, QPushButton, QLabel,
+    QSizePolicy, QFrame, QLineEdit, QGroupBox,
+)
 from src.mcp_microscopetoolset.utils import get_user_information
-from src.start_subprocess.servers import _start_server, wait_for_es
+from src.start_subprocess.servers import _start_server, _stop_server, wait_for_es
 from src.mcp_microscopetoolset.server_setup import create_mcp_server
 from src.mcp_microscopetoolset.agents_init import initialize_agents
 from src.mcp_microscopetoolset.viewer import NapariViewerMC
@@ -32,155 +32,243 @@ if not logger.handlers:
     ))
     logger.addHandler(fh)
 
+# ── Shared style constants ──────────────────────────────────────────────────
+_DOT_STOPPED  = "background:#aaaaaa;border-radius:6px;min-width:12px;min-height:12px;max-width:12px;max-height:12px;"
+_DOT_BUSY     = "background:#FF9800;border-radius:6px;min-width:12px;min-height:12px;max-width:12px;max-height:12px;"
+_DOT_OK       = "background:#4CAF50;border-radius:6px;min-width:12px;min-height:12px;max-width:12px;max-height:12px;"
+_DOT_ERROR    = "background:#f44336;border-radius:6px;min-width:12px;min-height:12px;max-width:12px;max-height:12px;"
+_BTN_GREEN    = ("QPushButton{background:#4CAF50;color:white;border-radius:4px;"
+                 "padding:2px 8px;font-size:11px;}"
+                 "QPushButton:hover{background:#45a049;}"
+                 "QPushButton:disabled{background:#cccccc;color:#666;}")
+_BTN_RED      = ("QPushButton{background:#f44336;color:white;border-radius:4px;"
+                 "padding:2px 8px;font-size:11px;}"
+                 "QPushButton:hover{background:#da190b;}"
+                 "QPushButton:disabled{background:#cccccc;color:#666;}")
+
+
+# ── Reusable status panel ───────────────────────────────────────────────────
+
+class ServicePanel(QFrame):
+    """[dot] Name  url/msg  [Start | Stop]"""
+
+    def __init__(self, name: str, start_label: str = "Start",
+                 stop_label: str = "Stop", parent=None):
+        super().__init__(parent)
+        self.setFrameShape(QFrame.Shape.StyledPanel)
+        self._start_label = start_label
+        self._stop_label  = stop_label
+
+        row = QHBoxLayout(self)
+        row.setContentsMargins(6, 4, 6, 4)
+        row.setSpacing(6)
+
+        self._dot = QLabel()
+        self._dot.setFixedSize(12, 12)
+
+        name_lbl = QLabel(name)
+        name_lbl.setStyleSheet("font-size:11px;font-weight:bold;")
+        name_lbl.setFixedWidth(90)
+
+        self._url_lbl = QLabel("")
+        self._url_lbl.setStyleSheet("font-size:10px;color:#555;")
+        self._url_lbl.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Preferred)
+
+        self.btn = QPushButton(start_label)
+        self.btn.setFixedWidth(72)
+
+        row.addWidget(self._dot)
+        row.addWidget(name_lbl)
+        row.addWidget(self._url_lbl)
+        row.addWidget(self.btn)
+
+        self.set_stopped()
+
+    def set_stopped(self):
+        self._dot.setStyleSheet(_DOT_STOPPED)
+        self._url_lbl.setText("")
+        self.btn.setText(self._start_label)
+        self.btn.setStyleSheet(_BTN_GREEN)
+        self.btn.setEnabled(True)
+
+    def set_busy(self, msg: str = ""):
+        self._dot.setStyleSheet(_DOT_BUSY)
+        self._url_lbl.setText(msg or "…")
+        self.btn.setEnabled(False)
+
+    def set_connected(self, url: str = ""):
+        self._dot.setStyleSheet(_DOT_OK)
+        self._url_lbl.setText(url)
+        self.btn.setText(self._stop_label)
+        self.btn.setStyleSheet(_BTN_RED)
+        self.btn.setEnabled(True)
+
+    def set_error(self, msg: str = ""):
+        self._dot.setStyleSheet(_DOT_ERROR)
+        self._url_lbl.setText(msg[:48])
+        self.btn.setText(self._start_label)
+        self.btn.setStyleSheet(_BTN_GREEN)
+        self.btn.setEnabled(True)
+
+
+# ── Thread-safe viewer proxy ────────────────────────────────────────────────
 
 class ThreadSafeViewerProxy(QObject):
-    """Proxy to execute viewer operations on the main Qt thread"""
     execute_on_main_thread = pyqtSignal(str, dict)
 
     def __init__(self, viewer):
         super().__init__()
         self.viewer = viewer
         self.result = None
-        self.error = None
+        self.error  = None
         self.done_event = threading.Event()
-
         self.execute_on_main_thread.connect(
             self._execute_viewer_method,
-            type=Qt.ConnectionType.QueuedConnection
+            type=Qt.ConnectionType.QueuedConnection,
         )
 
     @pyqtSlot(str, dict)
     def _execute_viewer_method(self, method_name, kwargs):
         try:
-            method = getattr(self.viewer, method_name)
-            self.result = method(**kwargs)
-            self.error = None
+            self.result = getattr(self.viewer, method_name)(**kwargs)
+            self.error  = None
         except Exception as e:
-            logger.error(f"Error executing viewer method {method_name}: {e}")
+            logger.error(f"Viewer method {method_name} failed: {e}")
             self.result = None
-            self.error = e
+            self.error  = e
         finally:
             self.done_event.set()
 
     def call_on_main_thread(self, method_name, **kwargs):
         self.result = None
-        self.error = None
+        self.error  = None
         self.done_event.clear()
         self.execute_on_main_thread.emit(method_name, kwargs)
         if not self.done_event.wait(timeout=10):
-            raise RuntimeError(f"Timeout waiting for {method_name} to complete on main thread")
+            raise RuntimeError(f"Timeout waiting for {method_name} on main thread")
         if self.error:
             raise self.error
         return self.result
 
 
-class MCPWorker(QObject):
-    start_thread = pyqtSignal()
-    stop_thread = pyqtSignal()
-    status_update = pyqtSignal(str)
-    servers_ready = pyqtSignal()
-    servers_stopped = pyqtSignal()
-    add_napari_micromanager = pyqtSignal()
-    mcp_server_ready = pyqtSignal()
+# ── Service workers ─────────────────────────────────────────────────────────
 
-    def __init__(self, viewer: Any, viewer_proxy=None):
+class ElasticsearchWorker(QObject):
+    started = pyqtSignal(str)   # url
+    error   = pyqtSignal(str)
+    stopped = pyqtSignal()
+
+    def __init__(self):
         super().__init__()
-        self._elastic_search_process = None
-        self._mmc = None
-        self._last_cfg_path = None
-        self._viewer = viewer
-        self._viewer_proxy = viewer_proxy
+        self._process = None
 
     @pyqtSlot()
-    def run_mcp_server(self):
-        """
-        Phase 1: Start Elasticsearch (optional) and add the napari-micromanager plugin.
-        Core selection (CMMCorePlus vs UniMMCore) is handled automatically by
-        napari-micromanager 0.3.0 based on whether the loaded .cfg contains #py device lines.
-        Phase 2 (agents + MCP server) starts after the user loads a .cfg.
-        """
+    def run(self):
         try:
             ui = get_user_information()
             es_home = ui.get("elastic_search_path_home", "")
+            if not es_home or not os.path.isdir(es_home):
+                self.error.emit("ELASTICSEARCH path not configured in .env")
+                return
 
-            if es_home and os.path.isdir(es_home):
-                self.status_update.emit("Loading Elasticsearch server...")
-                if sys.platform.startswith("win"):
-                    exe = f"{es_home}\\bin\\elasticsearch.bat"
-                else:
-                    exe = f"{es_home}/bin/elasticsearch"
+            exe = (f"{es_home}\\bin\\elasticsearch.bat"
+                   if sys.platform.startswith("win")
+                   else f"{es_home}/bin/elasticsearch")
+            logger.info(f"Launching Elasticsearch: {exe}")
+            self._process = _start_server([exe, "-d", "-p", "pid"])
+            logger.info(f"Elasticsearch PID={self._process.pid}")
 
-                logger.info(f"Launching Elasticsearch: {exe}")
-                self._elastic_search_process = _start_server([exe, "-d", "-p", "pid"])
-                logger.info(f"Elasticsearch server started with PID={self._elastic_search_process.pid}")
-                self.status_update.emit("Waiting for Elasticsearch to be ready...")
-                try:
-                    wait_for_es(max_wait=60)
-                    logger.info("Elasticsearch is ready!")
-                except Exception as e:
-                    logger.warning(f"ES startup failed (continuing without it): {e}")
-                    self.status_update.emit("Elasticsearch unavailable - starting without database tools")
-            else:
-                logger.info("Elasticsearch not configured - skipping")
-                self.status_update.emit("Starting without Elasticsearch...")
-                self._elastic_search_process = None
+            try:
+                wait_for_es(max_wait=60)
+            except Exception as e:
+                self.error.emit(f"ES did not become ready: {e}")
+                return
 
-            self.add_napari_micromanager.emit()
-
-            self.status_update.emit("Load a .cfg file via napari-micromanager to continue")
-            self.servers_ready.emit()
+            url = get_user_information().get("elasticsearch_url", "http://localhost:4500")
+            logger.info(f"Elasticsearch ready at {url}")
+            self.started.emit(url)
 
         except Exception as e:
-            logger.error(f"Error starting servers: {e}")
-            self.status_update.emit(f"Error: {e}")
-        finally:
-            self.stop_thread.emit()
+            logger.exception(f"ElasticsearchWorker: {e}")
+            self.error.emit(str(e))
 
-    def _stop_mcp_server_only(self) -> None:
-        """Stop the MCP server without touching Elasticsearch."""
-        if hasattr(self, '_uvicorn_server') and self._uvicorn_server is not None:
-            self._uvicorn_server.should_exit = True
-            logger.info("Signalled uvicorn to shut down")
-        if hasattr(self, '_fastmcp_thread') and self._fastmcp_thread is not None:
-            self._fastmcp_thread.join(timeout=15)
-            if self._fastmcp_thread.is_alive():
-                logger.warning("MCP thread did not stop in time — port 5500 may still be in use")
-            self._fastmcp_thread = None
-            self._uvicorn_server = None
-            logger.info("Previous MCP server stopped")
+    def stop_es(self):
+        """May be called from any thread."""
+        if self._process is not None:
+            try:
+                _stop_server(self._process)
+                logger.info("Elasticsearch stopped")
+            except Exception as e:
+                logger.warning(f"Could not stop Elasticsearch: {e}")
+            finally:
+                self._process = None
+        self.stopped.emit()
 
-    def _on_config_loaded(self):
-        """Phase 2: stop any running MCP server, then start a fresh one."""
-        cfg_path = self._last_cfg_path or ""
-        logger.info(f"Configuration loaded: {cfg_path}")
-        self._stop_mcp_server_only()
+
+class PostgreSQLWorker(QObject):
+    connected    = pyqtSignal(str)   # "host:port"
+    error        = pyqtSignal(str)
+    disconnected = pyqtSignal()
+
+    def __init__(self):
+        super().__init__()
+        self._db_conn = None
+
+    @pyqtSlot()
+    def run(self):
+        try:
+            from src.postqrl.connection import DBConnection
+            self._db_conn = DBConnection()
+            host = os.getenv("DB_HOST", "localhost")
+            port = os.getenv("DB_PORT", "5432")
+            self.connected.emit(f"{host}:{port}")
+        except Exception as e:
+            logger.exception(f"PostgreSQLWorker: {e}")
+            self.error.emit(str(e))
+
+    def disconnect_pg(self):
+        """May be called from any thread."""
+        if self._db_conn is not None:
+            try:
+                self._db_conn.disconnect()
+            except Exception:
+                pass
+            self._db_conn = None
+        self.disconnected.emit()
+
+
+class MCPServerWorker(QObject):
+    started = pyqtSignal(str)   # "http://host:port"
+    error   = pyqtSignal(str)
+    stopped = pyqtSignal()
+
+    def __init__(self, mmc: Any, viewer: Any, viewer_proxy: ThreadSafeViewerProxy):
+        super().__init__()
+        self._mmc          = mmc
+        self._viewer       = viewer
+        self._viewer_proxy = viewer_proxy
+        self._uvicorn_server = None
+        self._fastmcp_thread = None
+
+    @pyqtSlot()
+    def run(self):
+        self._stop_uvicorn()
 
         def _init_mcp():
             try:
-                self.status_update.emit("Initializing MCP server tools...")
-
-                logger.info("Initializing agents...")
+                logger.info("Initializing agents…")
                 agents = initialize_agents(mmc=self._mmc)
 
-                logger.info("Creating MCP server...")
                 viewer_instance = NapariViewerMC(self._viewer)
+                event_cache     = MicroscopeEventCache(self._mmc)
 
-                if self._mmc is None:
-                    raise RuntimeError("Microscope core not initialized - load a .cfg file first")
-                event_cache = MicroscopeEventCache(self._mmc)
-
-                timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-                run_id = f"benchmark_{timestamp}"
-                ui = get_user_information()
-                benchmark_agent = ui.get('benchmark_agent_enable', '')
-                if benchmark_agent == 'false':
-                    agent_type = 'untrained'
-                elif benchmark_agent == 'true':
-                    agent_type = 'trained'
-                else:
-                    agent_type = 'untrained'
-                benchmark_logger = BenchmarkLogger(agent_type=agent_type, run_id=run_id)
-                logger.info(f"Benchmark logger initialized: {run_id}")
+                ts       = datetime.now().strftime("%Y%m%d_%H%M%S")
+                ui       = get_user_information()
+                is_trained   = ui.get("benchmark_agent_enable", "") == "true"
+                bench_logger = BenchmarkLogger(
+                    agent_type="trained" if is_trained else "untrained",
+                    run_id=f"benchmark_{ts}",
+                )
 
                 mcp_server = create_mcp_server(
                     database_agent=agents["database_agent"],
@@ -189,327 +277,530 @@ class MCPWorker(QObject):
                     viewer=viewer_instance,
                     event_cache=event_cache,
                     viewer_proxy=self._viewer_proxy,
-                    benchmark_logger_instance=benchmark_logger
+                    benchmark_logger_instance=bench_logger,
                 )
 
                 import uvicorn, anyio
-                logger.info("Starting FastMCP server...")
-                starlette_app = mcp_server.streamable_http_app()
+                app    = mcp_server.streamable_http_app()
                 config = uvicorn.Config(
-                    starlette_app,
+                    app,
                     host=mcp_server.settings.host,
                     port=mcp_server.settings.port,
                     log_level=mcp_server.settings.log_level.lower(),
                 )
                 self._uvicorn_server = uvicorn.Server(config)
-                self.status_update.emit("MCP server ready! You can connect from Claude Code.")
-                self.mcp_server_ready.emit()
+                url = f"http://{mcp_server.settings.host}:{mcp_server.settings.port}"
+                self.started.emit(url)
                 try:
                     anyio.run(self._uvicorn_server.serve)
                 except OSError as e:
                     if "10048" in str(e) or "address already in use" in str(e).lower():
-                        logger.error("Port 5500 still in use — previous MCP server did not release it in time.")
-                        self.status_update.emit("Error: port 5500 still in use — try loading the config again")
+                        logger.error("Port 5500 still in use")
+                        self.error.emit("Port 5500 still in use — try restarting")
                     else:
                         raise
 
             except Exception as e:
                 logger.exception(f"FastMCP error: {e}")
-                self.status_update.emit(f"Error initializing MCP: {e}")
+                self.error.emit(str(e))
 
         self._fastmcp_thread = threading.Thread(target=_init_mcp, daemon=True)
         self._fastmcp_thread.start()
 
-    @pyqtSlot()
-    def stop_mcp_server(self):
-        """Stop the MCP server"""
-        self.status_update.emit("Stopping servers...")
+    def _stop_uvicorn(self):
+        if self._uvicorn_server is not None:
+            self._uvicorn_server.should_exit = True
+        if self._fastmcp_thread is not None:
+            self._fastmcp_thread.join(timeout=15)
+            if self._fastmcp_thread.is_alive():
+                logger.warning("MCP thread did not stop in time — port 5500 may still be held")
+            self._fastmcp_thread  = None
+            self._uvicorn_server  = None
 
-        try:
-            if self._elastic_search_process is not None:
-                self.status_update.emit("Stopping Elasticsearch server...")
-                try:
-                    if sys.platform.startswith("win"):
-                        subprocess.call(["taskkill", "/F", "/IM", "java.exe"])
-                    else:
-                        os.killpg(os.getpgid(self._elastic_search_process.pid), signal.SIGTERM)
-                    logger.info("Stopped Elasticsearch")
-                except Exception as e:
-                    logger.warning(f"Could not stop Elasticsearch: {e}")
+    def stop_mcp(self):
+        """May be called from any thread."""
+        self._stop_uvicorn()
+        self.stopped.emit()
 
-                time.sleep(2)
 
-            self._stop_mcp_server_only()
-
-            if self._mmc is not None:
-                self._mmc = None
-
-            logger.info("All servers stopped")
-            self.status_update.emit("All servers stopped")
-            self.servers_stopped.emit()
-
-        except Exception as e:
-            logger.error(f"Error stopping servers: {e}")
-            self.status_update.emit(f"Error stopping servers: {e}")
-            self.servers_stopped.emit()
-
+# ── Main widget ─────────────────────────────────────────────────────────────
 
 class MCPServer(QWidget):
 
     def __init__(self, auto_config: str | None = None):
         super().__init__()
-        self.mmc = None
-        self.viewer = napari.current_viewer()
         self._auto_config = auto_config
+        self.viewer       = napari.current_viewer()
+        self._mmc         = None
 
         self.setObjectName("MCPServer")
         self.setWindowTitle("MCP Server")
 
-        main_layout = QVBoxLayout(self)
-        main_layout.setContentsMargins(6, 4, 6, 4)
-        main_layout.setSpacing(3)
+        viewer_mc          = NapariViewerMC(self.viewer)
+        self._viewer_proxy = ThreadSafeViewerProxy(viewer_mc)
 
-        label_title = QLabel("Microscope Toolset MCP Server")
-        label_title.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        label_title.setStyleSheet("font-weight: bold; font-size: 12px;")
-
-        self.status_label = QLabel("Ready to start")
-        self.status_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        self.status_label.setStyleSheet("font-size: 11px; color: #666; padding: 2px;")
-
-        self.start_button = QPushButton("Start Servers")
-        self.start_button.setStyleSheet(
-            "QPushButton { background-color: #4CAF50; color: white; border-radius: 4px; padding: 4px 10px; font-size: 11px; }"
-            "QPushButton:hover { background-color: #45a049; }"
-            "QPushButton:disabled { background-color: #cccccc; color: #666666; }"
-        )
-        self.start_button.setSizePolicy(QSizePolicy.Policy.Fixed, QSizePolicy.Policy.Fixed)
-
-        self.stop_button = QPushButton("Stop Servers")
-        self.stop_button.setStyleSheet(
-            "QPushButton { background-color: #f44336; color: white; border-radius: 4px; padding: 4px 10px; font-size: 11px; }"
-            "QPushButton:hover { background-color: #da190b; }"
-            "QPushButton:disabled { background-color: #cccccc; color: #666666; }"
-        )
-        self.stop_button.setSizePolicy(QSizePolicy.Policy.Fixed, QSizePolicy.Policy.Fixed)
-        self.stop_button.setEnabled(False)
-
-        btn_width = max(self.start_button.sizeHint().width(),
-                        self.stop_button.sizeHint().width())
-        self.start_button.setFixedWidth(btn_width)
-        self.stop_button.setFixedWidth(btn_width)
-
-        main_layout.addWidget(label_title)
-        main_layout.addWidget(self.start_button, alignment=Qt.AlignmentFlag.AlignCenter)
-        main_layout.addWidget(self.stop_button, alignment=Qt.AlignmentFlag.AlignCenter)
-        main_layout.addWidget(self.status_label)
-
-        self.start_button.clicked.connect(self.click_start_server)
-        self.stop_button.clicked.connect(self.click_stop_server)
-
-        self.mcp_thread = None
-        self.mcp_worker = None
-        self._viewer_proxy = None
-        self._mmwin = None
+        # napari-micromanager state
+        self._mmwin         = None
         self._last_cfg_path = None
-        self._proxy_thread = None
-        self._proxy_worker = None
-        # Prevents _capturing_load from triggering Phase 2 on the recursive inner call
-        # that napari-micromanager makes during set_core / _auto_detect_load.
-        self._in_user_load = False
+        self._in_user_load  = False
+        self._proxy_thread  = None
+        self._proxy_worker  = None
+        self._remote_connected    = False
+        self._cfg_pending_restart = False  # auto-restart MCP after cfg reload
 
+        # service worker/thread pairs
+        self._es_worker  = None;  self._es_thread  = None;  self._es_running  = False
+        self._pg_worker  = None;  self._pg_thread  = None;  self._pg_running  = False
+        self._mcp_worker = None;  self._mcp_thread = None;  self._mcp_running = False
+
+        # ── build UI ──────────────────────────────────────────────────────
+        main = QVBoxLayout(self)
+        main.setContentsMargins(6, 4, 6, 4)
+        main.setSpacing(4)
+
+        title = QLabel("Microscope Toolset")
+        title.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        title.setStyleSheet("font-weight:bold;font-size:12px;")
+        main.addWidget(title)
+
+        # ── Core group ────────────────────────────────────────────────────
+        core_grp = QGroupBox("Microscope Core")
+        core_grp.setStyleSheet("QGroupBox{font-size:11px;}")
+        core_lay = QVBoxLayout(core_grp)
+        core_lay.setContentsMargins(4, 6, 4, 4)
+        core_lay.setSpacing(3)
+
+        status_row = QHBoxLayout()
+        status_row.setSpacing(5)
+        self._core_dot = QLabel()
+        self._core_dot.setFixedSize(12, 12)
+        self._core_dot.setStyleSheet(_DOT_STOPPED)
+        self._core_type_badge = QLabel("")
+        self._core_type_badge.setVisible(False)
+        self._core_addr_lbl = QLabel("No core loaded")
+        self._core_addr_lbl.setStyleSheet("font-size:10px;color:#555;")
+        status_row.addWidget(self._core_dot)
+        status_row.addWidget(self._core_type_badge)
+        status_row.addWidget(self._core_addr_lbl)
+        status_row.addStretch()
+        core_lay.addLayout(status_row)
+
+        remote_row = QHBoxLayout()
+        remote_row.setSpacing(4)
+        rl = QLabel("Remote:")
+        rl.setStyleSheet("font-size:10px;")
+        rl.setFixedWidth(50)
+        self._remote_url_edit = QLineEdit()
+        self._remote_url_edit.setPlaceholderText("http://127.0.0.1:5601")
+        self._remote_url_edit.setStyleSheet("font-size:10px;")
+        self._remote_connect_btn = QPushButton("Connect")
+        self._remote_connect_btn.setFixedWidth(72)
+        self._remote_connect_btn.setStyleSheet(_BTN_GREEN)
+        remote_row.addWidget(rl)
+        remote_row.addWidget(self._remote_url_edit)
+        remote_row.addWidget(self._remote_connect_btn)
+        core_lay.addLayout(remote_row)
+        main.addWidget(core_grp)
+
+        # ── Service panels ────────────────────────────────────────────────
+        self._es_panel  = ServicePanel("Elasticsearch", "Start",   "Stop")
+        self._pg_panel  = ServicePanel("PostgreSQL",    "Connect", "Disconnect")
+        self._mcp_panel = ServicePanel("MCP Server",    "Start",   "Stop")
+        self._mcp_panel.btn.setEnabled(False)   # enabled once core is ready
+        main.addWidget(self._es_panel)
+        main.addWidget(self._pg_panel)
+        main.addWidget(self._mcp_panel)
+
+        # ── Status bar ────────────────────────────────────────────────────
+        self._status_lbl = QLabel("Adding napari-micromanager…")
+        self._status_lbl.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self._status_lbl.setStyleSheet("font-size:10px;color:#666;padding:2px;")
+        self._status_lbl.setWordWrap(True)
+        main.addWidget(self._status_lbl)
+
+        # ── Wire signals ──────────────────────────────────────────────────
+        self._es_panel.btn.clicked.connect(self._toggle_elasticsearch)
+        self._pg_panel.btn.clicked.connect(self._toggle_postgresql)
+        self._mcp_panel.btn.clicked.connect(self._toggle_mcp_server)
+        self._remote_connect_btn.clicked.connect(self._toggle_remote_core)
+
+        # ── Add napari-micromanager on next tick ──────────────────────────
+        QTimer.singleShot(500, self._add_napari_micromanager)
         if self._auto_config is not None:
-            QTimer.singleShot(500, self.click_start_server)
+            QTimer.singleShot(1500, self._auto_load_config)
 
-    def click_start_server(self):
-        viewer_instance = NapariViewerMC(self.viewer)
-        self._viewer_proxy = ThreadSafeViewerProxy(viewer_instance)
+    # ── Elasticsearch ───────────────────────────────────────────────────────
 
-        self.mcp_thread = QThread()
-        self.mcp_worker = MCPWorker(
-            viewer=viewer_instance,
-            viewer_proxy=self._viewer_proxy
-        )
-        self.mcp_worker.moveToThread(self.mcp_thread)
+    def _toggle_elasticsearch(self):
+        if self._es_running:
+            self._stop_elasticsearch()
+        else:
+            self._start_elasticsearch()
 
-        self.mcp_thread.started.connect(self.mcp_worker.run_mcp_server)
-        self.mcp_worker.stop_thread.connect(self.mcp_thread.quit)
-
-        self.mcp_worker.status_update.connect(self.update_status_label)
-        self.mcp_worker.servers_ready.connect(self.on_servers_ready)
-        self.mcp_worker.servers_stopped.connect(self.on_servers_stopped)
-        self.mcp_worker.add_napari_micromanager.connect(self.add_napari_micromanager_plugin)
-
-        self.start_button.setEnabled(False)
-        self.stop_button.setEnabled(False)
-        self.status_label.setText("Starting servers...")
-
-        self.mcp_thread.start()
-
-    def click_stop_server(self):
-        if self.mcp_thread is None:
-            return
-        self.stop_button.setEnabled(False)
-        self.start_button.setEnabled(False)
-        self.status_label.setText("Stopping servers...")
-        self.mcp_worker.stop_mcp_server()
-        if self.mcp_thread:
-            self.mcp_thread.quit()
+    def _start_elasticsearch(self):
+        self._es_panel.set_busy("starting…")
+        self._set_status("Starting Elasticsearch…")
+        self._es_thread = QThread()
+        self._es_worker = ElasticsearchWorker()
+        self._es_worker.moveToThread(self._es_thread)
+        self._es_thread.started.connect(self._es_worker.run)
+        self._es_worker.started.connect(self._on_es_started)
+        self._es_worker.error.connect(self._on_es_error)
+        self._es_thread.start()
 
     @pyqtSlot(str)
-    def update_status_label(self, message):
-        self.status_label.setText(message)
+    def _on_es_started(self, url: str):
+        self._es_running = True
+        self._es_panel.set_connected(url)
+        self._set_status("Elasticsearch ready")
+        if self._es_thread:
+            self._es_thread.quit()
 
-        base = "font-size: 11px; padding: 2px;"
-        if "ready" in message.lower() or "you can start" in message.lower():
-            self.status_label.setStyleSheet(f"{base} color: #4CAF50; font-weight: bold;")
-        elif "error" in message.lower() or "failed" in message.lower():
-            self.status_label.setStyleSheet(f"{base} color: #f44336; font-weight: bold;")
-        elif "loading" in message.lower() or "starting" in message.lower() or "stopping" in message.lower() or "waiting" in message.lower():
-            self.status_label.setStyleSheet(f"{base} color: #FF9800; font-weight: bold;")
-        elif "load a .cfg" in message.lower():
-            self.status_label.setStyleSheet(f"{base} color: #2196F3; font-weight: bold;")
+    @pyqtSlot(str)
+    def _on_es_error(self, msg: str):
+        self._es_running = False
+        self._es_panel.set_error(msg)
+        self._set_status(f"Elasticsearch error: {msg}")
+        if self._es_thread:
+            self._es_thread.quit()
+
+    def _stop_elasticsearch(self):
+        self._es_panel.set_busy("stopping…")
+        if self._es_worker is not None:
+            self._es_worker.stopped.connect(self._on_es_stopped)
+            self._es_worker.stop_es()
         else:
-            self.status_label.setStyleSheet(f"{base} color: #666;")
+            self._on_es_stopped()
 
     @pyqtSlot()
-    def on_servers_ready(self):
-        """Called when Phase 1 is complete — napari-micromanager plugin is live."""
-        self.stop_button.setEnabled(True)
-        self.start_button.setEnabled(False)
+    def _on_es_stopped(self):
+        self._es_running = False
+        self._es_panel.set_stopped()
+        self._set_status("Elasticsearch stopped")
 
-        if self._auto_config is not None and self._mmwin is not None:
-            cfg = self._auto_config
-            logger.info(f"Auto-loading config: {cfg}")
-            self.status_label.setText(f"Auto-loading {os.path.basename(cfg)}...")
-            self._mmwin.core.loadSystemConfiguration(cfg)
+    # ── PostgreSQL ──────────────────────────────────────────────────────────
+
+    def _toggle_postgresql(self):
+        if self._pg_running:
+            self._stop_postgresql()
+        else:
+            self._start_postgresql()
+
+    def _start_postgresql(self):
+        self._pg_panel.set_busy("connecting…")
+        self._set_status("Connecting to PostgreSQL…")
+        self._pg_thread = QThread()
+        self._pg_worker = PostgreSQLWorker()
+        self._pg_worker.moveToThread(self._pg_thread)
+        self._pg_thread.started.connect(self._pg_worker.run)
+        self._pg_worker.connected.connect(self._on_pg_connected)
+        self._pg_worker.error.connect(self._on_pg_error)
+        self._pg_thread.start()
+
+    @pyqtSlot(str)
+    def _on_pg_connected(self, url: str):
+        self._pg_running = True
+        self._pg_panel.set_connected(url)
+        self._set_status("PostgreSQL connected")
+        if self._pg_thread:
+            self._pg_thread.quit()
+
+    @pyqtSlot(str)
+    def _on_pg_error(self, msg: str):
+        self._pg_running = False
+        self._pg_panel.set_error(msg)
+        self._set_status(f"PostgreSQL error: {msg}")
+        if self._pg_thread:
+            self._pg_thread.quit()
+
+    def _stop_postgresql(self):
+        self._pg_panel.set_busy("disconnecting…")
+        if self._pg_worker is not None:
+            self._pg_worker.disconnected.connect(self._on_pg_disconnected)
+            self._pg_worker.disconnect_pg()
+        else:
+            self._on_pg_disconnected()
 
     @pyqtSlot()
-    def on_servers_stopped(self):
-        self.start_button.setEnabled(True)
-        self.stop_button.setEnabled(False)
-        self.status_label.setText("Ready to start")
-        self.status_label.setStyleSheet("font-size: 11px; color: #666; padding: 2px;")
+    def _on_pg_disconnected(self):
+        self._pg_running = False
+        self._pg_panel.set_stopped()
+        self._set_status("PostgreSQL disconnected")
+
+    # ── MCP Server ──────────────────────────────────────────────────────────
+
+    def _toggle_mcp_server(self):
+        if self._mcp_running:
+            self._stop_mcp_server()
+        else:
+            self._start_mcp_server()
+
+    def _start_mcp_server(self):
+        if self._mmc is None:
+            self._set_status("Load a .cfg file or connect a remote core first")
+            return
+        self._mcp_panel.set_busy("starting…")
+        self._set_status("Starting MCP server…")
+        self._mcp_thread = QThread()
+        self._mcp_worker = MCPServerWorker(
+            mmc=self._mmc,
+            viewer=self.viewer,
+            viewer_proxy=self._viewer_proxy,
+        )
+        self._mcp_worker.moveToThread(self._mcp_thread)
+        self._mcp_thread.started.connect(self._mcp_worker.run)
+        self._mcp_worker.started.connect(self._on_mcp_started)
+        self._mcp_worker.error.connect(self._on_mcp_error)
+        self._mcp_thread.start()
+
+    @pyqtSlot(str)
+    def _on_mcp_started(self, url: str):
+        self._mcp_running = True
+        self._mcp_panel.set_connected(url)
+        self._set_status("MCP server ready! Connect from Claude Code.")
+        if self._mcp_thread:
+            self._mcp_thread.quit()
+
+    @pyqtSlot(str)
+    def _on_mcp_error(self, msg: str):
+        self._mcp_running = False
+        self._mcp_panel.set_error(msg)
+        self._set_status(f"MCP error: {msg}")
+        if self._mcp_thread:
+            self._mcp_thread.quit()
+
+    def _stop_mcp_server(self):
+        self._mcp_panel.set_busy("stopping…")
+        if self._mcp_worker is not None:
+            self._mcp_worker.stopped.connect(self._on_mcp_stopped)
+            self._mcp_worker.stop_mcp()
+        else:
+            self._on_mcp_stopped()
 
     @pyqtSlot()
-    def add_napari_micromanager_plugin(self):
-        """Add the napari-micromanager plugin and wire the Phase 2 trigger.
+    def _on_mcp_stopped(self):
+        self._mcp_running = False
+        self._mcp_panel.set_stopped()
+        if self._cfg_pending_restart:
+            self._cfg_pending_restart = False
+            self._start_mcp_server()
+        else:
+            self._set_status("MCP server stopped")
 
-        On restart (Stop → Start) the plugin is already present. _capturing_load
-        closes over `self`, so self.mcp_worker always refers to the current worker —
-        no re-wiring needed.
-        """
+    # ── Remote core ─────────────────────────────────────────────────────────
+
+    def _toggle_remote_core(self):
+        if self._remote_connected:
+            self._disconnect_remote_core()
+        else:
+            self._connect_remote_core()
+
+    @staticmethod
+    def _query_core_type(url: str) -> str:
+        """GET /info from the proxy server; returns the core class name or 'RemoteCore'."""
+        import urllib.request, json as _json
+        try:
+            with urllib.request.urlopen(f"{url}/info", timeout=3) as resp:
+                return _json.loads(resp.read()).get("core_type", "RemoteCore")
+        except Exception:
+            return "RemoteCore"
+
+    def _connect_remote_core(self):
+        url = self._remote_url_edit.text().strip() or "http://127.0.0.1:5601"
+        self._set_status(f"Connecting to {url}…")
+        try:
+            from pymmcore_proxy import connect
+            remote_core = connect(url)
+            self._in_user_load = True
+            try:
+                if self._mmwin is not None:
+                    self._mmwin.set_core(remote_core)
+            finally:
+                self._in_user_load = False
+            self._mmc = remote_core
+            self._remote_connected = True
+            core_type = self._query_core_type(url)
+            from urllib.parse import urlparse
+            p = urlparse(url)
+            host_port = f"{p.hostname}:{p.port}"
+            self._core_dot.setStyleSheet(_DOT_OK)
+            self._set_core_badge(core_type, host_port)
+            self._remote_connect_btn.setText("Disconnect")
+            self._remote_connect_btn.setStyleSheet(_BTN_RED)
+            self._mcp_panel.btn.setEnabled(True)
+            self._set_status(f"Remote core connected ({core_type}) — start MCP server")
+            logger.info(f"Connected to {core_type} at {url}")
+        except Exception as e:
+            logger.exception(f"Remote core connection failed: {e}")
+            self._core_dot.setStyleSheet(_DOT_ERROR)
+            self._clear_core_badge(f"Error: {str(e)[:40]}")
+            self._set_status(f"Remote connection failed: {e}")
+
+    def _disconnect_remote_core(self):
+        self._mmc = None
+        self._remote_connected = False
+        self._core_dot.setStyleSheet(_DOT_STOPPED)
+        self._clear_core_badge()
+        self._remote_connect_btn.setText("Connect")
+        self._remote_connect_btn.setStyleSheet(_BTN_GREEN)
+        self._mcp_panel.btn.setEnabled(False)
+        self._set_status("Remote core disconnected")
+        logger.info("Remote core disconnected")
+
+    # ── napari-micromanager ─────────────────────────────────────────────────
+
+    def _add_napari_micromanager(self):
         import traceback
         try:
             if self._mmwin is not None:
-                logger.info("napari-micromanager already present — skipping re-wiring")
+                logger.info("napari-micromanager already present — skipping")
+                self._set_status("Load a .cfg file to initialize the core")
                 return
 
-            logger.info("Adding napari-micromanager plugin...")
+            logger.info("Adding napari-micromanager plugin…")
             self.viewer.window.add_plugin_dock_widget(plugin_name="napari-micromanager")
-            logger.info("Successfully added napari-micromanager plugin")
 
             from napari_micromanager.main_window import get_main_window
-            win = get_main_window()
-            self._mmwin = win
+            self._mmwin = get_main_window()
+            self._install_load_hook(self._mmwin.core)
 
-            def _install_hooks(core):
-                """Replace core.loadSystemConfiguration with a wrapper that triggers Phase 2."""
-                _nm_load = core.loadSystemConfiguration
-
-                def _capturing_load(path):
-                    # _in_user_load is True while we are inside a user-initiated load.
-                    # napari-micromanager may call loadSystemConfiguration again on the
-                    # remote core during set_core() — the flag lets those pass straight
-                    # through without launching a second proxy.
-                    if self._in_user_load:
-                        _nm_load(path)
-                        return
-                    self._in_user_load = True
-                    try:
-                        self._last_cfg_path = str(path)
-                        cfg_type = _classify_cfg(str(path))
-                        logger.info(f"cfg classification: {cfg_type!r} for {path}")
-
-                        if cfg_type == "mixed":
-                            logger.error("Mixed C++/Python cfg not supported yet.")
-                            self.status_update.emit(
-                                "Error: cfg file mixes C++ and Python (#py) devices — not supported yet."
-                            )
-                            return
-
-                        # Both virtual and real cfgs go through the proxy: CoreProxyWorker
-                        # loads the cfg into the right core type and starts the HTTP server.
-                        # Phase 2 runs in _on_proxy_ready once the server is up.
-                        self._start_proxy_worker(str(path))
-                    finally:
-                        self._in_user_load = False
-
-                core.loadSystemConfiguration = _capturing_load
-
-            # Patch set_core so _capturing_load survives a CMMCorePlus↔UniMMCore swap.
-            _original_set_core = win.set_core
+            # Patch set_core so the hook survives a CMMCorePlus ↔ UniMMCore swap.
+            _orig_set_core = self._mmwin.set_core
 
             def _patched_set_core(core):
-                _original_set_core(core)
-                _install_hooks(win.core)
+                _orig_set_core(core)
+                self._install_load_hook(self._mmwin.core)
 
-            win.set_core = _patched_set_core
-            _install_hooks(win.core)
+            self._mmwin.set_core = _patched_set_core
+
+            self._set_status("Load a .cfg file to initialize the core")
+            logger.info("napari-micromanager plugin added")
 
         except Exception as e:
-            logger.error(
-                f"Failed to add napari-micromanager plugin: {e}\n"
-                + traceback.format_exc()
-            )
+            logger.error(f"Failed to add napari-micromanager: {e}\n" + traceback.format_exc())
+            self._set_status(f"Error adding napari-micromanager: {e}")
 
-    _PROXY_PORT = 5601  # single proxy per session; real port allocation deferred to Task E
+    def _install_load_hook(self, core):
+        """Wrap core.loadSystemConfiguration to intercept user-initiated cfg loads."""
+        _nm_load = core.loadSystemConfiguration
 
-    def _start_proxy_worker(self, cfg_path: str) -> None:
-        """Spin up CoreProxyWorker in a QThread; Phase 2 runs when server_ready fires."""
-        self.status_update.emit("Starting microscope proxy server…")
+        def _capturing_load(path):
+            # Skip if we are already inside a user load (avoids re-entry from
+            # napari-micromanager calling loadSystemConfiguration on the new
+            # remote core during set_core).
+            if self._in_user_load:
+                _nm_load(path)
+                return
+            self._in_user_load = True
+            try:
+                self._last_cfg_path = str(path)
+                cfg_type = _classify_cfg(str(path))
+                logger.info(f"cfg classification: {cfg_type!r} for {path}")
+                if cfg_type == "mixed":
+                    logger.error("Mixed C++/Python cfg not supported")
+                    self._set_status("Error: mixed C++/Python (#py) cfg not supported yet")
+                    return
+                self._start_proxy_worker(str(path))
+            finally:
+                self._in_user_load = False
+
+        core.loadSystemConfiguration = _capturing_load
+
+    _PROXY_PORT = 5601
+
+    def _start_proxy_worker(self, cfg_path: str):
+        self._set_status("Starting microscope proxy server…")
         thread = QThread()
         worker = CoreProxyWorker(cfg_path=cfg_path, port=self._PROXY_PORT)
         worker.moveToThread(thread)
         worker.server_ready.connect(self._on_proxy_ready)
         worker.server_error.connect(self._on_proxy_error)
         thread.started.connect(worker.run)
-        # Keep references so Python doesn't GC the thread before it finishes.
         self._proxy_thread = thread
         self._proxy_worker = worker
         thread.start()
 
     @pyqtSlot(str)
-    def _on_proxy_ready(self, url: str) -> None:
-        """Runs on the main Qt thread when the proxy server is accepting connections."""
+    def _on_proxy_ready(self, url: str):
         from pymmcore_proxy import connect
-        logger.info(f"Proxy ready at {url} — connecting RemoteMMCore")
-        self.status_update.emit("Proxy ready — connecting core…")
+        logger.info(f"Proxy ready at {url} — connecting core")
+        self._set_status("Proxy ready — connecting core…")
         remote_core = connect(url)
-        # Guard against napari-mm calling loadSystemConfiguration on the new core
-        # during set_core (which would re-enter _capturing_load).
         self._in_user_load = True
         try:
-            self._mmwin.set_core(remote_core)
+            if self._mmwin is not None:
+                self._mmwin.set_core(remote_core)
         finally:
             self._in_user_load = False
-        self._start_phase2()
+        self._mmc = remote_core
+        core_type = self._query_core_type(url)
+        from urllib.parse import urlparse
+        p = urlparse(url)
+        self._core_dot.setStyleSheet(_DOT_OK)
+        self._set_core_badge(core_type, f"{p.hostname}:{p.port}")
+        if self._mcp_running:
+            # cfg reloaded while MCP was live — restart with new core
+            self._cfg_pending_restart = True
+            self._stop_mcp_server()
+        else:
+            self._mcp_panel.btn.setEnabled(True)
+            self._set_status("Core ready — start MCP server to connect")
 
     @pyqtSlot(str)
-    def _on_proxy_error(self, msg: str) -> None:
-        """Runs on the main Qt thread when the proxy server fails to start."""
+    def _on_proxy_error(self, msg: str):
         logger.error(f"Proxy server failed: {msg}")
-        self.status_update.emit(f"Error: proxy server failed — {msg}")
+        self._core_dot.setStyleSheet(_DOT_ERROR)
+        self._clear_core_badge(f"Error: {msg[:40]}")
+        self._set_status(f"Proxy error: {msg}")
 
-    def _start_phase2(self) -> None:
-        """Called once per user-initiated cfg load; hands the loaded core to the worker."""
-        if self.mcp_worker is None:
+    def _auto_load_config(self):
+        if self._auto_config is None:
             return
-        mmc = self._mmwin.core
-        logger.info(f"Config loaded: {self._last_cfg_path!r}  core: {type(mmc).__name__}")
-        self.mcp_worker._mmc = mmc
-        self.mcp_worker._last_cfg_path = self._last_cfg_path or ""
-        self.mcp_worker._on_config_loaded()
+        if self._mmwin is None:
+            # Plugin not ready yet — retry
+            QTimer.singleShot(500, self._auto_load_config)
+            return
+        logger.info(f"Auto-loading config: {self._auto_config}")
+        self._set_status(f"Auto-loading {os.path.basename(self._auto_config)}…")
+        self._mmwin.core.loadSystemConfiguration(self._auto_config)
+
+    # ── Core badge helpers ──────────────────────────────────────────────────
+
+    _BADGE_STYLES = {
+        "CMMCorePlus": ("CMM+", "background:#1565C0;color:white;border-radius:7px;padding:1px 5px;font-size:10px;font-weight:bold;"),
+        "UniMMCore":   ("Uni",  "background:#6A1B9A;color:white;border-radius:7px;padding:1px 5px;font-size:10px;font-weight:bold;"),
+    }
+    _BADGE_FALLBACK = ("RMC",  "background:#E65100;color:white;border-radius:7px;padding:1px 5px;font-size:10px;font-weight:bold;")
+
+    def _set_core_badge(self, core_type: str, host_port: str) -> None:
+        text, style = self._BADGE_STYLES.get(core_type, self._BADGE_FALLBACK)
+        self._core_type_badge.setText(text)
+        self._core_type_badge.setStyleSheet(style)
+        self._core_type_badge.setVisible(True)
+        self._core_addr_lbl.setText(host_port)
+        self._core_addr_lbl.setStyleSheet("font-size:10px;color:#555;")
+
+    def _clear_core_badge(self, msg: str = "No core loaded") -> None:
+        self._core_type_badge.setVisible(False)
+        self._core_addr_lbl.setText(msg)
+        self._core_addr_lbl.setStyleSheet("font-size:10px;color:#555;")
+
+    # ── Utilities ───────────────────────────────────────────────────────────
+
+    def _set_status(self, message: str):
+        self._status_lbl.setText(message)
+        base = "font-size:10px;padding:2px;"
+        msg  = message.lower()
+        if any(w in msg for w in ("ready", "connected")):
+            self._status_lbl.setStyleSheet(f"{base}color:#4CAF50;font-weight:bold;")
+        elif any(w in msg for w in ("error", "failed", "not supported")):
+            self._status_lbl.setStyleSheet(f"{base}color:#f44336;font-weight:bold;")
+        elif any(w in msg for w in ("starting", "stopping", "connecting", "proxy", "loading", "…")):
+            self._status_lbl.setStyleSheet(f"{base}color:#FF9800;font-weight:bold;")
+        elif "load a" in msg:
+            self._status_lbl.setStyleSheet(f"{base}color:#2196F3;font-weight:bold;")
+        else:
+            self._status_lbl.setStyleSheet(f"{base}color:#666;")
 
     def closeEvent(self, event):
         self.hide()
