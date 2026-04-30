@@ -10,7 +10,7 @@ import napari
 from PyQt6.QtCore import Qt, QObject, pyqtSlot, QThread, pyqtSignal, QTimer
 from PyQt6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QPushButton, QLabel,
-    QSizePolicy, QFrame, QLineEdit, QGroupBox,
+    QSizePolicy, QFrame, QLineEdit, QGroupBox, QMessageBox,
 )
 from src.mcp_microscopetoolset.utils import get_user_information
 from src.start_subprocess.servers import _start_server, _stop_server, wait_for_es
@@ -346,6 +346,7 @@ class MCPServer(QWidget):
         self._proxy_thread  = None
         self._proxy_worker  = None
         self._remote_connected    = False
+        self._remote_url          = ""     # stored on connect; used for locality check
         self._cfg_pending_restart = False  # auto-restart MCP after cfg reload
 
         # service worker/thread pairs
@@ -619,6 +620,7 @@ class MCPServer(QWidget):
                 self._in_user_load = False
             self._mmc = remote_core
             self._remote_connected = True
+            self._remote_url = url
             core_type = self._query_core_type(url)
             from urllib.parse import urlparse
             p = urlparse(url)
@@ -639,6 +641,7 @@ class MCPServer(QWidget):
     def _disconnect_remote_core(self):
         self._mmc = None
         self._remote_connected = False
+        self._remote_url = ""
         self._core_dot.setStyleSheet(_DOT_STOPPED)
         self._clear_core_badge()
         self._remote_connect_btn.setText("Connect")
@@ -690,6 +693,20 @@ class MCPServer(QWidget):
             # remote core during set_core).
             if self._in_user_load:
                 _nm_load(path)
+                return
+            # Warn and block when a non-local remote core is active.
+            # Loading a cfg would silently disconnect from the remote and
+            # start a new local proxy — almost certainly not what the user wants.
+            if self._remote_connected and self._is_truly_remote(self._remote_url):
+                QMessageBox.warning(
+                    self,
+                    "Remote core is active",
+                    f"You are connected to a remote core at <b>{self._remote_url}</b>.<br><br>"
+                    "Loading a local .cfg file would disconnect you from the remote "
+                    "and start a new local proxy.<br><br>"
+                    "Disconnect the remote core first if you want to load a local configuration.",
+                )
+                logger.warning("Blocked cfg load: truly-remote core is active (%s)", self._remote_url)
                 return
             self._in_user_load = True
             try:
@@ -784,6 +801,17 @@ class MCPServer(QWidget):
         self._core_type_badge.setVisible(False)
         self._core_addr_lbl.setText(msg)
         self._core_addr_lbl.setStyleSheet("font-size:10px;color:#555;")
+
+    # ── Remote-locality helpers ─────────────────────────────────────────────
+
+    # ── Remote-locality helpers ─────────────────────────────────────────────
+
+    @staticmethod
+    def _is_truly_remote(url: str) -> bool:
+        """Return True when *url* points to a host other than localhost."""
+        from urllib.parse import urlparse
+        host = urlparse(url).hostname or ""
+        return host not in ("localhost", "127.0.0.1", "::1", "")
 
     # ── Utilities ───────────────────────────────────────────────────────────
 
