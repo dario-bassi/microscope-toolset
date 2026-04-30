@@ -1,6 +1,7 @@
 import logging
 from src.postqrl.connection import DBConnection
 from pgvector.psycopg2 import register_vector
+from typing import List
 
 logger = logging.getLogger(__name__)
 from psycopg2.extras import Json
@@ -27,7 +28,7 @@ class LoggerDB:
         finally:
             self.connection.put_connect(connection)
 
-    def list_collection(self):
+    def list_collection(self) -> list[str]:
         connection = self.connection.get_connect()
         try:
             with connection.cursor() as cur:
@@ -36,10 +37,10 @@ class LoggerDB:
                 FROM information_schema.tables
                 WHERE table_schema = 'public'
                 """)
-
                 return [row[0] for row in cur.fetchall()]
         except Exception as e:
             logger.error(e)
+            return []
         finally:
             self.connection.put_connect(connection)
 
@@ -71,7 +72,7 @@ class LoggerDB:
         finally:
             self.connection.put_connect(connection)
 
-    def get_collection(self, collection_name: str):
+    def get_collection(self, collection_name: str) -> list[dict]:
         connection = self.connection.get_connect()
 
         if collection_name not in self.list_collection():
@@ -79,37 +80,35 @@ class LoggerDB:
 
         try:
             with connection.cursor() as cur:
-
                 cur.execute(f"""
                 SELECT * FROM {collection_name}
                 """)
-
                 return [
                     {"prompt": row[1], "output": row[2], "feedback": row[3], "category": row[4], "embedding": row[5]}
                     for row in cur.fetchall()]
         except Exception as e:
             logger.error(e)
+            return []
         finally:
             self.connection.put_connect(connection)
 
-    def get_columns_name(self, collection_name: str):
-
+    def get_columns_name(self, collection_name: str) -> list:
         connection = self.connection.get_connect()
 
         if collection_name not in self.list_collection():
             logger.error(f"The collection {collection_name} doesn't exist or is not present into the database.")
 
         try:
-            with connection.cusor() as cur:
+            with connection.cursor() as cur:
                 cur.execute("""
                 SELECT column_name
                 FROM information_schema.columns
                 WHERE table_name = %s
-                """, collection_name)
-
+                """, (collection_name,))
                 return cur.fetchall()
         except Exception as e:
             logger.error(e)
+            return []
         finally:
             self.connection.put_connect(connection)
 
@@ -140,7 +139,7 @@ class LoggerDB:
         finally:
             self.connection.put_connect(connection)
 
-    def insert(self, collection_name: str, data_dict, embeddings=list[float]):
+    def insert(self, collection_name: str, data_dict, embeddings=List[float]):
 
         connection = self.connection.get_connect()
 
@@ -194,8 +193,7 @@ class LoggerDB:
 
         pass
 
-    def query_by_category(self, collection_name: str, category: str, k = 10):
-
+    def query_by_category(self, collection_name: str, category: str, k: int = 10) -> list[dict]:
         connection = self.connection.get_connect()
 
         if collection_name not in self.list_collection():
@@ -203,20 +201,19 @@ class LoggerDB:
 
         try:
             with connection.cursor() as cur:
-
                 cur.execute(f"""
                 SELECT * FROM {collection_name} WHERE category = %s LIMIT %s
-                """, (category,str(k)))
+                """, (category, k))
                 return [
                     {"prompt": row[1], "output": row[2], "feedback": row[3], "category": row[4], "embedding": row[5]}
                     for row in cur.fetchall()]
-
         except Exception as e:
             logger.error(e)
+            return []
         finally:
             self.connection.put_connect(connection)
 
-    def query_by_vector(self, collection_name: str, vector= list[float], k=10):
+    def query_by_vector(self, collection_name: str, vector: list[float], k: int = 10) -> list[dict]:
         connection = self.connection.get_connect()
 
         if collection_name not in self.list_collection():
@@ -224,24 +221,22 @@ class LoggerDB:
         try:
             with connection.cursor() as cur:
                 register_vector(cur)
-                print("is run the cursor")
                 cur.execute(f"""
                 SELECT prompt, output, feedback, category, (embedding <-> %s::vector) AS distance, embedding
                 FROM {collection_name}
                 ORDER BY distance
                 LIMIT %s
                 """, (vector, k))
-                #res = [row[0] for row in cur.fetchall()]
-                #print(res)
                 return [
                     {"prompt": row[0], "output": row[1], "feedback": row[2], "category": row[3], "distance": row[4]}
                     for row in cur.fetchall()]
         except Exception as e:
             logger.error(e)
+            return []
         finally:
             self.connection.put_connect(connection)
 
-    def query_feedback(self, collection_name: str, feedback: bool, k = 10):
+    def query_feedback(self, collection_name: str, feedback: bool, k: int = 10) -> list[dict]:
         connection = self.connection.get_connect()
 
         if collection_name not in self.list_collection():
@@ -250,14 +245,13 @@ class LoggerDB:
             with connection.cursor() as cur:
                 cur.execute(f"""
                 SELECT * FROM {collection_name} WHERE feedback = %s LIMIT %s
-                """, (feedback,str(k)))
-
+                """, (feedback, k))
                 return [
                     {"prompt": row[1], "output": row[2], "feedback": row[3], "category": row[4], "embedding": row[5]}
                     for row in cur.fetchall()]
         except Exception as e:
             logger.error(e)
-
+            return []
         finally:
             self.connection.put_connect(connection)
 
