@@ -47,8 +47,6 @@ def get_user_information() -> dict:
     # load user from the environment
     load_dotenv()
 
-    user_information['model'] = os.getenv("MODEL")
-    user_information['api_key'] = os.getenv("API_KEY")
     user_information['database_path'] = os.getenv("DATABASE")
     user_information['collection_name'] = os.getenv("DBNAME")
     user_information['log_collection'] = os.getenv("LOGNAME")
@@ -58,6 +56,8 @@ def get_user_information() -> dict:
     user_information['elastic_search_path_home'] = os.getenv("ELASTICSEARCH")
     user_information['fastmcp_server_path'] = os.getenv("FASTMCP_SERVER")
     user_information['benchmark_agent_enable'] = os.getenv("BENCHMARK_KNOWLEDGE_ENABLED")
+    user_information['anthropic_model'] = os.getenv("ANTHROPIC_MODEL", "claude-haiku-4-5-20251001")
+    user_information['embed_model'] = os.getenv("EMBED_MODEL", "BAAI/bge-small-en-v1.5")
 
     return user_information
 

@@ -1,4 +1,3 @@
-openai
 pymupdf4llm
 pymupdf
 semantic_text_splitter
@@ -41,3 +40,5 @@ git+https://github.com/hinderling/virtual-microscope
 git+https://github.com/hinderling/pymmcore-proxy.git
 pytest
 pytest-qt
+anthropic
+sentence-transformers

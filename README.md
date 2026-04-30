@@ -80,9 +80,43 @@ python .\src\create_database_from_publication.py --db <path to db> --doc <path t
 ```
 In the folder that you choose were to save the database, at the moment two directories will be created: *pages_png* and *pages_markdown*. The first will contain the png files of each page of the document and in the second the markdown files of the text extracted. 
 
-### How to start the toolset
+### Model configuration
 
-> Currently, the *Large Language Model* in use is from OpenAI. In the future it will be added the possibilities to choose the preferred Model. Be sure to have saved in the environment the api key for OpenAI with *OPENAI_API_KEY*.
+The toolset uses two models, both configurable via the `.env` file:
+
+**1. Claude (Anthropic) — for query reformulation inside the database agent**
+
+Set your API key and choose a model:
+```
+ANTHROPIC_API_KEY="your-anthropic-api-key-here"
+ANTHROPIC_MODEL="claude-haiku-4-5-20251001"
+```
+
+| Model | Speed | Quality | Cost |
+|---|---|---|---|
+| `claude-haiku-4-5-20251001` | Fast | Good — recommended for query reformulation | Low |
+| `claude-sonnet-4-6` | Medium | Higher quality | Medium |
+| `claude-opus-4-7` | Slow | Best quality | High |
+
+**2. Sentence-transformers — for embedding queries into Elasticsearch KNN search**
+
+```
+EMBED_MODEL="BAAI/bge-small-en-v1.5"
+```
+
+| Model | Dimensions | Size | Quality |
+|---|---|---|---|
+| `all-MiniLM-L6-v2` | 384 | ~80 MB | Fast / lightweight |
+| `BAAI/bge-small-en-v1.5` | 512 | ~120 MB | Good — default |
+| `all-mpnet-base-v2` | 768 | ~420 MB | Better |
+| `BAAI/bge-base-en-v1.5` | 768 | ~420 MB | Better |
+| `BAAI/bge-large-en-v1.5` | 1024 | ~1.2 GB | Best local quality |
+
+> **Important:** the embedding dimension must match your Elasticsearch KNN index. If you change `EMBED_MODEL` you must re-index all your Elasticsearch data.
+
+The model is downloaded automatically on first run.
+
+### How to start the toolset
 
 Run the following command for starting the Napari GUI
 ```

@@ -1,4 +1,5 @@
-from .base_agent import BaseAgent, OpenAI
+from .base_agent import BaseAgent
+import anthropic
 import json
 from .structuredOutput import RephraseOutput, ExtractKeywordOutput
 from src.databases.elasticsearch_db import ElasticSearchDB
@@ -24,13 +25,14 @@ if not logger.handlers:
 class DatabaseAgent(BaseAgent):
 
     # add missing variable
-    def __init__(self, client_openai: OpenAI,es_client: ElasticSearchDB, 
-                  api_collection: str, db_log_collection_name: str,
-                 tokenizer: Any, model: Any,
+    def __init__(self, client: anthropic.Anthropic | None, es_client: ElasticSearchDB,
+                 api_collection: str, db_log_collection_name: str,
+                 tokenizer: Any, model: Any, embed_model: Any,
+                 llm_model: str = "claude-haiku-4-5-20251001",
                  pdf_collection: str | None = None,
                  micromanager_collection: str | None = None,
-                  db_log: LoggerDB | None = None):
-        super().__init__(client_openai)
+                 db_log: LoggerDB | None = None):
+        super().__init__(client)
         self.es_client = es_client
         self.pdf_collection = pdf_collection
         self.micromanager_collection = micromanager_collection
@@ -39,16 +41,15 @@ class DatabaseAgent(BaseAgent):
         self.db_log_name = db_log_collection_name
         self.tokenizer = tokenizer
         self.model = model
+        self.embed_model = embed_model
+        self.llm_model = llm_model
 
     def _embeds_query(self, query: str) -> List[float]:
-        query = query.replace("\n", " ")
-        response = self.client_openai.embeddings.create(input=[query], model="text-embedding-3-small",
-                                                        dimensions=512)  # later add model's choice
-
-        embedding = response.data[0].embedding  # list of floating values
+        #query = query.replace("\n", " ") was problem with openai --> verify if the new sentence-transformer there are problems
+        # normalize_embeddings=True gives unit-length vectors suitable for cosine KNN
+        embedding = self.embed_model.encode(query, normalize_embeddings=True)
         logger.info("Generating embedding")
-
-        return embedding
+        return embedding.tolist()
 
     def _retrieve_relevant_information(self, query: str):
 
@@ -377,7 +378,7 @@ class DatabaseAgent(BaseAgent):
 
         error_description = "Failed to rephrase the original query"
 
-        return self.call_agent(model="gpt-4.1-mini",input_user=history, error_string=error_description, output_format=RephraseOutput)
+        return self.call_agent(model=self.llm_model,input_user=history, error_string=error_description, output_format=RephraseOutput)
 
     def split_query_in_keyword(self, query: str):
 
@@ -391,7 +392,7 @@ class DatabaseAgent(BaseAgent):
 
         error_description = "Failed to extract keywords from the original query"
 
-        return self.call_agent(model="gpt-4.1-mini",input_user=history, error_string=error_description, output_format=ExtractKeywordOutput)
+        return self.call_agent(model=self.llm_model,input_user=history, error_string=error_description, output_format=ExtractKeywordOutput)
 
 
     def _rerank(self, query: str, chunk: str):

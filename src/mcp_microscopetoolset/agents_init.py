@@ -1,7 +1,8 @@
 import os
-from openai import OpenAI
+import anthropic
 from pymmcore_plus import CMMCorePlus
 from transformers import AutoTokenizer, AutoModelForSequenceClassification
+from sentence_transformers import SentenceTransformer
 from src.agentsNormal.specialized_agent import DatabaseAgent
 from src.databases.elasticsearch_db import ElasticSearchDB
 from src.local.execute import Execute
@@ -91,40 +92,46 @@ def initialize_agents(mmc: CMMCorePlus, cfg_file: str | None = None):
                 logger.info(f"API Collection: {api_collection}")
 
                 # Load the cross-encoder for re-ranking
-                model_name = "cross-encoder/ms-marco-MiniLM-L6-v2"
-                tokenizer = AutoTokenizer.from_pretrained(model_name)
-                model = AutoModelForSequenceClassification.from_pretrained(model_name)
-                logger.info(f"Cross-encoder Model {model_name} loaded")
+                reranker_name = "cross-encoder/ms-marco-MiniLM-L6-v2"
+                tokenizer = AutoTokenizer.from_pretrained(reranker_name)
+                reranker_model = AutoModelForSequenceClassification.from_pretrained(reranker_name)
+                logger.info(f"Cross-encoder model {reranker_name} loaded")
 
-                # initialize LLM API
-                client_openai = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
-                logger.info("LLM API loaded")
+                # Load the sentence-transformers embedding model.
+                # NOTE: dimension must match the ES KNN index — re-index if you change model.
+                embed_model_name = system_user_information.get('embed_model', 'BAAI/bge-small-en-v1.5')
+                embed_model = SentenceTransformer(embed_model_name)
+                logger.info(f"Embedding model {embed_model_name!r} loaded")
+
+                # Anthropic client — only created when the API key is present.
+                # Without it, query reformulation is skipped but ES search still works.
+                anthropic_model = system_user_information.get('anthropic_model', 'claude-haiku-4-5-20251001')
+                if os.getenv("ANTHROPIC_API_KEY"):
+                    client = anthropic.Anthropic()
+                    logger.info(f"Anthropic client loaded (model: {anthropic_model!r})")
+                else:
+                    client = None
+                    logger.warning("ANTHROPIC_API_KEY not set — query reformulation will be unavailable")
 
                 # initialize different Agents
-                database_agent = DatabaseAgent(client_openai=client_openai, es_client=es_client, pdf_collection=pdf_publication,
-                                               micromanager_collection=micromanager_collection, api_collection=api_collection,
-                                               db_log=None, db_log_collection_name=system_user_information.get('log_collection', ''),
-                                               tokenizer=tokenizer, model=model)
+                database_agent = DatabaseAgent(
+                    client=client,
+                    es_client=es_client,
+                    pdf_collection=pdf_publication,
+                    micromanager_collection=micromanager_collection,
+                    api_collection=api_collection,
+                    db_log=None,
+                    db_log_collection_name=system_user_information.get('log_collection', ''),
+                    tokenizer=tokenizer,
+                    model=reranker_model,
+                    embed_model=embed_model,
+                    llm_model=anthropic_model,
+                )
                 logger.info("Initialed Database Agent")
         except Exception as e:
             logger.warning(f"Elasticsearch/Database agent initialization failed: {e}. Continuing without database tools.")
             es_client = None
             database_agent = None
-
-    #software_agent = SoftwareEngeneeringAgent(client_openai=client_openai)
-    #logger.info("Initialed Software Agent")
-
-    #strategy_agent = StrategyAgent(client_openai=client_openai)
-    #logger.info("Initialed Strategy Agent")
-
-    #no_coding_agent = NoCodingAgent(client_openai=client_openai)
-    #logger.info("Initialed NoCoding Agent")
-
-    #logger_agent = LoggerAgent(client_openai=client_openai)
-    #logger.info("Initialed Logger Agent")
-
-    #classify_agent = ClassifyAgent(client_openai=client_openai)
-    #logger.info("Initialed Classify Agent")
 
     return {
         "executor": executor,
@@ -133,11 +140,6 @@ def initialize_agents(mmc: CMMCorePlus, cfg_file: str | None = None):
         "db_log": None,
         "es_client": es_client,
     }
-#"software_agent": software_agent,
-#"strategy_agent": strategy_agent,
-#"no_coding_agent": no_coding_agent,
-#"logger_agent": logger_agent,
-#"classify_agent": classify_agent,
 
 
 
