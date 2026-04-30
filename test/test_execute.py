@@ -166,6 +166,70 @@ class TestRunCodeNew:
 # confirmation flow (via run_code_new: missing → error, not auto-install)
 # ---------------------------------------------------------------------------
 
+# ---------------------------------------------------------------------------
+# is_safe_code — Task #14
+# ---------------------------------------------------------------------------
+
+class TestIsSafeCode:
+
+    def test_safe_code(self, executor):
+        safe, reason = executor.is_safe_code("x = mmc.getXPosition()")
+        assert safe is True
+        assert reason == ""
+
+    def test_blocks_cmmcoreplus_constructor(self, executor):
+        safe, reason = executor.is_safe_code("core = CMMCorePlus()")
+        assert safe is False
+        assert "CMMCorePlus" in reason
+
+    def test_blocks_uniMMcore_constructor(self, executor):
+        safe, reason = executor.is_safe_code("core = UniMMCore()")
+        assert safe is False
+        assert "UniMMCore" in reason
+
+    def test_blocks_cmmcoreplus_instance(self, executor):
+        safe, reason = executor.is_safe_code("core = CMMCorePlus.instance()")
+        assert safe is False
+        assert "CMMCorePlus" in reason
+
+    def test_blocks_uniMMcore_instance(self, executor):
+        safe, reason = executor.is_safe_code("core = UniMMCore.instance()")
+        assert safe is False
+        assert "UniMMCore" in reason
+
+    def test_blocks_load_system_configuration(self, executor):
+        safe, reason = executor.is_safe_code("mmc.loadSystemConfiguration('demo.cfg')")
+        assert safe is False
+        assert "loadSystemConfiguration" in reason
+
+    def test_blocks_load_config(self, executor):
+        safe, reason = executor.is_safe_code("mmc.loadConfig('path/to/cfg')")
+        assert safe is False
+        assert "loadConfig" in reason
+
+    def test_unrelated_instance_call_allowed(self, executor):
+        # Some other class calling .instance() is fine
+        safe, reason = executor.is_safe_code("obj = MyClass.instance()")
+        assert safe is True
+
+    def test_syntax_error_returns_safe(self, executor):
+        # Syntax errors are caught later; safety check must not crash
+        safe, reason = executor.is_safe_code("def (broken!!!")
+        assert safe is True
+
+    def test_run_code_blocks_cmmcoreplus(self, executor):
+        result = executor.run_code_new("core = CMMCorePlus()", execution_mode="buffered")
+        assert "Safety Error" in result
+        assert "CMMCorePlus" in result
+
+    def test_run_code_blocks_load_system_configuration(self, executor):
+        result = executor.run_code_new(
+            "mmc.loadSystemConfiguration('demo.cfg')", execution_mode="buffered"
+        )
+        assert "Safety Error" in result
+        assert "loadSystemConfiguration" in result
+
+
 class TestConfirmationFlow:
 
     def test_missing_package_not_auto_installed(self, executor):

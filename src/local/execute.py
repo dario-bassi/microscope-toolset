@@ -29,6 +29,11 @@ if not logger.handlers:
 
 class Execute:
 
+    # Core classes the agent must not re-instantiate
+    _BLOCKED_CONSTRUCTORS = {"CMMCorePlus", "UniMMCore"}
+    # Hardware-config methods the agent must not call
+    _BLOCKED_METHODS = {"loadSystemConfiguration", "loadConfig"}
+
     def __init__(self, mmc: CMMCorePlus, filename: str | None = None):
         self.namespace = {}
 
@@ -139,7 +144,11 @@ class Execute:
         # Check code before running it
         if not self.is_safe_viewer(code):
             return "viewer"
-        
+
+        safe, reason = self.is_safe_code(code)
+        if not safe:
+            return f"Safety Error: {reason}"
+
         # Validate and pre-import dependencies
         try:
             failed = self._preimport_dependencies(code)
@@ -274,4 +283,47 @@ class Execute:
                 return False
 
         return True
+
+    def is_safe_code(self, code: str) -> tuple[bool, str]:
+        """
+        Check for patterns that must never appear in agent-submitted code:
+        - Re-instantiating CMMCorePlus / UniMMCore (use the pre-configured mmc)
+        - Calling CMMCorePlus.instance() / UniMMCore.instance()
+        - Calling loadSystemConfiguration() / loadConfig() (config is managed by the toolset)
+        Returns (True, "") if safe, (False, reason) if blocked.
+        """
+        try:
+            tree = ast.parse(code)
+        except SyntaxError:
+            return True, ""  # syntax errors are reported later
+
+        for node in ast.walk(tree):
+            if not isinstance(node, ast.Call):
+                continue
+            func = node.func
+
+            # Block CMMCorePlus() / UniMMCore() direct construction
+            if isinstance(func, ast.Name) and func.id in self._BLOCKED_CONSTRUCTORS:
+                return False, (
+                    f"Instantiating {func.id}() is not allowed inside agent code. "
+                    "Use the pre-configured `mmc` instance instead."
+                )
+
+            if isinstance(func, ast.Attribute):
+                # Block CMMCorePlus.instance() / UniMMCore.instance()
+                if (func.attr == "instance"
+                        and isinstance(func.value, ast.Name)
+                        and func.value.id in self._BLOCKED_CONSTRUCTORS):
+                    return False, (
+                        f"Calling {func.value.id}.instance() is not allowed. "
+                        "Use the pre-configured `mmc` instance instead."
+                    )
+                # Block .loadSystemConfiguration() / .loadConfig()
+                if func.attr in self._BLOCKED_METHODS:
+                    return False, (
+                        f"Calling .{func.attr}() is not allowed inside agent code. "
+                        "Hardware configuration is managed by the toolset."
+                    )
+
+        return True, ""
 
