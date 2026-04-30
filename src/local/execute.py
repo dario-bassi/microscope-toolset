@@ -34,6 +34,15 @@ class Execute:
     # Hardware-config methods the agent must not call
     _BLOCKED_METHODS = {"loadSystemConfiguration", "loadConfig"}
 
+    # Registry: top-level library name → list of guard callables (ast.AST → tuple[bool, str])
+    # Guards are run only when the corresponding library is imported in the submitted code.
+    _LIBRARY_GUARDS: dict[str, list] = {}
+
+    @classmethod
+    def register_library_guard(cls, library: str, guard_fn) -> None:
+        """Register a library-specific guard. Call this from any module to extend checks."""
+        cls._LIBRARY_GUARDS.setdefault(library, []).append(guard_fn)
+
     def __init__(self, mmc: CMMCorePlus, filename: str | None = None):
         self.namespace = {}
 
@@ -149,6 +158,10 @@ class Execute:
         if not safe:
             return f"Safety Error: {reason}"
 
+        ok, reason = self._check_library_guards(code)
+        if not ok:
+            return f"Library Guard Error: {reason}"
+
         # Validate and pre-import dependencies
         try:
             failed = self._preimport_dependencies(code)
@@ -183,8 +196,12 @@ class Execute:
             out_f = StringIO()
             err_f = StringIO()
             # code execution
-            with redirect_stdout(out_f), redirect_stderr(err_f):
-                exec(code, self.namespace)
+            teardowns = self._apply_runtime_guards(code)
+            try:
+                with redirect_stdout(out_f), redirect_stderr(err_f):
+                    exec(code, self.namespace)
+            finally:
+                self._remove_runtime_guards(teardowns)
             # reading output+errors
             stdout_text = out_f.getvalue().strip()
             stderr_text = err_f.getvalue().strip()
@@ -231,8 +248,12 @@ class Execute:
             out_f = StringIO()
             err_f = StringIO()
             # code execution
-            with redirect_stdout(out_f), redirect_stderr(err_f):
-                exec(code, self.namespace)
+            teardowns = self._apply_runtime_guards(code)
+            try:
+                with redirect_stdout(out_f), redirect_stderr(err_f):
+                    exec(code, self.namespace)
+            finally:
+                self._remove_runtime_guards(teardowns)
             # reading output+errors
             stdout_text = out_f.getvalue().strip()
             stderr_text = err_f.getvalue().strip()
@@ -327,3 +348,201 @@ class Execute:
 
         return True, ""
 
+    def _get_imported_modules(self, code: str) -> set[str]:
+        """Return the set of top-level module names imported anywhere in the code."""
+        modules: set[str] = set()
+        try:
+            tree = ast.parse(code)
+        except SyntaxError:
+            return modules
+        for node in ast.walk(tree):
+            if isinstance(node, ast.Import):
+                for alias in node.names:
+                    modules.add(alias.name.split(".")[0])
+            elif isinstance(node, ast.ImportFrom) and node.module:
+                modules.add(node.module.split(".")[0])
+        return modules
+
+    def _check_library_guards(self, code: str) -> tuple[bool, str]:
+        """Run every registered guard for libraries that appear in the code."""
+        imported = self._get_imported_modules(code)
+        try:
+            tree = ast.parse(code)
+        except SyntaxError:
+            return True, ""
+        for lib, guards in self._LIBRARY_GUARDS.items():
+            if lib in imported:
+                for guard_fn in guards:
+                    ok, reason = guard_fn(tree)
+                    if not ok:
+                        return False, f"[{lib}] {reason}"
+        return True, ""
+
+    # Registry: top-level library name → runtime installer callable (namespace → teardown | None)
+    _RUNTIME_GUARDS: dict[str, list] = {}
+
+    @classmethod
+    def register_runtime_guard(cls, library: str, installer_fn) -> None:
+        """Register a runtime guard installer for a library."""
+        cls._RUNTIME_GUARDS.setdefault(library, []).append(installer_fn)
+
+    def _apply_runtime_guards(self, code: str) -> list:
+        """Install runtime guards for libraries present in the code. Returns teardown callables."""
+        imported = self._get_imported_modules(code)
+        teardowns = []
+        for lib, installers in self._RUNTIME_GUARDS.items():
+            if lib in imported:
+                for installer_fn in installers:
+                    td = installer_fn(self.namespace)
+                    if td is not None:
+                        teardowns.append(td)
+        return teardowns
+
+    @staticmethod
+    def _remove_runtime_guards(teardowns: list) -> None:
+        for td in teardowns:
+            try:
+                td()
+            except Exception:
+                pass
+
+
+# ---------------------------------------------------------------------------
+# Built-in library guards
+# ---------------------------------------------------------------------------
+
+def _cellpose_diameter_guard(tree: ast.AST) -> tuple[bool, str]:
+    """Require an explicit 'diameter' kwarg in any cellpose call."""
+    has_diameter = any(
+        kw.arg == "diameter"
+        for node in ast.walk(tree)
+        if isinstance(node, ast.Call)
+        for kw in node.keywords
+    )
+    if not has_diameter:
+        return False, (
+            "no 'diameter' keyword argument found. "
+            "Cellpose defaults to 30 px cell diameter — set it explicitly to match your cells."
+        )
+    return True, ""
+
+
+Execute.register_library_guard("cellpose", _cellpose_diameter_guard)
+
+
+def _cellpose_channels_guard(tree: ast.AST) -> tuple[bool, str]:
+    """Require an explicit 'channels' kwarg — default [0,0] fails on multichannel images."""
+    has_channels = any(
+        kw.arg == "channels"
+        for node in ast.walk(tree)
+        if isinstance(node, ast.Call)
+        for kw in node.keywords
+    )
+    if not has_channels:
+        return False, (
+            "no 'channels' keyword argument found. "
+            "Cellpose defaults to [0, 0] (grayscale) — set channels explicitly, "
+            "e.g. [0, 0] for grayscale, [1, 2] for cytoplasm+nucleus."
+        )
+    return True, ""
+
+
+def _try_numeric_literal(node: ast.expr) -> float | None:
+    """Return the numeric value of a literal node (handles negatives), or None."""
+    if isinstance(node, ast.Constant) and isinstance(node.value, (int, float)):
+        return float(node.value)
+    if (isinstance(node, ast.UnaryOp)
+            and isinstance(node.op, ast.USub)
+            and isinstance(node.operand, ast.Constant)
+            and isinstance(node.operand.value, (int, float))):
+        return -float(node.operand.value)
+    return None
+
+
+def _cellpose_flow_threshold_guard(tree: ast.AST) -> tuple[bool, str]:
+    """Block flow_threshold literals outside [0.0, 3.0]."""
+    for node in ast.walk(tree):
+        if not isinstance(node, ast.Call):
+            continue
+        for kw in node.keywords:
+            if kw.arg != "flow_threshold":
+                continue
+            val = _try_numeric_literal(kw.value)
+            if val is not None and not (0.0 <= val <= 3.0):
+                return False, (
+                    f"flow_threshold={val} is outside the sane range [0.0, 3.0]. "
+                    "Values > 1.0 accept noise as cells; values < 0.0 miss real cells."
+                )
+    return True, ""
+
+
+def _cellpose_cellprob_threshold_guard(tree: ast.AST) -> tuple[bool, str]:
+    """Block cellprob_threshold literals outside [-6.0, 6.0]."""
+    for node in ast.walk(tree):
+        if not isinstance(node, ast.Call):
+            continue
+        for kw in node.keywords:
+            if kw.arg != "cellprob_threshold":
+                continue
+            val = _try_numeric_literal(kw.value)
+            if val is not None and not (-6.0 <= val <= 6.0):
+                return False, (
+                    f"cellprob_threshold={val} is outside the sane range [-6.0, 6.0]. "
+                    "Extreme values cause silent over- or under-segmentation."
+                )
+    return True, ""
+
+
+Execute.register_library_guard("cellpose", _cellpose_channels_guard)
+Execute.register_library_guard("cellpose", _cellpose_flow_threshold_guard)
+Execute.register_library_guard("cellpose", _cellpose_cellprob_threshold_guard)
+
+
+# ---------------------------------------------------------------------------
+# Built-in runtime guards
+# ---------------------------------------------------------------------------
+
+_CELLPOSE_SIZE_THRESHOLD = 512
+
+
+def _install_cellpose_size_guard(namespace: dict):
+    """
+    Monkey-patch Cellpose.eval to check image size at runtime.
+    Images larger than 512×512 raise RuntimeError unless the user sets
+    cellpose_allow_large_image = True in their code before the eval call.
+    Returns a teardown callable that restores the original method.
+    """
+    try:
+        import cellpose.models
+        original_eval = cellpose.models.Cellpose.eval
+    except (ImportError, AttributeError):
+        return None
+
+    def _guarded_eval(self_model, x, *args, **kwargs):
+        import numpy as np
+        img = np.asarray(x) if not isinstance(x, list) else np.asarray(x[0])
+        if img.ndim >= 2:
+            h, w = img.shape[0], img.shape[1]
+            if (h > _CELLPOSE_SIZE_THRESHOLD or w > _CELLPOSE_SIZE_THRESHOLD) \
+                    and not namespace.get("cellpose_allow_large_image", False):
+                raise RuntimeError(
+                    f"Image size {h}×{w} px exceeds the {_CELLPOSE_SIZE_THRESHOLD}×"
+                    f"{_CELLPOSE_SIZE_THRESHOLD} px threshold — segmentation may take a very long time.\n"
+                    f"  • Resize first, then map masks back to original coordinates:\n"
+                    f"      img_small = cv2.resize(img, ({_CELLPOSE_SIZE_THRESHOLD}, {_CELLPOSE_SIZE_THRESHOLD}))\n"
+                    f"      masks, flows, _ = model.eval(img_small, ...)\n"
+                    f"      masks = cv2.resize(masks, ({w}, {h}), interpolation=cv2.INTER_NEAREST)\n"
+                    f"    Use INTER_NEAREST — bilinear/bicubic blends label IDs and corrupts the mask.\n"
+                    f"  • Or allow the original size:  set  cellpose_allow_large_image = True  before the eval call."
+                )
+        return original_eval(self_model, x, *args, **kwargs)
+
+    cellpose.models.Cellpose.eval = _guarded_eval
+
+    def _teardown():
+        cellpose.models.Cellpose.eval = original_eval
+
+    return _teardown
+
+
+Execute.register_runtime_guard("cellpose", _install_cellpose_size_guard)

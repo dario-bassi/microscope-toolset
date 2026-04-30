@@ -132,6 +132,41 @@ And select the microscope MCP server either connecting the server or enabling th
 After you added the *mcp.json* configuration file, you can start the MCP Client that will connect to the server.
 
 
+### Execution guardrails
+
+The `execute_python_code` tool runs agent-submitted Python code through a series of safety and correctness checks before execution:
+
+**General checks (all code):**
+- Blocks re-instantiation of `CMMCorePlus` / `UniMMCore` — the pre-configured `mmc` instance must be used
+- Blocks `.loadSystemConfiguration()` / `.loadConfig()` — hardware configuration is managed by the toolset
+- Blocks any reference to `viewer` or `napari.current_viewer()` — GUI access must go through the dedicated `viewer_*` tools
+- Auto-detects missing packages before execution and surfaces them for user approval
+
+**Library-specific guardrails (cellpose):**
+
+When `cellpose` is imported the following checks are enforced:
+
+| Check | What it blocks | Why |
+|---|---|---|
+| `diameter` required | Calls without an explicit diameter kwarg | Cellpose defaults to 30 px — wrong for most microscopy samples |
+| `channels` required | Calls without explicit channel assignment | Default `[0,0]` fails silently on multichannel fluorescence images |
+| `flow_threshold` range | Literal values outside `[0.0, 3.0]` | Values > 1.0 accept noise as cells; < 0.0 misses real cells |
+| `cellprob_threshold` range | Literal values outside `[-6.0, 6.0]` | Extreme values cause silent over/under-segmentation |
+| Image size (runtime) | Images larger than 512×512 px | Large images make segmentation very slow |
+
+If an image exceeds 512×512, the agent receives an error with a ready-to-use resize + mask rescale snippet (using `cv2.INTER_NEAREST` to avoid blending label IDs). To opt out and use the original image size, set `cellpose_allow_large_image = True` in the code before the `eval` call.
+
+**Adding guardrails for other libraries:**
+
+The guardrail system is extensible. Static (AST-based) guards and runtime (monkey-patch) guards can be registered for any library from any module:
+
+```python
+Execute.register_library_guard("mylib", my_ast_guard_fn)   # runs before exec
+Execute.register_runtime_guard("mylib", my_installer_fn)   # runs during exec
+```
+
+If you need a guardrail for a library that is not yet covered, please [open an issue or submit a PR](https://github.com/ddd42-star/microscope-toolset/issues).
+
 ### TO DO LIST
 
 - [ ] Fix use of Elasticsearch and PostgresSQL database

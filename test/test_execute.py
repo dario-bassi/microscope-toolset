@@ -167,7 +167,7 @@ class TestRunCodeNew:
 # ---------------------------------------------------------------------------
 
 # ---------------------------------------------------------------------------
-# is_safe_code — Task #14
+# is_safe_code 
 # ---------------------------------------------------------------------------
 
 class TestIsSafeCode:
@@ -259,3 +259,323 @@ class TestConfirmationFlow:
         # Step 2: run without issue
         result = executor.run_code_new('print("after install")', execution_mode="buffered")
         assert "after install" in result
+
+
+# ---------------------------------------------------------------------------
+# Library guards 
+# ---------------------------------------------------------------------------
+
+import ast as _ast
+import numpy as np
+from src.local.execute import (
+    Execute,
+    _cellpose_diameter_guard,
+    _cellpose_channels_guard,
+    _cellpose_flow_threshold_guard,
+    _cellpose_cellprob_threshold_guard,
+    _install_cellpose_size_guard,
+    _CELLPOSE_SIZE_THRESHOLD,
+)
+
+
+class TestGetImportedModules:
+
+    def test_empty_code(self, executor):
+        assert executor._get_imported_modules("x = 1") == set()
+
+    def test_plain_import(self, executor):
+        assert "os" in executor._get_imported_modules("import os")
+
+    def test_from_import(self, executor):
+        assert "os" in executor._get_imported_modules("from os.path import join")
+
+    def test_submodule_uses_top_level(self, executor):
+        mods = executor._get_imported_modules("import os.path")
+        assert "os" in mods
+        assert "os.path" not in mods
+
+    def test_multiple_imports(self, executor):
+        code = "import numpy\nfrom scipy import stats"
+        mods = executor._get_imported_modules(code)
+        assert {"numpy", "scipy"}.issubset(mods)
+
+    def test_syntax_error_returns_empty(self, executor):
+        assert executor._get_imported_modules("def (broken!!!") == set()
+
+
+class TestCheckLibraryGuards:
+
+    def test_no_guard_registered_passes(self, executor):
+        ok, reason = executor._check_library_guards("import os\nprint('hi')")
+        assert ok is True
+        assert reason == ""
+
+    def test_unrelated_library_guard_not_triggered(self, executor):
+        ok, _ = executor._check_library_guards("import numpy")
+        assert ok is True
+
+    def test_custom_guard_triggered(self, executor):
+        def _always_fail(tree):
+            return False, "test guard triggered"
+        Execute.register_library_guard("_test_lib_guard_xyz", _always_fail)
+        try:
+            ok, reason = executor._check_library_guards("import _test_lib_guard_xyz")
+            assert ok is False
+            assert "_test_lib_guard_xyz" in reason
+            assert "test guard triggered" in reason
+        finally:
+            Execute._LIBRARY_GUARDS.pop("_test_lib_guard_xyz", None)
+
+    def test_custom_guard_not_triggered_when_lib_absent(self, executor):
+        def _always_fail(tree):
+            return False, "should not run"
+        Execute.register_library_guard("_test_lib_guard_absent", _always_fail)
+        try:
+            ok, _ = executor._check_library_guards("import os")
+            assert ok is True
+        finally:
+            Execute._LIBRARY_GUARDS.pop("_test_lib_guard_absent", None)
+
+    def test_syntax_error_passes(self, executor):
+        ok, _ = executor._check_library_guards("def (broken!!!")
+        assert ok is True
+
+
+class TestCellposeDiameterGuard:
+
+    def _tree(self, code):
+        return _ast.parse(code)
+
+    def test_with_diameter_passes(self):
+        code = "model.eval(img, diameter=15)"
+        ok, reason = _cellpose_diameter_guard(self._tree(code))
+        assert ok is True
+        assert reason == ""
+
+    def test_without_diameter_fails(self):
+        code = "model.eval(img)"
+        ok, reason = _cellpose_diameter_guard(self._tree(code))
+        assert ok is False
+        assert "diameter" in reason
+
+    def test_empty_code_fails(self):
+        ok, _ = _cellpose_diameter_guard(self._tree("x = 1"))
+        assert ok is False
+
+    def test_run_code_blocks_cellpose_without_diameter(self, executor):
+        code = "import cellpose\ncellpose.models.Cellpose().eval(img)"
+        result = executor.run_code_new(code, execution_mode="buffered")
+        assert "Library Guard Error" in result
+        assert "cellpose" in result.lower()
+
+    def test_run_code_allows_cellpose_with_diameter(self, executor):
+        code = "import cellpose\ncellpose.models.Cellpose().eval(img, diameter=15, channels=[0,0])"
+        # Will fail at runtime (no real cellpose), but must pass all guards
+        result = executor.run_code_new(code, execution_mode="buffered")
+        assert "Library Guard Error" not in result
+
+
+class TestCellposeChannelsGuard:
+
+    def _tree(self, code):
+        return _ast.parse(code)
+
+    def test_with_channels_passes(self):
+        ok, _ = _cellpose_channels_guard(self._tree("model.eval(img, channels=[0,0])"))
+        assert ok is True
+
+    def test_without_channels_fails(self):
+        ok, reason = _cellpose_channels_guard(self._tree("model.eval(img)"))
+        assert ok is False
+        assert "channels" in reason
+
+    def test_no_call_fails(self):
+        ok, _ = _cellpose_channels_guard(self._tree("x = 1"))
+        assert ok is False
+
+
+class TestCellposeFlowThresholdGuard:
+
+    def _tree(self, code):
+        return _ast.parse(code)
+
+    def test_valid_value_passes(self):
+        ok, _ = _cellpose_flow_threshold_guard(self._tree("model.eval(img, flow_threshold=0.4)"))
+        assert ok is True
+
+    def test_zero_passes(self):
+        ok, _ = _cellpose_flow_threshold_guard(self._tree("model.eval(img, flow_threshold=0.0)"))
+        assert ok is True
+
+    def test_max_boundary_passes(self):
+        ok, _ = _cellpose_flow_threshold_guard(self._tree("model.eval(img, flow_threshold=3.0)"))
+        assert ok is True
+
+    def test_too_high_fails(self):
+        ok, reason = _cellpose_flow_threshold_guard(self._tree("model.eval(img, flow_threshold=5.0)"))
+        assert ok is False
+        assert "flow_threshold" in reason
+
+    def test_negative_fails(self):
+        ok, reason = _cellpose_flow_threshold_guard(self._tree("model.eval(img, flow_threshold=-1.0)"))
+        assert ok is False
+        assert "flow_threshold" in reason
+
+    def test_absent_passes(self):
+        # Not set at all → guard passes (no literal to check)
+        ok, _ = _cellpose_flow_threshold_guard(self._tree("model.eval(img)"))
+        assert ok is True
+
+    def test_variable_value_passes(self):
+        # Can't check non-literal values statically
+        ok, _ = _cellpose_flow_threshold_guard(self._tree("model.eval(img, flow_threshold=thresh)"))
+        assert ok is True
+
+
+class TestCellposeCellprobThresholdGuard:
+
+    def _tree(self, code):
+        return _ast.parse(code)
+
+    def test_valid_value_passes(self):
+        ok, _ = _cellpose_cellprob_threshold_guard(self._tree("model.eval(img, cellprob_threshold=0.0)"))
+        assert ok is True
+
+    def test_boundary_passes(self):
+        ok, _ = _cellpose_cellprob_threshold_guard(self._tree("model.eval(img, cellprob_threshold=6.0)"))
+        assert ok is True
+
+    def test_too_high_fails(self):
+        ok, reason = _cellpose_cellprob_threshold_guard(self._tree("model.eval(img, cellprob_threshold=10.0)"))
+        assert ok is False
+        assert "cellprob_threshold" in reason
+
+    def test_too_low_fails(self):
+        ok, reason = _cellpose_cellprob_threshold_guard(self._tree("model.eval(img, cellprob_threshold=-10.0)"))
+        assert ok is False
+        assert "cellprob_threshold" in reason
+
+    def test_absent_passes(self):
+        ok, _ = _cellpose_cellprob_threshold_guard(self._tree("model.eval(img)"))
+        assert ok is True
+
+    def test_variable_value_passes(self):
+        ok, _ = _cellpose_cellprob_threshold_guard(self._tree("model.eval(img, cellprob_threshold=prob)"))
+        assert ok is True
+
+
+# ---------------------------------------------------------------------------
+# Runtime guards — cellpose image size
+# ---------------------------------------------------------------------------
+
+import sys
+import types
+
+
+@pytest.fixture()
+def fake_cellpose():
+    """
+    Inject a minimal fake cellpose.models into sys.modules so tests
+    work regardless of whether real cellpose is installed or what API version it has.
+    """
+    from unittest.mock import MagicMock
+
+    class FakeCellpose:
+        def eval(self, x, *args, **kwargs):
+            return [], [], []
+
+    fake_models = types.ModuleType("cellpose.models")
+    fake_models.Cellpose = FakeCellpose
+
+    fake_pkg = types.ModuleType("cellpose")
+    fake_pkg.models = fake_models
+
+    orig_cellpose = sys.modules.get("cellpose")
+    orig_models = sys.modules.get("cellpose.models")
+    sys.modules["cellpose"] = fake_pkg
+    sys.modules["cellpose.models"] = fake_models
+
+    yield fake_models, FakeCellpose
+
+    # Restore original state
+    if orig_cellpose is None:
+        sys.modules.pop("cellpose", None)
+    else:
+        sys.modules["cellpose"] = orig_cellpose
+    if orig_models is None:
+        sys.modules.pop("cellpose.models", None)
+    else:
+        sys.modules["cellpose.models"] = orig_models
+
+
+class TestCellposeSizeGuard:
+    """Runtime size interceptor tests — use fake_cellpose fixture, no real cellpose needed."""
+
+    def test_small_image_passes(self, fake_cellpose):
+        fake_models, FakeCellpose = fake_cellpose
+        original_eval = FakeCellpose.eval
+        namespace = {}
+        td = _install_cellpose_size_guard(namespace)
+        assert td is not None
+        try:
+            small = np.zeros((256, 256), dtype=np.uint8)
+            FakeCellpose.eval(FakeCellpose(), small)   # must not raise
+        finally:
+            td()
+        assert FakeCellpose.eval is original_eval
+
+    def test_large_image_raises(self, fake_cellpose):
+        fake_models, FakeCellpose = fake_cellpose
+        namespace = {}
+        td = _install_cellpose_size_guard(namespace)
+        assert td is not None
+        try:
+            large = np.zeros((_CELLPOSE_SIZE_THRESHOLD + 1, _CELLPOSE_SIZE_THRESHOLD + 1), dtype=np.uint8)
+            with pytest.raises(RuntimeError, match="exceeds"):
+                FakeCellpose.eval(FakeCellpose(), large)
+        finally:
+            td()
+
+    def test_large_image_with_allow_flag_passes(self, fake_cellpose):
+        fake_models, FakeCellpose = fake_cellpose
+        namespace = {"cellpose_allow_large_image": True}
+        td = _install_cellpose_size_guard(namespace)
+        assert td is not None
+        try:
+            large = np.zeros((1024, 1024), dtype=np.uint8)
+            FakeCellpose.eval(FakeCellpose(), large)   # must not raise
+        finally:
+            td()
+
+    def test_teardown_restores_original(self, fake_cellpose):
+        fake_models, FakeCellpose = fake_cellpose
+        original_eval = FakeCellpose.eval
+        namespace = {}
+        td = _install_cellpose_size_guard(namespace)
+        assert FakeCellpose.eval is not original_eval
+        td()
+        assert FakeCellpose.eval is original_eval
+
+    def test_apply_remove_runtime_guards_lifecycle(self, executor, fake_cellpose):
+        """_apply_runtime_guards installs teardowns; _remove_runtime_guards restores state."""
+        fake_models, FakeCellpose = fake_cellpose
+        original_eval = FakeCellpose.eval
+        code = "import cellpose"
+        teardowns = executor._apply_runtime_guards(code)
+        assert len(teardowns) > 0
+        assert FakeCellpose.eval is not original_eval
+        executor._remove_runtime_guards(teardowns)
+        assert FakeCellpose.eval is original_eval
+
+    def test_list_input_first_element_checked(self, fake_cellpose):
+        """When x is a list of arrays, the first element's shape is checked."""
+        fake_models, FakeCellpose = fake_cellpose
+        namespace = {}
+        td = _install_cellpose_size_guard(namespace)
+        assert td is not None
+        try:
+            large = np.zeros((1024, 1024), dtype=np.uint8)
+            with pytest.raises(RuntimeError, match="exceeds"):
+                FakeCellpose.eval(FakeCellpose(), [large])
+        finally:
+            td()
