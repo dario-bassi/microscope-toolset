@@ -51,110 +51,6 @@ class DatabaseAgent(BaseAgent):
         logger.info("Generating embedding")
         return embedding.tolist()
 
-    def _retrieve_relevant_information(self, query: str):
-
-        try:
-            # embed the user query
-            query_embedded = self._embeds_query(query=query)
-
-            # search into the database for chroma
-            # results = self.client_collection.query(query_embeddings=query_embedded, n_results=25)
-            # search into the db of Elasticsearch
-            # 1. search into the api collection
-            api_docs_result = self.es_client.hybrid_search(index_name=self.api_collection, query=query,
-                                                           query_vector=query_embedded,
-                                                           keyword_to_search_for_bm25="contextualize_text")
-            # 2. search into pdf collection
-            pdf_docs_results = self.es_client.hybrid_search(index_name=self.pdf_collection, query=query,
-                                                            query_vector=query_embedded,
-                                                            keyword_to_search_for_bm25="content")
-            # 3. search into micromanager devices
-            micromanager_docs_results = self.es_client.hybrid_search(index_name=self.micromanager_collection, query=query,
-                                                                     query_vector=query_embedded,
-                                                                     keyword_to_search_for_bm25="content")
-            # now extract list of object for reranking
-            list_api_docs_result = [{
-                "type": result["_source"]["type"],
-                "name": result["_source"]["name"],
-                "signature": result["_source"]["signature"],
-                "description": result["_source"]["description"],
-                "filename": result["_source"]["filename"],
-                "contextualize_text": result["_source"]["contextualize_text"],
-                "score": result["_score"]
-            }
-                for result in api_docs_result["hits"]["hits"]
-            ]
-            list_pdf_docs_results = [{
-                "content": result["_source"]["content"],
-                "chunk_id": result["_source"]["chunk_id"],
-                "filename": result["_source"]["filename"],
-                "score": result["_score"]
-            }
-                for result in pdf_docs_results["hits"]["hits"]
-            ]
-            list_micromanager_docs_results = [{
-                "doc_id": result["_source"]["doc_id"],
-                "content": result["_source"]["content"],
-                "chunk_id": result["_source"]["chunk_id"],
-                "filename": result["_source"]["filename"],
-                "score": result["_score"]
-            }
-                for result in micromanager_docs_results["hits"]["hits"]
-            ]
-            # sort list of results
-            list_api_docs_result = sorted(list_api_docs_result, key=lambda x: x["score"], reverse=True)
-            list_micromanager_docs_results = sorted(list_micromanager_docs_results, key=lambda x: x["score"], reverse=True)
-            list_pdf_docs_results = sorted(list_pdf_docs_results, key=lambda x: x["score"], reverse=True)
-
-            # merge all result into a single list
-            merged_list = []
-            # iterate through the first list
-            merged_list = self._rerank_and_add_to_list(merged_list=merged_list, partial_result_list=list_api_docs_result,
-                                                      keyword_field="contextualize_text", query=query)
-            # iterate through the second list
-            merged_list = self._rerank_and_add_to_list(merged_list=merged_list, partial_result_list=list_pdf_docs_results,
-                                                      keyword_field="content", query=query)
-            # iterate through the last list
-            merged_list = self._rerank_and_add_to_list(merged_list=merged_list,
-                                                      partial_result_list=list_micromanager_docs_results,
-                                                      keyword_field="content", query=query)
-            #print(merged_list)
-            # sort the list descending, from higher score through lower
-            sorted_merged_list = sorted(merged_list, key=lambda x: x["score"], reverse=True)
-            #print(sorted_merged_list)
-
-            # Just keep first 25 results
-            results = sorted_merged_list[:24]
-            #print(results)
-
-            # search into the database for the log
-            log_result = self.db_log.query_by_vector(collection_name=self.db_log_name, vector=query_embedded, k=5)
-            # print(log_result)
-            if log_result is None:
-                log_result = []
-
-            relevant_information = [json.dumps(chunk) for chunk in results]
-
-            # log_relevant_chunks
-            log_chunks = [
-                json.dumps({
-                    "prompt": log_result[i]['prompt'],
-                    "output": log_result[i]['output'],
-                    "feedback": log_result[i]['feedback'],
-                    "category": log_result[i]['category']
-                })
-                for i in range(len(log_result))
-            ]
-
-            # print(log_chunks)
-            print("getting relevant information")
-
-            joined_chunks = [*relevant_information, *log_chunks]
-
-            return joined_chunks
-        except Exception as e:
-            return [f"Error getting relevant information from databases: {str(e)}"]
-
     def _retrieve_api_information(self, reformulated_query: str) -> list | str:
         try:
             # embed the user query
@@ -343,30 +239,30 @@ class DatabaseAgent(BaseAgent):
             "context": list_pdfs_result
         }
 
-    def look_for_context(self, query: str) -> str:
+    def retrieve_session_logs(self, query: str, k: int = 5) -> list:
+        """Retrieve past session logs semantically similar to the query. Returns [] if db_log not configured."""
+        if self.db_log is None:
+            return []
+        try:
+            query_embedded = self._embeds_query(query=query)
+            results = self.db_log.query_by_vector(
+                collection_name=self.db_log_name,
+                vector=query_embedded,
+                k=k
+            )
+            return results if results is not None else []
+        except Exception as e:
+            logger.error(f"Failed to retrieve session logs: {e}")
+            return []
 
-        # retrieve relevant information
-        list_of_relevant_information = self._retrieve_relevant_information(query=query)
-
-        if len(list_of_relevant_information) == 0 or list_of_relevant_information is None:
-            return "No relevant information contained into the database."
-
-        more_relevant_information = [f"CHUNK {ids}:\n" + relevant_chunk for ids, relevant_chunk in
-                                       enumerate(list_of_relevant_information)]
-
-        list_of_information = "\n\n".join(more_relevant_information)
-
-        return list_of_information
-
-    def add_log(self, data) -> None:
-        #logger = logging.getLogger(__name__)
-        # if ["prompt", "output", "feedback", "category"] not in data.keys():
-        #    logger.error("missing data")
-
-        # insert the feedback from the user inside the database
+    def add_log(self, data) -> bool:
+        """Log a session entry to PostgreSQL. Returns False if db_log is not configured."""
+        if self.db_log is None:
+            logger.warning("add_log called but PostgreSQL logger is not configured — skipping.")
+            return False
         vector = self._embeds_query(data['prompt'])
-        # print(vector)
         self.db_log.insert(self.db_log_name, data, embeddings=vector)
+        return True
 
     def rephrase_query(self, query: str):
 

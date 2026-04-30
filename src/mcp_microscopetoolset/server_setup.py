@@ -256,6 +256,90 @@ def create_mcp_server(
                  )
 
     @mcp.tool(
+        name="log_session",
+        description=(
+            "Save a session entry to the PostgreSQL logger database for future retrieval and learning. "
+            "Log the user prompt, agent output, optional feedback, and a category label. "
+            "Logged entries are embedded and can be retrieved in future sessions to improve responses. "
+            "Returns a status indicating whether the log was saved (requires PostgreSQL to be configured)."
+        )
+    )
+    def log_session(
+        prompt: str = Field(..., description="A summary of the whole conversation: the user goal, steps taken, and final outcome."),
+        output: str = Field(..., description="The agent's response, generated code, or result summary."),
+        feedback: str = Field("", description="Optional feedback or notes about the session outcome (e.g. 'worked', 'failed', 'needed adjustment')."),
+        category: str = Field("", description="Optional category label for the session (e.g. 'acquisition', 'analysis', 'troubleshooting', 'question')."),
+        user_query: str = Field("", description="(Optional) The original user query, used for logging only.")
+    ) -> dict[str, Any]:
+        start_time = time.time()
+        result = None
+        try:
+            if database_agent is None:
+                result = {"status": "skipped", "reason": "Database agent not available (Elasticsearch not configured)"}
+                return result
+            data = {"prompt": prompt, "output": output, "feedback": feedback, "category": category}
+            saved = database_agent.add_log(data)
+            if saved:
+                result = {"status": "saved", "prompt": prompt, "category": category}
+            else:
+                result = {"status": "skipped", "reason": "PostgreSQL logger not configured"}
+            return result
+        except Exception as e:
+            logger.error(f"Error in log_session: {e}", exc_info=True)
+            result = {"status": "error", "error": str(e)}
+            return result
+        finally:
+            execution_time_ms = (time.time() - start_time) * 1000
+            if benchmark_logger and user_query:
+                benchmark_logger.set_query(user_query)
+            if benchmark_logger and result is not None:
+                benchmark_logger.log_tool_call(
+                    tool_name="log_session",
+                    input_params={"prompt": prompt[:100], "category": category, "user_query": user_query},
+                    result=result,
+                    execution_time_ms=execution_time_ms
+                )
+
+    @mcp.tool(
+        name="retrieve_session_logs",
+        description=(
+            "Retrieve past logged sessions from the PostgreSQL logger that are semantically similar to the current query. "
+            "Use this at the start of a task to check if a similar experiment or analysis was done before "
+            "and what approach worked. Returns the most similar past sessions ranked by embedding distance. "
+            "Requires PostgreSQL to be configured; returns an empty list otherwise."
+        )
+    )
+    def retrieve_session_logs(
+        query: str = Field(..., description="The current task or question — used to find semantically similar past sessions."),
+        k: int = Field(5, description="Number of past sessions to retrieve (default 5)."),
+        user_query: str = Field("", description="(Optional) The original user query, used for logging only.")
+    ) -> dict[str, Any]:
+        start_time = time.time()
+        result = None
+        try:
+            if database_agent is None:
+                result = {"status": "skipped", "reason": "Database agent not available (Elasticsearch not configured)", "sessions": []}
+                return result
+            sessions = database_agent.retrieve_session_logs(query=query, k=k)
+            result = {"status": "success", "count": len(sessions), "sessions": sessions}
+            return result
+        except Exception as e:
+            logger.error(f"Error in retrieve_session_logs: {e}", exc_info=True)
+            result = {"status": "error", "error": str(e), "sessions": []}
+            return result
+        finally:
+            execution_time_ms = (time.time() - start_time) * 1000
+            if benchmark_logger and user_query:
+                benchmark_logger.set_query(user_query)
+            if benchmark_logger and result is not None:
+                benchmark_logger.log_tool_call(
+                    tool_name="retrieve_session_logs",
+                    input_params={"query": query, "k": k, "user_query": user_query},
+                    result={"status": result.get("status"), "count": result.get("count")},
+                    execution_time_ms=execution_time_ms
+                )
+
+    @mcp.tool(
         name="get_microscope_settings",
         description="Return the current microscope state: device property schemas, current values, and configuration groups."
     )

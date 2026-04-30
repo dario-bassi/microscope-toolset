@@ -17,6 +17,8 @@ Your requests are handled by an agent that has access to:
 - `micromanager_device_database` — Search Micro-Manager device documentation
 - `pdfs_publication_database` — Search scientific publications
 - `reformulate_user_query` — Rephrase queries for better database matching
+- `log_session` — Save a session entry (prompt, output, feedback, category) to the PostgreSQL logger
+- `retrieve_session_logs` — Retrieve past sessions semantically similar to the current task from the PostgreSQL logger
 
 **Microscope Status Tools** (inspect current state):
 - `get_microscope_settings` — Current objective, channels, device properties
