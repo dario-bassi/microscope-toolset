@@ -139,12 +139,11 @@ class MicroscopeEventCache:
         """
         Get recent events.
         """
-        # TODO add filters for which events or keep all
         with self._lock:
             events = list(self._cache)
 
         return events[-limit:]
-    
+
     def get_last_event(self, event_type: str | None = None):
         """
         Get most recent event, optionally filtered by event_type.
@@ -156,6 +155,29 @@ class MicroscopeEventCache:
                         return event
             return None
         events = self.get_recent_events(limit=1)
-        # If there is not previous event just return None
         return events[0] if events else None
+
+    def snapshot(self) -> int:
+        """Return the current cache length — use as a bookmark before code execution."""
+        with self._lock:
+            return len(self._cache)
+
+    def events_since(self, idx: int) -> list[dict]:
+        """Return all events that arrived after the given snapshot index."""
+        with self._lock:
+            events = list(self._cache)
+        return events[idx:]
+
+    def format_events(self, events: list[dict]) -> str:
+        """Format a list of events into a compact human-readable string for the agent."""
+        if not events:
+            return ""
+        lines = []
+        for e in events:
+            ts = e.get("time", "")[:19].replace("T", " ")
+            etype = e.get("event_type", "")
+            data = e.get("data", {})
+            data_str = ", ".join(f"{k}={v}" for k, v in data.items())
+            lines.append(f"  [{ts}] {etype}: {data_str}" if data_str else f"  [{ts}] {etype}")
+        return "\n\nHardware events during execution:\n" + "\n".join(lines)
 

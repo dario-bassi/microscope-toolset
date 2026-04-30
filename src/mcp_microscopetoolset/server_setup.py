@@ -564,7 +564,16 @@ def create_mcp_server(
                 }
                 return result
 
+            cache_idx = event_cache.snapshot() if event_cache is not None else None
             execution_output = executor.run_code_new(prepare_code_to_run, execution_mode)
+
+            # Append hardware events that fired during execution
+            if cache_idx is not None:
+                new_events = event_cache.events_since(cache_idx)
+                event_log = event_cache.format_events(new_events)
+                if event_log:
+                    execution_output = execution_output + event_log
+
             if "Error" in execution_output:
                 logger.error({"tool": "execute_python_code", "code": code, "error": execution_output})
                 _log_run(code, None, execution_output, execution_mode, user_query, strategy)
