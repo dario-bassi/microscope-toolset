@@ -1,6 +1,19 @@
 # Microscope Toolset
 This repository is a toolset for microscope that use pymmcore-plus with LLM
 
+---
+
+> ⚠️ **Security & Liability Warning**
+>
+> This toolset gives an LLM agent direct access to your computer: it can execute arbitrary Python code, read and write files, control microscope hardware, and install packages into your Python environment.
+>
+> **You are responsible for reviewing every action the agent proposes before approving it.** In particular:
+> - The `install_packages` tool will install packages directly into your active conda/uv environment. Only approve packages you recognise and trust.
+> - The `execute_python_code` tool runs code with the same privileges as your user account.
+>
+> The author(s) of this project accept **no responsibility** for any damage, data loss, security incident, or unintended hardware interaction that may result from using this software. Use it at your own risk.
+
+---
 
 ### How to get  started
 

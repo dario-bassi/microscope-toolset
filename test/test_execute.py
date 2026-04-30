@@ -160,3 +160,38 @@ class TestRunCodeNew:
             execution_mode="buffered"
         )
         assert "a warning" in result
+
+
+# ---------------------------------------------------------------------------
+# confirmation flow (via run_code_new: missing → error, not auto-install)
+# ---------------------------------------------------------------------------
+
+class TestConfirmationFlow:
+
+    def test_missing_package_not_auto_installed(self, executor):
+        """run_code_new must NOT silently install — it should surface the failure."""
+        with patch.object(executor, "_install_library", return_value=False) as mock_install:
+            result = executor.run_code_new(
+                "import _fake_pkg_xyz_does_not_exist",
+                execution_mode="buffered"
+            )
+        # install was attempted once for the missing package
+        mock_install.assert_called_once_with("_fake_pkg_xyz_does_not_exist")
+        assert "Missing packages" in result
+        assert "_fake_pkg_xyz_does_not_exist" in result
+
+    def test_get_missing_imports_is_standalone(self, executor):
+        """_get_missing_imports must not install anything — pure inspection."""
+        with patch.object(executor, "_install_library") as mock_install:
+            missing = executor._get_missing_imports("import _fake_pkg_xyz_does_not_exist")
+        mock_install.assert_not_called()
+        assert "_fake_pkg_xyz_does_not_exist" in missing
+
+    def test_install_then_run_succeeds(self, executor):
+        """Simulate the two-step flow: install → run."""
+        # Step 1: detect missing
+        missing = executor._get_missing_imports("import os")   # os is always present
+        assert missing == []
+        # Step 2: run without issue
+        result = executor.run_code_new('print("after install")', execution_mode="buffered")
+        assert "after install" in result

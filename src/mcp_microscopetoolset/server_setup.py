@@ -438,6 +438,61 @@ def create_mcp_server(
             logger.warning(f"Failed to write run log: {log_err}")
 
     @mcp.tool(
+        name="install_packages",
+        description=(
+            "Install one or more Python packages into the current Python environment using pip. "
+            "Call this after execute_python_code returns a 'packages_required' response, then retry execute_python_code. "
+            "Returns a per-package status indicating whether each install succeeded or failed. "
+            "⚠️ IMPORTANT — USER CONSENT REQUIRED: Before calling this tool you MUST explicitly inform the user "
+            "which packages will be installed and ask for their approval. Installing unknown or untrusted packages "
+            "can modify the active conda/uv environment and may pose a security risk. "
+            "Only proceed if the user has confirmed they recognise and trust the listed packages."
+        )
+    )
+    def install_packages(
+        packages: list[str] = Field(..., description="List of package names to install (e.g. ['numpy', 'tifffile'])."),
+        user_query: str = Field("", description="(Optional) The original user query, used for logging only.")
+    ) -> dict[str, Any]:
+        start_time = time.time()
+        result = None
+        try:
+            results = {}
+            for pkg in packages:
+                success = executor._install_library(pkg)
+                results[pkg] = "installed" if success else "failed"
+                if success:
+                    logger.info(f"Package '{pkg}' installed successfully.")
+                else:
+                    logger.warning(f"Package '{pkg}' installation failed.")
+            all_ok = all(v == "installed" for v in results.values())
+            result = {
+                "status": "ok" if all_ok else "partial_failure",
+                "packages": results,
+                "message": (
+                    "All packages installed. You can now retry execute_python_code."
+                    if all_ok else
+                    f"Some packages failed to install: {[p for p, s in results.items() if s == 'failed']}. "
+                    "Try installing them manually."
+                ),
+            }
+            return result
+        except Exception as e:
+            logger.error(f"Error in install_packages: {e}", exc_info=True)
+            result = {"status": "error", "error": str(e)}
+            return result
+        finally:
+            execution_time_ms = (time.time() - start_time) * 1000
+            if benchmark_logger and user_query:
+                benchmark_logger.set_query(user_query)
+            if benchmark_logger and result is not None:
+                benchmark_logger.log_tool_call(
+                    tool_name="install_packages",
+                    input_params={"packages": packages, "user_query": user_query},
+                    result=result,
+                    execution_time_ms=execution_time_ms
+                )
+
+    @mcp.tool(
         name="execute_python_code",
         description=(
             "Execute Python code on the microscope. The code runs in a namespace with a pre-configured `mmc` instance (CMMCorePlus/UniMMCore). Returns execution output or error details. "
@@ -495,6 +550,20 @@ def create_mcp_server(
         result = None
         try:
             prepare_code_to_run = prepare_code(code)
+
+            # Check for missing packages before running — require explicit approval
+            missing = executor._get_missing_imports(prepare_code_to_run)
+            if missing:
+                result = {
+                    "status": "packages_required",
+                    "missing_packages": missing,
+                    "message": (
+                        f"The following packages are not installed: {', '.join(missing)}. "
+                        "Use the install_packages tool to install them, then retry execute_python_code."
+                    ),
+                }
+                return result
+
             execution_output = executor.run_code_new(prepare_code_to_run, execution_mode)
             if "Error" in execution_output:
                 logger.error({"tool": "execute_python_code", "code": code, "error": execution_output})

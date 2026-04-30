@@ -27,6 +27,7 @@ Your requests are handled by an agent that has access to:
 - `snap_image` — Capture a single frame and display in napari
 
 **Execution Tools** (run code on real hardware):
+- `install_packages` — Install missing Python packages (call after packages_required response, then retry)
 - `execute_python_code` — Run Python with pre-configured `mmc` instance
   - **Modes:** `buffered` (atomic/single-shot) or `live` (sequential hardware calls)
   - **Pre-configured helpers:** `run_mda_with_feedback()`, `center_on_cell()`, `detect_cells()`, `find_bright_centroid()`
