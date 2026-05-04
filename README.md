@@ -163,6 +163,24 @@ Execute.register_runtime_guard("mylib", my_installer_fn)   # runs during exec
 
 If you need a guardrail for a library that is not yet covered, please [open an issue or submit a PR](https://github.com/ddd42-star/microscope-toolset/issues).
 
+### Benchmarking
+
+The toolset includes a simulation-based benchmarking system for evaluating agent performance using the knowledge database from the *self-learn-loop*. Each benchmark test is a self-contained virtual microscope scenario served to the agent over HTTP — the agent cannot see the ground truth or simulation configuration.
+
+Tests are launched from the **Benchmarking** panel in the MCPServer GUI, or from the CLI:
+
+```bash
+# Start a test server on port 5602
+python -m src.benchmarking.test_server test_1 --port 5602
+
+# List all available tests
+python -m src.benchmarking.test_runner
+```
+
+To add a new test, see [Benchmark Tests](docs/benchmark_test_authoring.md).
+
+---
+
 ### TO DO LIST
 
 - [x] Fix use of Elasticsearch and PostgresSQL database
