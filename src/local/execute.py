@@ -50,13 +50,26 @@ class Execute:
             mmc.loadSystemConfiguration(fileName=filename)
             logger.info("configuration file of the microscope was loaded")
 
+        self._populate_namespace(mmc)
+        logger.info("mmc instance is loaded into the namespace")
+        logger.info("Execute initialized")
+
+    def _populate_namespace(self, mmc) -> None:
+        """Fill (or replace) all mmc-dependent namespace entries."""
         self.namespace["mmc"] = GatekeeperCore(mmc)
         self.namespace["run_mda_with_feedback"] = lambda events, on_frame=None: run_mda_with_feedback(mmc, events, on_frame)
         self.namespace["center_on_cell"] = lambda **kw: center_on_cell(mmc, **kw)
         self.namespace["find_bright_centroid"] = find_bright_centroid
         self.namespace["detect_cells"] = detect_cells
-        logger.info("mmc instance is loaded into the namespace")
-        logger.info("Execute initialized")
+
+    def update_core(self, mmc) -> None:
+        """Swap the active core in the namespace after a core switch.
+
+        Replaces the GatekeeperCore wrapper and re-binds every lambda that
+        captured the old mmc instance in its closure.
+        """
+        self._populate_namespace(mmc)
+        logger.info("Execute namespace updated with new core (%s)", type(mmc).__name__)
 
 
     def _install_library(self, module: str):

@@ -760,6 +760,8 @@ class MCPServer(QWidget):
             self._cfg_pending_restart = False
             self._start_mcp_server()
         else:
+            if self._mmc is None:
+                self._mcp_panel.btn.setEnabled(False)
             self._set_status("MCP server stopped")
 
     # ── Benchmarking ────────────────────────────────────────────────────────
@@ -908,8 +910,13 @@ class MCPServer(QWidget):
             self._set_core_badge(core_type, host_port)
             self._remote_connect_btn.setText("Disconnect")
             self._remote_connect_btn.setStyleSheet(_BTN_RED)
-            self._mcp_panel.btn.setEnabled(True)
-            self._set_status(f"Remote core connected ({core_type}) — start MCP server")
+            if self._mcp_running:
+                self._cfg_pending_restart = True
+                self._stop_mcp_server()
+                self._set_status(f"Remote core connected ({core_type}) — restarting MCP server…")
+            else:
+                self._mcp_panel.btn.setEnabled(True)
+                self._set_status(f"Remote core connected ({core_type}) — start MCP server")
             logger.info(f"Connected to {core_type} at {url}")
         except Exception as e:
             logger.exception(f"Remote core connection failed: {e}")
@@ -928,6 +935,8 @@ class MCPServer(QWidget):
         self._mcp_panel.btn.setEnabled(False)
         self._set_status("Remote core disconnected")
         logger.info("Remote core disconnected")
+        if self._mcp_running:
+            self._stop_mcp_server()
 
     # ── napari-micromanager ─────────────────────────────────────────────────
 
