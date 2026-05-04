@@ -186,6 +186,7 @@ cython_debug/
 !src/ARCHITECTURE.md
 !src/self-learn/knowledge/**/*.md
 !docs/benchmark_test_authoring.md
+!docs/experiment_workflow_guidelines.md
 
 # ignore database
 chroma_storage/
