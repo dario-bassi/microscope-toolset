@@ -214,6 +214,7 @@ pgvector/
 
 # png files
 *.png
+!docs/ecosystem-png.png
 
 # elastic search
 elasticsearch-7.17.29/

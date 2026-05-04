@@ -154,7 +154,7 @@ After you added the *mcp.json* configuration file, you can start the MCP Client 
 
 ### Project structure
 
-![MCP Tool Ecosystem](docs/ecosystem.svg)
+![MCP Tool Ecosystem](docs/ecosystem-png.png)
 
 
 ### Execution guardrails
