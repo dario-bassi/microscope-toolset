@@ -1,0 +1,27 @@
+title: "Organoid Z-stack — 3D reconstruction, 4 buds, outer_r=120"
+description: |
+  The agent must acquire a complete Z-stack through a 3D intestinal organoid
+  and assemble a volumetric image. The organoid has 4 crypt-like buds.
+  Valid Z range: approximately ±120 px around the equatorial plane (z=0).
+  Suggested step: Z from -120 to +120 in 5 px increments (~48 slices).
+
+backend: organoid
+cell_type: organoid
+outer_radius: 120
+wall_thickness: 20
+n_cells: 400
+n_buds: 4
+lumen_opacity: 0.6
+seed: 68
+focal_plane: 0.0
+
+channels:
+  - name: DIC
+    filter: "Electra1(402/454)"
+    led: CYAN
+  - name: DAPI
+    filter: "SCFP2(434/474)"
+    led: UV
+  - name: E-cadherin
+    filter: "TagGFP2(483/506)"
+    led: GREEN

@@ -1,13 +1,5 @@
-"""Test 1: particle backend, normal cells, out-of-focus fluorescence start.
+# TEST_CONFIG is injected from test.yaml by test_runner.py
 
-Channels:
-  DAPI    — nucleus    — filter SCFP2(434/474)  + LED UV
-  mCherry — membrane   — filter mScarlet3(569/582) + LED ORANGE
-
-The focal plane starts 50 µm above the tissue plane (tissue_z=0.0), which is
-well outside the 10x DOF of 6 µm, so the image is visibly blurred at launch.
-The agent must move the Z stage toward 0 µm to bring cells into focus.
-"""
 
 def create_sim_override():
     """Particle's create_sim() doesn't forward cell_type, so we instantiate directly."""
@@ -17,28 +9,3 @@ def create_sim_override():
         seed=TEST_CONFIG["seed"],
         cell_type=TEST_CONFIG["cell_type"],
     )
-
-
-TEST_CONFIG = {
-    "title": "Out-of-focus fluorescence start — DAPI + mCherry, normal cells",
-    "backend": "particle",
-    "cell_type": "normal",
-    "n_cells": 50,
-    "seed": 0,
-    "focal_plane": 0.0,
-    "initial_properties": [
-        ("ZStage", "Position", "50.0"),   # start 50 µm out of focus; GUI reflects this
-    ],
-    "channels": [
-        {
-            "name": "DAPI",
-            "filter": "SCFP2(434/474)",
-            "led": "UV",
-        },
-        {
-            "name": "mCherry",
-            "filter": "mScarlet3(569/582)",
-            "led": "ORANGE",
-        },
-    ],
-}

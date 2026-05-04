@@ -1,0 +1,23 @@
+title: "Multi-channel fluorescence — acquire, merge and segment, 80 cells, 1500x1500 µm"
+description: |
+  Acquire DAPI and mCherry channels separately, merge them, then segment cells.
+  Cells are static and start out of focus (ZStage = 50.0 µm).
+
+backend: particle
+cell_type: normal
+n_cells: 80
+seed: 42
+width: 1500
+height: 1500
+brownian_d: 0.0
+focal_plane: 0.0
+initial_properties:
+  - [ZStage, Position, "50.0"]
+
+channels:
+  - name: DAPI
+    filter: "SCFP2(434/474)"
+    led: UV
+  - name: mCherry
+    filter: "mScarlet3(569/582)"
+    led: ORANGE

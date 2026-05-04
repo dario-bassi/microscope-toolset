@@ -42,3 +42,4 @@ pytest
 pytest-qt
 anthropic
 sentence-transformers
+pyyaml

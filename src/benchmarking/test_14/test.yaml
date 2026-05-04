@@ -1,0 +1,23 @@
+title: "Large-area fluorescence scan — detect 500+ cells, 5000x5000 µm"
+description: |
+  The agent must systematically scan a 5000x5000 µm field and count at least
+  500 out of 600 seeded cells. The simulation starts out of focus (ZStage = 10 µm).
+
+backend: particle
+cell_type: normal
+n_cells: 600
+seed: 99
+width: 5000
+height: 5000
+brownian_d: 0.0
+focal_plane: 0.0
+initial_properties:
+  - [ZStage, Position, "10.0"]
+
+channels:
+  - name: DAPI
+    filter: "SCFP2(434/474)"
+    led: UV
+  - name: mCherry
+    filter: "mScarlet3(569/582)"
+    led: ORANGE

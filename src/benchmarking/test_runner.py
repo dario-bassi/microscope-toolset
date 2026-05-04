@@ -1,10 +1,18 @@
 """Test runner for benchmarking experiments.
 
-Each test lives in src/benchmarking/test_<N>/initialize_test.py and defines
-a TEST_CONFIG dict.  This module validates the config, pre-creates the
-simulation with custom parameters, sets GLOBAL_BRIDGE so SimServer skips its
-own sim creation, and generates a dynamic .cfg file with the user-facing
-channel names.
+Each test lives in src/benchmarking/test_<N>/ and defines its configuration
+in one of three ways:
+
+  test.yaml only          — pure YAML test; backend create_sim() is called
+                            with all non-runner kwargs from the file.
+  test.yaml + initialize_test.py — hybrid; YAML supplies the config dict,
+                            initialize_test.py provides create_sim_override().
+  initialize_test.py only — legacy Python test; defines TEST_CONFIG dict and
+                            optionally create_sim_override().
+
+This module validates the config, pre-creates the simulation, sets
+GLOBAL_BRIDGE so SimServer skips its own sim creation, and generates a
+dynamic .cfg file with the user-facing channel names.
 
 Usage from plugin_napari.py:
     cfg_path = run_test("test_1")
@@ -27,31 +35,126 @@ from typing import Any
 # ---------------------------------------------------------------------------
 
 _BENCHMARKING_DIR = Path(__file__).parent
+_YAML_FILENAME = "test.yaml"
+
+# Runner-level keys that are extracted explicitly in run_test() and must not
+# be forwarded to backend create_sim() as unknown kwargs.
+_RUNNER_KEYS = frozenset({
+    "title", "backend", "focal_plane", "channels",
+    "cell_type", "phase_contrast", "slm",
+    "time_scale", "tick_hz", "initial_properties",
+})
 
 
-def _load_test_module(test_name: str):
-    """Import initialize_test.py from the named test folder."""
-    test_dir = _BENCHMARKING_DIR / test_name
-    init_file = test_dir / "initialize_test.py"
-    if not init_file.exists():
-        raise FileNotFoundError(
-            f"Test not found: {init_file}\n"
-            f"Create src/benchmarking/{test_name}/initialize_test.py with a TEST_CONFIG dict."
-        )
+class _TestSpec:
+    """Duck-typed object returned for YAML-based tests.
+
+    Satisfies the interface expected by run_test() and test_server.py:
+      .TEST_CONFIG          — dict (same structure as Python TEST_CONFIG)
+      .__doc__              — task description string
+      .create_sim_override  — optional callable (only present when a Python hook exists)
+    """
+
+    def __init__(self, config: dict, doc: str = "", override_fn=None):
+        self.TEST_CONFIG = config
+        self.__doc__ = doc
+        if override_fn is not None:
+            self.create_sim_override = override_fn
+
+
+def _load_yaml_config(yaml_file: Path) -> dict:
+    """Parse a test.yaml file and return the config dict.
+
+    Validates required fields and normalises initial_properties rows from
+    YAML lists to tuples (matching the Python TEST_CONFIG convention).
+    """
+    try:
+        import yaml
+    except ImportError as exc:
+        raise ImportError(
+            "pyyaml is required for YAML test configs.  "
+            "Install with: pip install pyyaml"
+        ) from exc
+
+    with yaml_file.open(encoding="utf-8") as fh:
+        data = yaml.safe_load(fh)
+
+    if not isinstance(data, dict):
+        raise ValueError(f"{yaml_file}: expected a YAML mapping at the top level")
+    if "backend" not in data:
+        raise ValueError(f"{yaml_file}: required field 'backend' is missing")
+    if "channels" not in data:
+        raise ValueError(f"{yaml_file}: required field 'channels' is missing")
+
+    # YAML loads [[a,b,c], ...] as list-of-lists; convert to list-of-tuples
+    # so they match the Python convention and unpack cleanly in _generate_cfg.
+    if "initial_properties" in data:
+        data["initial_properties"] = [tuple(row) for row in data["initial_properties"]]
+
+    return data
+
+
+def _load_py_module(test_name: str, init_file: Path):
+    """Import initialize_test.py from disk (used for legacy and hybrid tests)."""
     spec = importlib.util.spec_from_file_location(f"test_{test_name}", init_file)
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)
     return module
 
 
+def _load_test_module(test_name: str):
+    """Load a test specification — YAML-first with Python fallback.
+
+    Resolution order for ``src/benchmarking/<test_name>/``:
+
+    1. **test.yaml only** — pure YAML test.  Config comes from YAML;
+       ``create_sim()`` is called with the non-runner kwargs.
+    2. **test.yaml + initialize_test.py** — hybrid test.  YAML supplies the
+       config; the Python file must define ``create_sim_override()`` which
+       receives control instead of the standard ``create_sim()`` call.
+    3. **initialize_test.py only** — legacy Python test (unchanged behaviour).
+    4. **Neither** — raises ``FileNotFoundError``.
+    """
+    test_dir = _BENCHMARKING_DIR / test_name
+    yaml_file = test_dir / _YAML_FILENAME
+    init_file = test_dir / "initialize_test.py"
+
+    has_yaml = yaml_file.exists()
+    has_py   = init_file.exists()
+
+    if not has_yaml and not has_py:
+        raise FileNotFoundError(
+            f"Test not found: {test_dir}\n"
+            f"Create test.yaml or initialize_test.py with a TEST_CONFIG dict."
+        )
+
+    if has_yaml:
+        cfg = _load_yaml_config(yaml_file)
+        doc = cfg.pop("description", "")
+        override_fn = None
+        if has_py:
+            py_mod = _load_py_module(test_name, init_file)
+            # Inject the YAML config into the module namespace so that
+            # create_sim_override() can reference TEST_CONFIG without the
+            # Python file needing to duplicate it.
+            py_mod.TEST_CONFIG = cfg
+            if hasattr(py_mod, "create_sim_override"):
+                override_fn = py_mod.create_sim_override
+        return _TestSpec(cfg, doc=doc, override_fn=override_fn)
+
+    # Legacy: Python-only path
+    return _load_py_module(test_name, init_file)
+
+
 def list_tests() -> list[dict]:
-    """Return metadata for every test_* folder that has an initialize_test.py."""
+    """Return metadata for every test_* folder that has a test.yaml or initialize_test.py."""
     results = []
     for test_dir in sorted(_BENCHMARKING_DIR.glob("test_*")):
         if not test_dir.is_dir():
             continue
-        init_file = test_dir / "initialize_test.py"
-        if not init_file.exists():
+        has_yaml = (test_dir / _YAML_FILENAME).exists()
+        has_py   = (test_dir / "initialize_test.py").exists()
+        if not has_yaml and not has_py:
             continue
         entry = {"name": test_dir.name, "title": "", "backend": "", "channels": []}
         try:
@@ -218,8 +321,7 @@ def run_test(test_name: str) -> Path:
         sim = module.create_sim_override()
     else:
         import importlib as _il
-        _NON_SIM_KEYS = frozenset({"title", "backend", "focal_plane", "channels"})
-        sim_kwargs = {k: v for k, v in cfg.items() if k not in _NON_SIM_KEYS}
+        sim_kwargs = {k: v for k, v in cfg.items() if k not in _RUNNER_KEYS}
         backend_mod = _il.import_module(f"virtual_microscope.backends.{backend}")
         sim = backend_mod.create_sim(**sim_kwargs)
 

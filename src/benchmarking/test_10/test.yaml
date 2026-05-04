@@ -1,0 +1,22 @@
+title: "Cell-cycle mitosis detection — 2 mitotic cells, 1500x1500 µm"
+description: |
+  The agent's goal is to detect and classify cells in a specific mitosis stage.
+  Only 2 cells are seeded into G2 (they will enter M after ~2 real minutes);
+  the remaining cells are in G1 or S so the mitotic cells stand out clearly.
+
+backend: particle
+cell_type: cycle
+n_cells: 100
+seed: 7
+width: 1500
+height: 1500
+brownian_d: 0.0
+focal_plane: 0.0
+
+channels:
+  - name: DAPI
+    filter: "SCFP2(434/474)"
+    led: UV
+  - name: mScarlet
+    filter: "mScarlet3(569/582)"
+    led: ORANGE

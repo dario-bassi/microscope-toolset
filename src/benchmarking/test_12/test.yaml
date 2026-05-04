@@ -1,0 +1,22 @@
+title: "H&E tissue classification — glandular grade 0, 512x512, 40x objective"
+description: |
+  Normal (grade 0) glandular tissue viewed at 40x. Well-formed glands, uniform
+  nuclei, minimal mitotic figures, no necrosis. The agent must interpret
+  high-magnification patches and infer broader tissue architecture from limited FOV.
+
+backend: histology
+cell_type: histology
+tissue_type: glandular
+grade: 0
+n_nuclei: 200
+world_size: 512
+internal_scale: 4
+seed: 17
+focal_plane: 0.0
+initial_properties:
+  - [Objective, Label, "40x"]
+
+channels:
+  - name: H-and-E
+    filter: "Electra1(402/454)"
+    led: CYAN
