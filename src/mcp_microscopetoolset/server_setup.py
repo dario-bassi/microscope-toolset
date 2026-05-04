@@ -51,13 +51,15 @@ def create_mcp_server(
         viewer,
         event_cache,
         viewer_proxy=None,
-        benchmark_logger_instance: BenchmarkLogger | None = None
+        benchmark_logger_instance: BenchmarkLogger | None = None,
+        host: str = "127.0.0.1",
+        port: int = 5500,
 ) -> FastMCP:
     # Server definition
     mcp = FastMCP(
         name="Microscope Toolset",
-        host="127.0.0.1",
-        port=5500,
+        host=host,
+        port=port,
         streamable_http_path="/mcp",
         log_level="INFO"
     )

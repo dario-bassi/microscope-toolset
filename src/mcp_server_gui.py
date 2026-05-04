@@ -7,7 +7,8 @@ from datetime import datetime
 from typing import Any
 
 import napari
-from PyQt6.QtCore import Qt, QObject, pyqtSlot, QThread, pyqtSignal, QTimer
+from PyQt6.QtCore import Qt, QObject, pyqtSlot, QThread, pyqtSignal, QTimer, QSettings
+from PyQt6.QtGui import QIntValidator
 from PyQt6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QPushButton, QLabel,
     QSizePolicy, QFrame, QLineEdit, QGroupBox, QMessageBox,
@@ -242,11 +243,14 @@ class MCPServerWorker(QObject):
     error   = pyqtSignal(str)
     stopped = pyqtSignal()
 
-    def __init__(self, mmc: Any, viewer: Any, viewer_proxy: ThreadSafeViewerProxy):
+    def __init__(self, mmc: Any, viewer: Any, viewer_proxy: ThreadSafeViewerProxy,
+                 host: str = "127.0.0.1", port: int = 5500):
         super().__init__()
         self._mmc          = mmc
         self._viewer       = viewer
         self._viewer_proxy = viewer_proxy
+        self._host         = host
+        self._port         = port
         self._uvicorn_server = None
         self._fastmcp_thread = None
 
@@ -278,25 +282,27 @@ class MCPServerWorker(QObject):
                     event_cache=event_cache,
                     viewer_proxy=self._viewer_proxy,
                     benchmark_logger_instance=bench_logger,
+                    host=self._host,
+                    port=self._port,
                 )
 
                 import uvicorn, anyio
                 app    = mcp_server.streamable_http_app()
                 config = uvicorn.Config(
                     app,
-                    host=mcp_server.settings.host,
-                    port=mcp_server.settings.port,
+                    host=self._host,
+                    port=self._port,
                     log_level=mcp_server.settings.log_level.lower(),
                 )
                 self._uvicorn_server = uvicorn.Server(config)
-                url = f"http://{mcp_server.settings.host}:{mcp_server.settings.port}"
+                url = f"http://{self._host}:{self._port}"
                 self.started.emit(url)
                 try:
                     anyio.run(self._uvicorn_server.serve)
                 except OSError as e:
                     if "10048" in str(e) or "address already in use" in str(e).lower():
-                        logger.error("Port 5500 still in use")
-                        self.error.emit("Port 5500 still in use — try restarting")
+                        logger.error(f"Port {self._port} still in use")
+                        self.error.emit(f"Port {self._port} still in use — try restarting")
                     else:
                         raise
 
@@ -338,6 +344,9 @@ class MCPServer(QWidget):
 
         viewer_mc          = NapariViewerMC(self.viewer)
         self._viewer_proxy = ThreadSafeViewerProxy(viewer_mc)
+
+        # Persistent settings
+        self._settings = QSettings("MicroscopeToolset", "MCPServer")
 
         # napari-micromanager state
         self._mmwin         = None
@@ -401,6 +410,20 @@ class MCPServer(QWidget):
         remote_row.addWidget(self._remote_url_edit)
         remote_row.addWidget(self._remote_connect_btn)
         core_lay.addLayout(remote_row)
+
+        proxy_row = QHBoxLayout()
+        proxy_row.setSpacing(4)
+        pl = QLabel("Proxy port:")
+        pl.setStyleSheet("font-size:10px;")
+        pl.setFixedWidth(65)
+        self._proxy_port_edit = QLineEdit()
+        self._proxy_port_edit.setPlaceholderText("5601")
+        self._proxy_port_edit.setStyleSheet("font-size:10px;")
+        self._proxy_port_edit.setValidator(QIntValidator(1, 65535))
+        proxy_row.addWidget(pl)
+        proxy_row.addWidget(self._proxy_port_edit)
+        proxy_row.addStretch()
+        core_lay.addLayout(proxy_row)
         main.addWidget(core_grp)
 
         # ── Service panels ────────────────────────────────────────────────
@@ -410,6 +433,30 @@ class MCPServer(QWidget):
         self._mcp_panel.btn.setEnabled(False)   # enabled once core is ready
         main.addWidget(self._es_panel)
         main.addWidget(self._pg_panel)
+
+        # MCP host / port config row
+        mcp_cfg_row = QHBoxLayout()
+        mcp_cfg_row.setSpacing(4)
+        mcp_lbl = QLabel("MCP:")
+        mcp_lbl.setStyleSheet("font-size:10px;")
+        mcp_lbl.setFixedWidth(30)
+        self._mcp_host_edit = QLineEdit()
+        self._mcp_host_edit.setPlaceholderText("127.0.0.1")
+        self._mcp_host_edit.setStyleSheet("font-size:10px;")
+        colon_lbl = QLabel(":")
+        colon_lbl.setStyleSheet("font-size:10px;")
+        colon_lbl.setFixedWidth(8)
+        self._mcp_port_edit = QLineEdit()
+        self._mcp_port_edit.setPlaceholderText("5500")
+        self._mcp_port_edit.setMaximumWidth(55)
+        self._mcp_port_edit.setStyleSheet("font-size:10px;")
+        self._mcp_port_edit.setValidator(QIntValidator(1, 65535))
+        mcp_cfg_row.addWidget(mcp_lbl)
+        mcp_cfg_row.addWidget(self._mcp_host_edit)
+        mcp_cfg_row.addWidget(colon_lbl)
+        mcp_cfg_row.addWidget(self._mcp_port_edit)
+        main.addLayout(mcp_cfg_row)
+
         main.addWidget(self._mcp_panel)
 
         # ── Status bar ────────────────────────────────────────────────────
@@ -424,6 +471,12 @@ class MCPServer(QWidget):
         self._pg_panel.btn.clicked.connect(self._toggle_postgresql)
         self._mcp_panel.btn.clicked.connect(self._toggle_mcp_server)
         self._remote_connect_btn.clicked.connect(self._toggle_remote_core)
+
+        # ── Restore persisted settings ────────────────────────────────────
+        self._remote_url_edit.setText(self._settings.value("remote_url", ""))
+        self._proxy_port_edit.setText(self._settings.value("proxy_port", "5601"))
+        self._mcp_host_edit.setText(self._settings.value("mcp_host", "127.0.0.1"))
+        self._mcp_port_edit.setText(self._settings.value("mcp_port", "5500"))
 
         # ── Add napari-micromanager on next tick ──────────────────────────
         QTimer.singleShot(500, self._add_napari_micromanager)
@@ -540,6 +593,16 @@ class MCPServer(QWidget):
         if self._mmc is None:
             self._set_status("Load a .cfg file or connect a remote core first")
             return
+        host = self._mcp_host_edit.text().strip() or "127.0.0.1"
+        port_text = self._mcp_port_edit.text().strip()
+        if not port_text.isdigit() or not (1 <= int(port_text) <= 65535):
+            self._set_status("Invalid MCP port — enter a number between 1 and 65535")
+            return
+        port = int(port_text)
+        self._settings.setValue("mcp_host", host)
+        self._settings.setValue("mcp_port", str(port))
+        self._mcp_host_edit.setEnabled(False)
+        self._mcp_port_edit.setEnabled(False)
         self._mcp_panel.set_busy("starting…")
         self._set_status("Starting MCP server…")
         self._mcp_thread = QThread()
@@ -547,6 +610,8 @@ class MCPServer(QWidget):
             mmc=self._mmc,
             viewer=self.viewer,
             viewer_proxy=self._viewer_proxy,
+            host=host,
+            port=port,
         )
         self._mcp_worker.moveToThread(self._mcp_thread)
         self._mcp_thread.started.connect(self._mcp_worker.run)
@@ -582,6 +647,8 @@ class MCPServer(QWidget):
     def _on_mcp_stopped(self):
         self._mcp_running = False
         self._mcp_panel.set_stopped()
+        self._mcp_host_edit.setEnabled(True)
+        self._mcp_port_edit.setEnabled(True)
         if self._cfg_pending_restart:
             self._cfg_pending_restart = False
             self._start_mcp_server()
@@ -608,6 +675,7 @@ class MCPServer(QWidget):
 
     def _connect_remote_core(self):
         url = self._remote_url_edit.text().strip() or "http://127.0.0.1:5601"
+        self._settings.setValue("remote_url", url)
         self._set_status(f"Connecting to {url}…")
         try:
             from pymmcore_proxy import connect
@@ -723,12 +791,13 @@ class MCPServer(QWidget):
 
         core.loadSystemConfiguration = _capturing_load
 
-    _PROXY_PORT = 5601
-
     def _start_proxy_worker(self, cfg_path: str):
+        port_text = self._proxy_port_edit.text().strip()
+        proxy_port = int(port_text) if port_text.isdigit() and 1 <= int(port_text) <= 65535 else 5601
+        self._settings.setValue("proxy_port", str(proxy_port))
         self._set_status("Starting microscope proxy server…")
         thread = QThread()
-        worker = CoreProxyWorker(cfg_path=cfg_path, port=self._PROXY_PORT)
+        worker = CoreProxyWorker(cfg_path=cfg_path, port=proxy_port)
         worker.moveToThread(thread)
         worker.server_ready.connect(self._on_proxy_ready)
         worker.server_error.connect(self._on_proxy_error)
