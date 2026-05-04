@@ -20,6 +20,6 @@ channels:
   - name: DAPI
     filter: "SCFP2(434/474)"
     led: UV
-  - name: mCherry
+  - name: mScarlet
     filter: "mScarlet3(569/582)"
     led: ORANGE
