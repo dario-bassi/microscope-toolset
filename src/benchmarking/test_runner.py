@@ -35,6 +35,7 @@ from typing import Any
 # ---------------------------------------------------------------------------
 
 _BENCHMARKING_DIR = Path(__file__).parent
+_TESTS_DIR = _BENCHMARKING_DIR / "tests"
 _YAML_FILENAME = "test.yaml"
 
 # Runner-level keys that are extracted explicitly in run_test() and must not
@@ -115,7 +116,7 @@ def _load_test_module(test_name: str):
     3. **initialize_test.py only** — legacy Python test (unchanged behaviour).
     4. **Neither** — raises ``FileNotFoundError``.
     """
-    test_dir = _BENCHMARKING_DIR / test_name
+    test_dir = _TESTS_DIR / test_name
     yaml_file = test_dir / _YAML_FILENAME
     init_file = test_dir / "initialize_test.py"
 
@@ -149,7 +150,7 @@ def _load_test_module(test_name: str):
 def list_tests() -> list[dict]:
     """Return metadata for every test_* folder that has a test.yaml or initialize_test.py."""
     results = []
-    for test_dir in sorted(_BENCHMARKING_DIR.glob("test_*")):
+    for test_dir in sorted(_TESTS_DIR.glob("test_*")):
         if not test_dir.is_dir():
             continue
         has_yaml = (test_dir / _YAML_FILENAME).exists()
@@ -355,7 +356,7 @@ def run_test(test_name: str) -> Path:
     phase_contrast: bool = cfg.get("phase_contrast", False)
     slm: bool = cfg.get("slm", False)
     initial_properties: list = cfg.get("initial_properties", [])
-    output_dir = _BENCHMARKING_DIR / test_name
+    output_dir = _TESTS_DIR / test_name
     output_dir.mkdir(parents=True, exist_ok=True)
     cfg_path = _generate_cfg(backend, channels, output_dir, cell_type=cell_type,
                              phase_contrast=phase_contrast, slm=slm,
