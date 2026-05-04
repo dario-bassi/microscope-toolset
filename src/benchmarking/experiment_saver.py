@@ -92,17 +92,23 @@ def _line_count(path: Path) -> int:
 # Public API
 # ---------------------------------------------------------------------------
 
-def start_experiment(name: str | None = None) -> str:
-    """Record the start of an experiment and return its name.
+def start_experiment(name: str | None = None) -> tuple[str, Path]:
+    """Record the start of an experiment and return (name, workspace_dir).
 
-    Writes a `.experiment_marker.json` file in the project root with:
-    - The experiment name
-    - The path to the current session JSONL file
-    - The current line count (so we know where the experiment begins)
-    - The session subdirectory path (for tool-results and subagents)
+    Creates the experiment folder and a workspace/ subdirectory immediately so
+    the agent can start saving files there. Writes a `.experiment_marker.json`
+    file with the folder paths and the current JSONL line offset.
     """
     if name is None:
         name = f"exp_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
+
+    # Pre-create the experiment folder so the agent has a workspace from the start
+    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+    safe_name = name.replace(" ", "_").replace("/", "-")
+    EXPERIMENTS_DIR.mkdir(parents=True, exist_ok=True)
+    exp_dir = EXPERIMENTS_DIR / f"{safe_name}_{timestamp}"
+    workspace_dir = exp_dir / "workspace"
+    workspace_dir.mkdir(parents=True, exist_ok=True)
 
     project_dir = _claude_project_dir()
     session_file = _latest_session_file(project_dir) if project_dir else None
@@ -115,14 +121,17 @@ def start_experiment(name: str | None = None) -> str:
         "session_file": str(session_file) if session_file else None,
         "session_data_dir": str(session_data) if session_data else None,
         "start_line": line_count,
+        "exp_dir": str(exp_dir),
+        "workspace_dir": str(workspace_dir),
     }
     MARKER_FILE.write_text(json.dumps(marker, indent=2), encoding="utf-8")
 
     print(f"[experiment_saver] Started '{name}'")
+    print(f"  Experiment dir   : {exp_dir}")
+    print(f"  Workspace        : {workspace_dir}")
     print(f"  Session file     : {session_file}")
-    print(f"  Session data dir : {session_data or '(not yet created)'}")
     print(f"  Starting at      : line {line_count}")
-    return name
+    return name, workspace_dir
 
 
 def end_experiment(output_dir: Path | str | None = None) -> Path:
@@ -158,12 +167,18 @@ def end_experiment(output_dir: Path | str | None = None) -> Path:
     if not exp_lines:
         print("[experiment_saver] Warning: no new lines captured since start.")
 
-    # Create experiment folder
-    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-    safe_name = name.replace(" ", "_").replace("/", "-")
-    base_dir = Path(output_dir) if output_dir else EXPERIMENTS_DIR
-    exp_dir = base_dir / f"{safe_name}_{timestamp}"
-    exp_dir.mkdir(parents=True, exist_ok=True)
+    # Use the pre-created experiment folder from the marker when available;
+    # fall back to creating a new timestamped folder for legacy markers.
+    if "exp_dir" in marker:
+        base_dir = Path(output_dir) if output_dir else None
+        exp_dir = Path(marker["exp_dir"]) if base_dir is None else base_dir / Path(marker["exp_dir"]).name
+        exp_dir.mkdir(parents=True, exist_ok=True)
+    else:
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        safe_name = name.replace(" ", "_").replace("/", "-")
+        base_dir = Path(output_dir) if output_dir else EXPERIMENTS_DIR
+        exp_dir = base_dir / f"{safe_name}_{timestamp}"
+        exp_dir.mkdir(parents=True, exist_ok=True)
 
     # Save conversation slice
     conv_path = exp_dir / "conversation.jsonl"
@@ -223,7 +238,8 @@ def _main() -> None:
 
     if cmd == "start":
         name = args[1] if len(args) > 1 else None
-        start_experiment(name)
+        _, workspace = start_experiment(name)
+        print(f"  Workspace ready at: {workspace}")
 
     elif cmd == "end":
         try:

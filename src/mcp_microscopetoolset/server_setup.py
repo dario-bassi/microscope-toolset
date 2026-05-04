@@ -1342,6 +1342,35 @@ def create_mcp_server(
 
     
     @mcp.tool(
+        name="get_experiment_workspace",
+        description=(
+            "Return the path to the current experiment workspace folder. "
+            "The workspace is a local directory created automatically when the user "
+            "clicks 'Start Tracking' in the GUI. Save all experiment outputs "
+            "(images, CSV files, analysis results, figures) into this directory so "
+            "they are bundled with the conversation when the experiment is saved. "
+            "Returns None when no experiment is active."
+        ),
+    )
+    def get_experiment_workspace() -> dict[str, Any]:
+        try:
+            import json as _json
+            from src.benchmarking.experiment_saver import MARKER_FILE
+            from pathlib import Path as _Path
+            if not MARKER_FILE.exists():
+                return {"active": False, "workspace_dir": None, "experiment_name": None}
+            marker = _json.loads(MARKER_FILE.read_text(encoding="utf-8"))
+            ws = marker.get("workspace_dir")
+            return {
+                "active": True,
+                "experiment_name": marker.get("experiment_name"),
+                "workspace_dir": ws,
+                "started_at": marker.get("start_time"),
+            }
+        except Exception as e:
+            return {"active": False, "workspace_dir": None, "error": str(e)}
+
+    @mcp.tool(
             name="request_user_clarification",
             description="Allow the MCP Client to interact with the user asking for clarification or some new input to answer the user's request."
     )

@@ -424,8 +424,9 @@ class MCPServer(QWidget):
         self._bench_worker = None;  self._bench_thread = None;  self._bench_running = False
 
         # experiment tracking
-        self._tracking_active = False
-        self._tracking_name   = ""
+        self._tracking_active    = False
+        self._tracking_name      = ""
+        self._tracking_workspace = None   # Path to active workspace folder
 
         # ── build UI ──────────────────────────────────────────────────────
         main = QVBoxLayout(self)
@@ -595,14 +596,27 @@ class MCPServer(QWidget):
         track_row.addWidget(self._track_stop_btn)
         track_lay.addLayout(track_row)
 
+        info_row = QHBoxLayout()
+        info_row.setSpacing(4)
         self._track_info_lbl = QLabel("")
         self._track_info_lbl.setStyleSheet(
             "font-size:10px;color:#555;padding:2px 4px;"
             "background:#f5f5f5;border-radius:3px;"
         )
         self._track_info_lbl.setWordWrap(True)
-        self._track_info_lbl.setVisible(False)
-        track_lay.addWidget(self._track_info_lbl)
+        self._track_info_lbl.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Preferred)
+        self._track_open_btn = QPushButton("Open")
+        self._track_open_btn.setFixedWidth(44)
+        self._track_open_btn.setStyleSheet(
+            "QPushButton{font-size:10px;padding:1px 4px;border-radius:3px;"
+            "background:#e0e0e0;color:#333;}"
+            "QPushButton:hover{background:#bdbdbd;}"
+            "QPushButton:disabled{background:#f0f0f0;color:#aaa;}"
+        )
+        self._track_open_btn.setEnabled(False)
+        info_row.addWidget(self._track_info_lbl)
+        info_row.addWidget(self._track_open_btn)
+        track_lay.addLayout(info_row)
 
         main.addWidget(track_grp)
 
@@ -621,6 +635,7 @@ class MCPServer(QWidget):
         self._bench_panel.btn.clicked.connect(self._toggle_benchmark)
         self._track_start_btn.clicked.connect(self._start_tracking)
         self._track_stop_btn.clicked.connect(self._stop_tracking)
+        self._track_open_btn.clicked.connect(self._open_workspace)
 
         # ── Restore persisted settings ────────────────────────────────────
         self._remote_url_edit.setText(self._settings.value("remote_url", ""))
@@ -921,17 +936,19 @@ class MCPServer(QWidget):
         from src.benchmarking.experiment_saver import start_experiment
         name = self._track_name_edit.text().strip() or None
         try:
-            exp_name = start_experiment(name)
-            self._tracking_active = True
-            self._tracking_name   = exp_name
+            exp_name, workspace = start_experiment(name)
+            self._tracking_active    = True
+            self._tracking_name      = exp_name
+            self._tracking_workspace = workspace
             self._track_dot.setStyleSheet(_DOT_OK)
             self._track_name_edit.setEnabled(False)
             self._track_start_btn.setEnabled(False)
             self._track_stop_btn.setEnabled(True)
-            self._track_info_lbl.setText(f"Tracking: {exp_name}")
+            self._track_info_lbl.setText(f"Tracking: {exp_name}  |  workspace: …/{workspace.parent.name}/{workspace.name}")
             self._track_info_lbl.setVisible(True)
+            self._track_open_btn.setEnabled(True)
             self._set_status(f"Experiment tracking started: {exp_name}")
-            logger.info(f"Experiment tracking started: {exp_name}")
+            logger.info(f"Experiment tracking started: {exp_name}, workspace: {workspace}")
         except Exception as e:
             self._track_dot.setStyleSheet(_DOT_ERROR)
             self._set_status(f"Tracking start failed: {e}")
@@ -943,14 +960,16 @@ class MCPServer(QWidget):
         self._track_stop_btn.setEnabled(False)
         try:
             exp_dir = end_experiment()
-            self._tracking_active = False
-            self._tracking_name   = ""
+            self._tracking_active    = False
+            self._tracking_name      = ""
+            self._tracking_workspace = exp_dir / "workspace"
             self._track_dot.setStyleSheet(_DOT_STOPPED)
             self._track_name_edit.setEnabled(True)
             self._track_name_edit.clear()
             self._track_start_btn.setEnabled(True)
             self._track_info_lbl.setText(f"Saved: {exp_dir.name}")
             self._track_info_lbl.setVisible(True)
+            self._track_open_btn.setEnabled(True)   # keep open enabled to browse saved experiment
             self._set_status(f"Experiment saved: {exp_dir.name}")
             logger.info(f"Experiment saved to: {exp_dir}")
         except FileNotFoundError as e:
@@ -963,6 +982,20 @@ class MCPServer(QWidget):
             self._track_stop_btn.setEnabled(True)
             self._set_status(f"Tracking save failed: {e}")
             logger.exception(f"Tracking save failed: {e}")
+
+    def _open_workspace(self):
+        """Open the experiment workspace folder in the system file explorer."""
+        target = self._tracking_workspace
+        if target is None or not target.exists():
+            self._set_status("Workspace folder not found")
+            return
+        import subprocess as _sp
+        if sys.platform == "win32":
+            _sp.Popen(["explorer", str(target)])
+        elif sys.platform == "darwin":
+            _sp.Popen(["open", str(target)])
+        else:
+            _sp.Popen(["xdg-open", str(target)])
 
     # ── Remote core ─────────────────────────────────────────────────────────
 

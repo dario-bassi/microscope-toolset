@@ -62,6 +62,25 @@ class Execute:
         self.namespace["find_bright_centroid"] = find_bright_centroid
         self.namespace["detect_cells"] = detect_cells
 
+    def _refresh_workspace(self) -> None:
+        """Inject workspace_dir into the namespace from the active experiment marker.
+
+        Called at the start of every run_code_new() so the variable is always
+        current — even if the experiment was started after the executor was created.
+        """
+        try:
+            import json as _json
+            from src.benchmarking.experiment_saver import MARKER_FILE
+            from pathlib import Path as _Path
+            if MARKER_FILE.exists():
+                _marker = _json.loads(MARKER_FILE.read_text(encoding="utf-8"))
+                _ws = _marker.get("workspace_dir")
+                self.namespace["workspace_dir"] = _Path(_ws) if _ws else None
+            else:
+                self.namespace["workspace_dir"] = None
+        except Exception:
+            self.namespace["workspace_dir"] = None
+
     def update_core(self, mmc) -> None:
         """Swap the active core in the namespace after a core switch.
 
@@ -158,6 +177,9 @@ class Execute:
 
     def run_code_new(self, code: str, execution_mode: str = "buffered"):
         """Execute code after pre-importing deps. Use GatekeeperCore to buffer hardware calls and commit on succession"""
+
+        # Refresh workspace_dir from the active experiment marker (if any)
+        self._refresh_workspace()
 
         # validate mode
         if execution_mode not in ["buffered", "live"]:
