@@ -1,45 +1,68 @@
-pymupdf4llm
-pymupdf
-semantic_text_splitter
-napari[pyqt6, optional]
+# Viewer & microscope control
+napari[pyqt6,optional]
+napari-plugin-engine
 napari-micromanager
-#git+https://github.com/dario-bassi/pymmcore-widgets.git@modified_stage
-#git+https://github.com/pymmcore-plus/pymmcore-plus.git@main
+pyqt6
 pymmcore-plus
-numpy
-psycopg2
-python-dotenv
+useq-schema
+git+https://github.com/hinderling/pymmcore-proxy.git
+
+# MCP server
 mcp
+uvicorn
+anyio
+
+# Image processing
+numpy
+scipy
+scikit-image
+opencv-python
+pillow
+tifffile
+imageio
+numba
+
+# AI / ML
+torch
+cellpose
+transformers
+sentence-transformers
+anthropic
+openai
+
+# Database / search
+elasticsearch
+pgvector
+psycopg2
+
+# Document processing
+pymupdf
+pymupdf4llm
+semantic_text_splitter
+tiktoken
+pdf2image
+beautifulsoup4
+markdown
+chardet
+
+# Utilities
 pydantic
-pandas
-protobuf
-griffe
+python-dotenv
 requests
 tqdm
-markdown
-pyqt6
-chardet
-pgvector
-pdf2image
-elasticsearch
-tiktoken
-transformers
-torch
-pygame
-pillow
-scikit-image
+pandas
+pyyaml
 more-itertools
-beautifulsoup4
-numba
-opencv-python
+protobuf
+griffe
+pygame
+
+# Simulation
+git+https://github.com/hinderling/virtual-microscope
+
+# Dev / testing
+pytest
+pytest-qt
 pre-commit
 vulture
 coverage
-cellpose
-git+https://github.com/hinderling/virtual-microscope
-git+https://github.com/hinderling/pymmcore-proxy.git
-pytest
-pytest-qt
-anthropic
-sentence-transformers
-pyyaml

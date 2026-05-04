@@ -15,34 +15,62 @@ This repository is a toolset for microscope that use pymmcore-plus with LLM
 
 ---
 
-### How to get  started
+### How to get started
 
-In order to use this toolset, you need to have python installed. There are differents option, you could use *Anaconda*, *miniconda* or *mamba*. After you installed your favorite package and environment management system create a specific environment for this toolset.
-
-```
-conda create -n microscope-toolset python=3.12.11
-```
-Afterwards activate your newly environment
-```
-conda activate microscope-toolset
-```
-Create a new folder and clone the _microscope-toolset_ repository
-```
+Clone the repository first:
+```bash
 git clone https://github.com/ddd42-star/microscope-toolset.git
-```
-Then go into the folder of this repository and install all the packages using the *requirements* file
-```
-pip install -r requirements.txt
+cd microscope-toolset
 ```
 
-### Installation
-```
+Then set up a Python 3.12 environment using either **conda** or **uv**:
+
+---
+
+#### Option A — Conda (Anaconda / Miniconda / Mamba)
+
+```bash
+conda create -n microscope-toolset python=3.12.11
+conda activate microscope-toolset
+pip install -r requirements.txt
 pip install -e .
 ```
-or 
+
+---
+
+#### Option B — uv
+
+Install uv if you don't have it yet:
+```bash
+pip install uv
 ```
-python -m compileall src/
+
+Create the environment:
+```bash
+uv venv --python 3.12
+# Windows
+.venv\Scripts\activate
+# macOS / Linux
+source .venv/bin/activate
 ```
+
+**Install from `pyproject.toml` (recommended with uv):**
+```bash
+uv sync           # installs all dependencies defined in pyproject.toml
+uv sync --extra dev  # also includes pytest, pre-commit, coverage, …
+```
+
+`uv sync` reads `[tool.uv.sources]` in `pyproject.toml` to resolve `virtual-microscope` and `pymmcore-proxy` from git automatically. If you have local clones of those packages in the project folder, switch the relevant lines in `[tool.uv.sources]` to path sources — see the comments in `pyproject.toml`.
+
+**Alternative — install from `requirements.txt`** (same as the conda path):
+```bash
+uv pip install -r requirements.txt
+uv pip install -e .
+```
+
+> **PyTorch + CUDA:** uv installs the CPU-only build of torch by default. To enable CUDA support, uncomment the `torch` index entry in `[tool.uv.sources]` inside `pyproject.toml` and set your CUDA version (`cu118`, `cu121`, `cu124`, …) before running `uv sync`.
+
+---
 
 #### Optional databases: Elasticsearch and PostgreSQL
 
