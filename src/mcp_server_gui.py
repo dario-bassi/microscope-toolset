@@ -423,6 +423,10 @@ class MCPServer(QWidget):
         self._mcp_worker   = None;  self._mcp_thread   = None;  self._mcp_running   = False
         self._bench_worker = None;  self._bench_thread = None;  self._bench_running = False
 
+        # experiment tracking
+        self._tracking_active = False
+        self._tracking_name   = ""
+
         # ── build UI ──────────────────────────────────────────────────────
         main = QVBoxLayout(self)
         main.setContentsMargins(6, 4, 6, 4)
@@ -561,6 +565,47 @@ class MCPServer(QWidget):
 
         main.addWidget(bench_grp)
 
+        # ── Experiment Tracking group ──────────────────────────────────────
+        track_grp = QGroupBox("Experiment Tracking")
+        track_grp.setStyleSheet("QGroupBox{font-size:11px;}")
+        track_lay = QVBoxLayout(track_grp)
+        track_lay.setContentsMargins(4, 6, 4, 4)
+        track_lay.setSpacing(3)
+
+        track_row = QHBoxLayout()
+        track_row.setSpacing(4)
+        self._track_dot = QLabel()
+        self._track_dot.setFixedSize(12, 12)
+        self._track_dot.setStyleSheet(_DOT_STOPPED)
+        track_name_lbl = QLabel("Name:")
+        track_name_lbl.setStyleSheet("font-size:10px;")
+        track_name_lbl.setFixedWidth(35)
+        self._track_name_edit = QLineEdit()
+        self._track_name_edit.setPlaceholderText("experiment_name  (optional)")
+        self._track_name_edit.setStyleSheet("font-size:10px;")
+        self._track_start_btn = QPushButton("Start Tracking")
+        self._track_start_btn.setStyleSheet(_BTN_GREEN)
+        self._track_stop_btn  = QPushButton("Stop & Save")
+        self._track_stop_btn.setStyleSheet(_BTN_RED)
+        self._track_stop_btn.setEnabled(False)
+        track_row.addWidget(self._track_dot)
+        track_row.addWidget(track_name_lbl)
+        track_row.addWidget(self._track_name_edit)
+        track_row.addWidget(self._track_start_btn)
+        track_row.addWidget(self._track_stop_btn)
+        track_lay.addLayout(track_row)
+
+        self._track_info_lbl = QLabel("")
+        self._track_info_lbl.setStyleSheet(
+            "font-size:10px;color:#555;padding:2px 4px;"
+            "background:#f5f5f5;border-radius:3px;"
+        )
+        self._track_info_lbl.setWordWrap(True)
+        self._track_info_lbl.setVisible(False)
+        track_lay.addWidget(self._track_info_lbl)
+
+        main.addWidget(track_grp)
+
         # ── Status bar ────────────────────────────────────────────────────
         self._status_lbl = QLabel("Adding napari-micromanager…")
         self._status_lbl.setAlignment(Qt.AlignmentFlag.AlignCenter)
@@ -574,6 +619,8 @@ class MCPServer(QWidget):
         self._mcp_panel.btn.clicked.connect(self._toggle_mcp_server)
         self._remote_connect_btn.clicked.connect(self._toggle_remote_core)
         self._bench_panel.btn.clicked.connect(self._toggle_benchmark)
+        self._track_start_btn.clicked.connect(self._start_tracking)
+        self._track_stop_btn.clicked.connect(self._stop_tracking)
 
         # ── Restore persisted settings ────────────────────────────────────
         self._remote_url_edit.setText(self._settings.value("remote_url", ""))
@@ -867,6 +914,55 @@ class MCPServer(QWidget):
         if self._remote_connected:
             self._disconnect_remote_core()
         self._set_status("Test server stopped")
+
+    # ── Experiment tracking ─────────────────────────────────────────────────
+
+    def _start_tracking(self):
+        from src.benchmarking.experiment_saver import start_experiment
+        name = self._track_name_edit.text().strip() or None
+        try:
+            exp_name = start_experiment(name)
+            self._tracking_active = True
+            self._tracking_name   = exp_name
+            self._track_dot.setStyleSheet(_DOT_OK)
+            self._track_name_edit.setEnabled(False)
+            self._track_start_btn.setEnabled(False)
+            self._track_stop_btn.setEnabled(True)
+            self._track_info_lbl.setText(f"Tracking: {exp_name}")
+            self._track_info_lbl.setVisible(True)
+            self._set_status(f"Experiment tracking started: {exp_name}")
+            logger.info(f"Experiment tracking started: {exp_name}")
+        except Exception as e:
+            self._track_dot.setStyleSheet(_DOT_ERROR)
+            self._set_status(f"Tracking start failed: {e}")
+            logger.exception(f"Tracking start failed: {e}")
+
+    def _stop_tracking(self):
+        from src.benchmarking.experiment_saver import end_experiment
+        self._track_dot.setStyleSheet(_DOT_BUSY)
+        self._track_stop_btn.setEnabled(False)
+        try:
+            exp_dir = end_experiment()
+            self._tracking_active = False
+            self._tracking_name   = ""
+            self._track_dot.setStyleSheet(_DOT_STOPPED)
+            self._track_name_edit.setEnabled(True)
+            self._track_name_edit.clear()
+            self._track_start_btn.setEnabled(True)
+            self._track_info_lbl.setText(f"Saved: {exp_dir.name}")
+            self._track_info_lbl.setVisible(True)
+            self._set_status(f"Experiment saved: {exp_dir.name}")
+            logger.info(f"Experiment saved to: {exp_dir}")
+        except FileNotFoundError as e:
+            self._track_dot.setStyleSheet(_DOT_ERROR)
+            self._track_stop_btn.setEnabled(True)
+            self._set_status(f"Tracking stop failed: {e}")
+            logger.error(f"Tracking stop failed: {e}")
+        except Exception as e:
+            self._track_dot.setStyleSheet(_DOT_ERROR)
+            self._track_stop_btn.setEnabled(True)
+            self._set_status(f"Tracking save failed: {e}")
+            logger.exception(f"Tracking save failed: {e}")
 
     # ── Remote core ─────────────────────────────────────────────────────────
 
