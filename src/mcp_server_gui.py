@@ -1,4 +1,5 @@
 import os
+import subprocess
 import sys
 import logging
 import threading
@@ -11,7 +12,7 @@ from PyQt6.QtCore import Qt, QObject, pyqtSlot, QThread, pyqtSignal, QTimer, QSe
 from PyQt6.QtGui import QIntValidator
 from PyQt6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QPushButton, QLabel,
-    QSizePolicy, QFrame, QLineEdit, QGroupBox, QMessageBox,
+    QSizePolicy, QFrame, QLineEdit, QGroupBox, QMessageBox, QComboBox,
 )
 from src.mcp_microscopetoolset.utils import get_user_information
 from src.start_subprocess.servers import _start_server, _stop_server, wait_for_es
@@ -329,6 +330,64 @@ class MCPServerWorker(QObject):
         self.stopped.emit()
 
 
+# ── Benchmark worker ────────────────────────────────────────────────────────
+
+class BenchmarkWorker(QObject):
+    """Start a test_server.py subprocess and wait until /health responds."""
+
+    ready = pyqtSignal(str)   # base URL once server is up
+    error = pyqtSignal(str)
+
+    def __init__(self, test_name: str, host: str, port: int):
+        super().__init__()
+        self._test_name = test_name
+        self._host      = host
+        self._port      = port
+        self._process   = None
+
+    @pyqtSlot()
+    def run(self):
+        import urllib.request as _req
+        try:
+            cmd = [
+                sys.executable, "-m", "src.benchmarking.test_server",
+                self._test_name,
+                "--host", self._host,
+                "--port", str(self._port),
+            ]
+            self._process = subprocess.Popen(cmd)
+
+            url      = f"http://{self._host}:{self._port}"
+            deadline = time.monotonic() + 30.0
+            while time.monotonic() < deadline:
+                try:
+                    with _req.urlopen(f"{url}/health", timeout=1.0) as r:
+                        if r.status == 200:
+                            self.ready.emit(url)
+                            return
+                except Exception:
+                    pass
+                time.sleep(0.5)
+
+            self._kill()
+            self.error.emit("Test server did not start within 30 s")
+        except Exception as e:
+            self._kill()
+            self.error.emit(str(e))
+
+    def stop(self):
+        self._kill()
+
+    def _kill(self):
+        if self._process is not None:
+            try:
+                self._process.terminate()
+                self._process.wait(timeout=5)
+            except Exception:
+                pass
+            self._process = None
+
+
 # ── Main widget ─────────────────────────────────────────────────────────────
 
 class MCPServer(QWidget):
@@ -359,9 +418,10 @@ class MCPServer(QWidget):
         self._cfg_pending_restart = False  # auto-restart MCP after cfg reload
 
         # service worker/thread pairs
-        self._es_worker  = None;  self._es_thread  = None;  self._es_running  = False
-        self._pg_worker  = None;  self._pg_thread  = None;  self._pg_running  = False
-        self._mcp_worker = None;  self._mcp_thread = None;  self._mcp_running = False
+        self._es_worker    = None;  self._es_thread    = None;  self._es_running    = False
+        self._pg_worker    = None;  self._pg_thread    = None;  self._pg_running    = False
+        self._mcp_worker   = None;  self._mcp_thread   = None;  self._mcp_running   = False
+        self._bench_worker = None;  self._bench_thread = None;  self._bench_running = False
 
         # ── build UI ──────────────────────────────────────────────────────
         main = QVBoxLayout(self)
@@ -459,6 +519,48 @@ class MCPServer(QWidget):
 
         main.addWidget(self._mcp_panel)
 
+        # ── Benchmarking group ────────────────────────────────────────────
+        bench_grp = QGroupBox("Benchmarking")
+        bench_grp.setStyleSheet("QGroupBox{font-size:11px;}")
+        bench_lay = QVBoxLayout(bench_grp)
+        bench_lay.setContentsMargins(4, 6, 4, 4)
+        bench_lay.setSpacing(3)
+
+        bench_sel_row = QHBoxLayout()
+        bench_sel_row.setSpacing(4)
+        tl = QLabel("Test:")
+        tl.setStyleSheet("font-size:10px;")
+        tl.setFixedWidth(30)
+        self._bench_combo = QComboBox()
+        self._bench_combo.setStyleSheet("font-size:10px;")
+        bench_port_lbl = QLabel("Port:")
+        bench_port_lbl.setStyleSheet("font-size:10px;")
+        bench_port_lbl.setFixedWidth(28)
+        self._bench_port_edit = QLineEdit()
+        self._bench_port_edit.setPlaceholderText("5602")
+        self._bench_port_edit.setMaximumWidth(50)
+        self._bench_port_edit.setStyleSheet("font-size:10px;")
+        self._bench_port_edit.setValidator(QIntValidator(1, 65535))
+        bench_sel_row.addWidget(tl)
+        bench_sel_row.addWidget(self._bench_combo)
+        bench_sel_row.addWidget(bench_port_lbl)
+        bench_sel_row.addWidget(self._bench_port_edit)
+        bench_lay.addLayout(bench_sel_row)
+
+        self._bench_panel = ServicePanel("Test Server", "Launch", "Stop")
+        bench_lay.addWidget(self._bench_panel)
+
+        self._bench_info_lbl = QLabel("")
+        self._bench_info_lbl.setStyleSheet(
+            "font-size:10px;color:#555;padding:2px 4px;"
+            "background:#f5f5f5;border-radius:3px;"
+        )
+        self._bench_info_lbl.setWordWrap(True)
+        self._bench_info_lbl.setVisible(False)
+        bench_lay.addWidget(self._bench_info_lbl)
+
+        main.addWidget(bench_grp)
+
         # ── Status bar ────────────────────────────────────────────────────
         self._status_lbl = QLabel("Adding napari-micromanager…")
         self._status_lbl.setAlignment(Qt.AlignmentFlag.AlignCenter)
@@ -471,12 +573,17 @@ class MCPServer(QWidget):
         self._pg_panel.btn.clicked.connect(self._toggle_postgresql)
         self._mcp_panel.btn.clicked.connect(self._toggle_mcp_server)
         self._remote_connect_btn.clicked.connect(self._toggle_remote_core)
+        self._bench_panel.btn.clicked.connect(self._toggle_benchmark)
 
         # ── Restore persisted settings ────────────────────────────────────
         self._remote_url_edit.setText(self._settings.value("remote_url", ""))
         self._proxy_port_edit.setText(self._settings.value("proxy_port", "5601"))
         self._mcp_host_edit.setText(self._settings.value("mcp_host", "127.0.0.1"))
         self._mcp_port_edit.setText(self._settings.value("mcp_port", "5500"))
+        self._bench_port_edit.setText(self._settings.value("bench_port", "5602"))
+
+        # ── Populate test catalog ─────────────────────────────────────────
+        self._refresh_bench_tests()
 
         # ── Add napari-micromanager on next tick ──────────────────────────
         QTimer.singleShot(500, self._add_napari_micromanager)
@@ -654,6 +761,110 @@ class MCPServer(QWidget):
             self._start_mcp_server()
         else:
             self._set_status("MCP server stopped")
+
+    # ── Benchmarking ────────────────────────────────────────────────────────
+
+    def _refresh_bench_tests(self):
+        """Populate the test combo from src/benchmarking/test_*/."""
+        try:
+            from src.benchmarking.test_runner import list_tests
+            tests = list_tests()
+        except Exception:
+            tests = []
+        self._bench_combo.clear()
+        if not tests:
+            self._bench_combo.addItem("No tests found in src/benchmarking/test_*/")
+            self._bench_combo.setEnabled(False)
+            self._bench_panel.btn.setEnabled(False)
+        else:
+            for t in tests:
+                label = f"{t['name']}  —  {t['title']}" if t['title'] else t['name']
+                self._bench_combo.addItem(label, userData=t['name'])
+            self._bench_combo.setEnabled(True)
+            self._bench_panel.btn.setEnabled(True)
+
+    def _toggle_benchmark(self):
+        if self._bench_running:
+            self._stop_benchmark()
+        else:
+            self._launch_benchmark()
+
+    def _launch_benchmark(self):
+        idx = self._bench_combo.currentIndex()
+        test_name = self._bench_combo.itemData(idx)
+        if not test_name:
+            self._set_status("Select a test first")
+            return
+        port_text = self._bench_port_edit.text().strip()
+        port = int(port_text) if port_text.isdigit() and 1 <= int(port_text) <= 65535 else 5602
+        self._settings.setValue("bench_port", str(port))
+        self._bench_combo.setEnabled(False)
+        self._bench_port_edit.setEnabled(False)
+        self._bench_panel.set_busy("starting…")
+        self._set_status(f"Launching test '{test_name}' on port {port}…")
+        self._bench_thread = QThread()
+        self._bench_worker = BenchmarkWorker(test_name=test_name, host="127.0.0.1", port=port)
+        self._bench_worker.moveToThread(self._bench_thread)
+        self._bench_thread.started.connect(self._bench_worker.run)
+        self._bench_worker.ready.connect(self._on_bench_ready)
+        self._bench_worker.error.connect(self._on_bench_error)
+        self._bench_thread.start()
+
+    @pyqtSlot(str)
+    def _on_bench_ready(self, url: str):
+        self._bench_running = True
+        self._bench_panel.set_connected(url)
+        if self._bench_thread:
+            self._bench_thread.quit()
+        # Auto-connect the agent to the test server as a remote core
+        self._remote_url_edit.setText(url)
+        self._connect_remote_core()
+        self._fetch_bench_info(url)
+        self._set_status(f"Test server ready — agent connected to {url}")
+
+    def _fetch_bench_info(self, url: str):
+        import urllib.request, json as _json
+        try:
+            with urllib.request.urlopen(f"{url}/test/info", timeout=3) as r:
+                info = _json.loads(r.read())
+            title    = info.get("title", "")
+            channels = ", ".join(info.get("channels", []))
+            desc     = (info.get("description", "") or "").strip().split("\n")[0]
+            text = title
+            if channels:
+                text += f"  |  Channels: {channels}"
+            if desc:
+                text += f"\n{desc}"
+            self._bench_info_lbl.setText(text)
+            self._bench_info_lbl.setVisible(True)
+        except Exception:
+            self._bench_info_lbl.setVisible(False)
+
+    @pyqtSlot(str)
+    def _on_bench_error(self, msg: str):
+        self._bench_running = False
+        self._bench_combo.setEnabled(True)
+        self._bench_port_edit.setEnabled(True)
+        self._bench_panel.set_error(msg)
+        self._set_status(f"Test server error: {msg}")
+        if self._bench_thread:
+            self._bench_thread.quit()
+
+    def _stop_benchmark(self):
+        self._bench_panel.set_busy("stopping…")
+        if self._bench_worker is not None:
+            self._bench_worker.stop()
+        self._on_bench_stopped()
+
+    def _on_bench_stopped(self):
+        self._bench_running = False
+        self._bench_panel.set_stopped()
+        self._bench_combo.setEnabled(True)
+        self._bench_port_edit.setEnabled(True)
+        self._bench_info_lbl.setVisible(False)
+        if self._remote_connected:
+            self._disconnect_remote_core()
+        self._set_status("Test server stopped")
 
     # ── Remote core ─────────────────────────────────────────────────────────
 
