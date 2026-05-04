@@ -113,3 +113,51 @@ pymmcore-proxy     = { git = "https://github.com/hinderling/pymmcore-proxy.git" 
 # Without this uv installs the CPU-only build.
 # [tool.uv.sources]
 # torch = { index = "https://download.pytorch.org/whl/cu121" }
+
+# ---------------------------------------------------------------------------
+# ruff — lint + format
+# ---------------------------------------------------------------------------
+
+[tool.ruff]
+line-length = 100
+# Exclude cloned external packages and generated/archived folders
+exclude = [
+    "virtual-microscope",
+    "napari-micromanager",
+    "pymmcore-proxy",
+    "pymmcore-widgets",
+    "scratch",
+    "benchmark_logs",
+    "src/benchmarking/experiments",
+    ".venv",
+]
+
+[tool.ruff.lint]
+select = [
+    "E",   # pycodestyle errors
+    "F",   # pyflakes (unused imports, undefined names)
+    "I",   # isort (import ordering)
+    "UP",  # pyupgrade (modernise syntax)
+    "B",   # flake8-bugbear (likely bugs and design issues)
+    "C4",  # flake8-comprehensions (simplify comprehensions)
+]
+ignore = [
+    "E501",  # line too long — enforced by ruff-format instead
+    "N802",  # function name should be lowercase — Qt slots use camelCase
+    "N803",  # argument name should be lowercase — Qt signal args
+    "N806",  # variable in function should be lowercase — Qt conventions
+    "B008",  # do not perform function calls in default arguments
+]
+
+[tool.ruff.lint.isort]
+known-first-party = ["src"]
+
+# ---------------------------------------------------------------------------
+# bandit — security linting
+# ---------------------------------------------------------------------------
+
+[tool.bandit]
+# B101  assert used — fine in tests and guards
+# B603  subprocess with list args — used to open workspace folder in Explorer
+# B607  partial executable path — we call "explorer", "open", "xdg-open" by name
+skips = ["B101", "B603", "B607"]

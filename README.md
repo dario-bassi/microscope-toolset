@@ -153,7 +153,8 @@ And select the microscope MCP server either connecting the server or enabling th
 After you added the *mcp.json* configuration file, you can start the MCP Client that will connect to the server.
 
 ### Project structure
-To add
+
+![MCP Tool Ecosystem](docs/ecosystem.svg)
 
 
 ### Execution guardrails
