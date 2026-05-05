@@ -1,4 +1,6 @@
 import os
+import platform
+import socket
 import subprocess
 import sys
 import logging
@@ -239,6 +241,56 @@ class PostgreSQLWorker(QObject):
         self.disconnected.emit()
 
 
+def _port_in_use(port: int) -> bool:
+    """Return True if *port* is currently bound by any process.
+
+    Uses a non-destructive socket probe — works on Windows, macOS, and Linux
+    without requiring admin privileges or external tools.
+    """
+    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+        s.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+        try:
+            s.bind(("127.0.0.1", port))
+            return False
+        except OSError:
+            return True
+
+
+def _log_port_listeners(port: int) -> None:
+    """Log which process (if any) is still listening on *port* after stop.
+
+    Cross-platform:
+      Windows  — netstat -ano | findstr :<port>
+      macOS    — lsof -iTCP:<port> -sTCP:LISTEN
+      Linux    — ss -tlnp sport = :<port>
+    """
+    system = platform.system()
+    try:
+        if system == "Windows":
+            out = subprocess.check_output(
+                ["netstat", "-ano"], text=True, stderr=subprocess.DEVNULL
+            )
+            lines = [l for l in out.splitlines() if f":{port}" in l]
+        elif system == "Darwin":
+            out = subprocess.check_output(
+                ["lsof", f"-iTCP:{port}", "-sTCP:LISTEN"],
+                text=True, stderr=subprocess.DEVNULL
+            )
+            lines = out.strip().splitlines()
+        else:  # Linux
+            out = subprocess.check_output(
+                ["ss", "-tlnp", f"sport = :{port}"],
+                text=True, stderr=subprocess.DEVNULL
+            )
+            lines = out.strip().splitlines()
+        if lines:
+            logger.warning("Port %d still has listeners:\n%s", port, "\n".join(lines))
+        else:
+            logger.info("Port %d is free.", port)
+    except Exception as e:
+        logger.debug("Could not check port %d listeners: %s", port, e)
+
+
 class MCPServerWorker(QObject):
     started = pyqtSignal(str)   # "http://host:port"
     error   = pyqtSignal(str)
@@ -254,12 +306,14 @@ class MCPServerWorker(QObject):
         self._port         = port
         self._uvicorn_server = None
         self._fastmcp_thread = None
+        self._loop           = None   # asyncio event loop owned by _fastmcp_thread
 
     @pyqtSlot()
     def run(self):
         self._stop_uvicorn()
 
         def _init_mcp():
+            import asyncio, uvicorn
             try:
                 logger.info("Initializing agents…")
                 agents = initialize_agents(mmc=self._mmc)
@@ -287,7 +341,6 @@ class MCPServerWorker(QObject):
                     port=self._port,
                 )
 
-                import uvicorn, anyio
                 app    = mcp_server.streamable_http_app()
                 config = uvicorn.Config(
                     app,
@@ -296,16 +349,23 @@ class MCPServerWorker(QObject):
                     log_level=mcp_server.settings.log_level.lower(),
                 )
                 self._uvicorn_server = uvicorn.Server(config)
-                url = f"http://{self._host}:{self._port}"
-                self.started.emit(url)
+
+                loop = asyncio.new_event_loop()
+                asyncio.set_event_loop(loop)
+                self._loop = loop
                 try:
-                    anyio.run(self._uvicorn_server.serve)
+                    url = f"http://{self._host}:{self._port}"
+                    self.started.emit(url)
+                    loop.run_until_complete(self._uvicorn_server.serve())
                 except OSError as e:
                     if "10048" in str(e) or "address already in use" in str(e).lower():
                         logger.error(f"Port {self._port} still in use")
                         self.error.emit(f"Port {self._port} still in use — try restarting")
                     else:
                         raise
+                finally:
+                    loop.close()
+                    self._loop = None
 
             except Exception as e:
                 logger.exception(f"FastMCP error: {e}")
@@ -315,14 +375,37 @@ class MCPServerWorker(QObject):
         self._fastmcp_thread.start()
 
     def _stop_uvicorn(self):
-        if self._uvicorn_server is not None:
-            self._uvicorn_server.should_exit = True
+        server = self._uvicorn_server
+        loop   = self._loop
+        if server is not None:
+            # force_exit=True makes uvicorn cancel open connections immediately
+            # instead of waiting for them to drain — essential for fast port release.
+            server.should_exit = True
+            server.force_exit  = True
+            if loop is not None and not loop.is_closed():
+                try:
+                    # Wake the sleeping asyncio event loop so it checks should_exit
+                    # without waiting for the next 0.1 s tick.
+                    loop.call_soon_threadsafe(lambda: None)
+                except RuntimeError:
+                    pass
         if self._fastmcp_thread is not None:
-            self._fastmcp_thread.join(timeout=15)
+            self._fastmcp_thread.join(timeout=5)
+            # The thread may still be alive finishing lifespan cleanup, but uvicorn
+            # closes its listen socket early in shutdown — before the lifespan completes.
+            # Use the port probe as the authoritative check, not thread liveness.
             if self._fastmcp_thread.is_alive():
-                logger.warning("MCP thread did not stop in time — port 5500 may still be held")
-            self._fastmcp_thread  = None
-            self._uvicorn_server  = None
+                logger.debug("MCP thread still running lifespan teardown (port may already be free)")
+            self._fastmcp_thread = None
+            self._uvicorn_server = None
+            self._loop           = None
+            if _port_in_use(self._port):
+                # Port is still bound — lifespan hasn't released it yet.
+                # Log listeners so the user can identify the holding process.
+                logger.warning("Port %d still bound after stop", self._port)
+                _log_port_listeners(self._port)
+            else:
+                logger.info("Port %d released — safe to restart", self._port)
 
     def stop_mcp(self):
         """May be called from any thread."""
@@ -768,6 +851,11 @@ class MCPServer(QWidget):
             self._set_status("Invalid MCP port — enter a number between 1 and 65535")
             return
         port = int(port_text)
+        if _port_in_use(port):
+            self._mcp_panel.set_error(f"Port {port} still in use — wait a moment and retry")
+            self._set_status(f"Port {port} is still bound — previous server may still be shutting down")
+            _log_port_listeners(port)
+            return
         self._settings.setValue("mcp_host", host)
         self._settings.setValue("mcp_port", str(port))
         self._mcp_host_edit.setEnabled(False)
@@ -818,6 +906,10 @@ class MCPServer(QWidget):
         self._mcp_panel.set_stopped()
         self._mcp_host_edit.setEnabled(True)
         self._mcp_port_edit.setEnabled(True)
+        # Release references so the old worker/thread are GC'd and cannot
+        # interfere with the next start (avoids double-stop on restart).
+        self._mcp_worker = None
+        self._mcp_thread = None
         if self._cfg_pending_restart:
             self._cfg_pending_restart = False
             self._start_mcp_server()
