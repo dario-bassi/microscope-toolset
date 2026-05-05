@@ -60,6 +60,7 @@ class ServicePanel(QFrame):
                  stop_label: str = "Stop", parent=None):
         super().__init__(parent)
         self.setFrameShape(QFrame.Shape.StyledPanel)
+        self.setStyleSheet("ServicePanel{border:1px solid #ddd;border-radius:6px;}")
         self._start_label = start_label
         self._stop_label  = stop_label
 
@@ -483,6 +484,7 @@ class MCPServer(QWidget):
 
         self.setObjectName("MCPServer")
         self.setWindowTitle("MCP Server")
+        self.setMaximumWidth(450)
 
         viewer_mc          = NapariViewerMC(self.viewer)
         self._viewer_proxy = ThreadSafeViewerProxy(viewer_mc)
@@ -582,6 +584,20 @@ class MCPServer(QWidget):
         main.addWidget(self._es_panel)
         main.addWidget(self._pg_panel)
 
+        # Hide ES/PG panels when the services are not configured in the environment
+        try:
+            _es_home = get_user_information().get("elastic_search_path_home", "")
+        except Exception:
+            _es_home = ""
+        if not _es_home:
+            self._es_panel.setVisible(False)
+        try:
+            _pg_host = get_user_information().get("db_host", "") or os.getenv("DB_HOST", "")
+        except Exception:
+            _pg_host = os.getenv("DB_HOST", "")
+        if not _pg_host:
+            self._pg_panel.setVisible(False)
+
         # MCP host / port config row
         mcp_cfg_row = QHBoxLayout()
         mcp_cfg_row.setSpacing(4)
@@ -603,9 +619,18 @@ class MCPServer(QWidget):
         mcp_cfg_row.addWidget(self._mcp_host_edit)
         mcp_cfg_row.addWidget(colon_lbl)
         mcp_cfg_row.addWidget(self._mcp_port_edit)
-        main.addLayout(mcp_cfg_row)
 
-        main.addWidget(self._mcp_panel)
+        # Group config row + service panel under a QGroupBox (matches core/bench/tracking border)
+        mcp_grp = QGroupBox("MCP Server")
+        mcp_grp.setStyleSheet("QGroupBox{font-size:11px;}")
+        mcp_grp_lay = QVBoxLayout(mcp_grp)
+        mcp_grp_lay.setContentsMargins(4, 6, 4, 4)
+        mcp_grp_lay.setSpacing(3)
+        mcp_grp_lay.addLayout(mcp_cfg_row)
+        self._mcp_panel.setFrameShape(QFrame.Shape.NoFrame)
+        self._mcp_panel.setStyleSheet("")  # border provided by mcp_grp
+        mcp_grp_lay.addWidget(self._mcp_panel)
+        main.addWidget(mcp_grp)
 
         # ── Benchmarking group ────────────────────────────────────────────
         bench_grp = QGroupBox("Benchmarking")
@@ -636,6 +661,8 @@ class MCPServer(QWidget):
         bench_lay.addLayout(bench_sel_row)
 
         self._bench_panel = ServicePanel("Test Server", "Launch", "Stop")
+        self._bench_panel.setFrameShape(QFrame.Shape.NoFrame)
+        self._bench_panel.setStyleSheet("")  # border provided by bench_grp
         bench_lay.addWidget(self._bench_panel)
 
         self._bench_info_lbl = QLabel("")
@@ -933,9 +960,14 @@ class MCPServer(QWidget):
             self._bench_combo.setEnabled(False)
             self._bench_panel.btn.setEnabled(False)
         else:
+            _MAX = 45
             for t in tests:
                 label = f"{t['name']}  —  {t['title']}" if t['title'] else t['name']
-                self._bench_combo.addItem(label, userData=t['name'])
+                display = label if len(label) <= _MAX else label[:_MAX - 1] + "…"
+                self._bench_combo.addItem(display, userData=t['name'])
+                self._bench_combo.setItemData(
+                    self._bench_combo.count() - 1, label, Qt.ItemDataRole.ToolTipRole
+                )
             self._bench_combo.setEnabled(True)
             self._bench_panel.btn.setEnabled(True)
 
