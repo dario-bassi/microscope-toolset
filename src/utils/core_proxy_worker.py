@@ -48,7 +48,16 @@ class CoreProxyWorker(QObject):
     def run(self):
         try:
             import urllib.request
+            import logging.handlers as _lh
             from pymmcore_proxy import serve
+
+            # On Windows, RotatingFileHandler.doRollover() calls os.rename() which
+            # fails if another process (e.g. the ipykernel MCP sandbox) has the same
+            # pymmcore-plus log file open.  Disabling rotation here avoids the rename.
+            _pmm = logging.getLogger("pymmcore-plus")
+            for _h in _pmm.handlers:
+                if isinstance(_h, _lh.RotatingFileHandler):
+                    _h.maxBytes = 0
 
             cfg_type = classify_cfg(self._cfg_path)
             logger.info(f"cfg type={cfg_type!r}  path={self._cfg_path!r}")
@@ -60,12 +69,25 @@ class CoreProxyWorker(QObject):
                 )
                 return
 
-            if cfg_type == "virtual":
-                from pymmcore_plus.experimental.unicore import UniMMCore
-                core = UniMMCore()
-            else:
-                from pymmcore_plus import CMMCorePlus
-                core = CMMCorePlus()
+            # Force psygnal signals for the server core.
+            # CMMCorePlus auto-selects Qt signals when a QApplication is running,
+            # but Qt signals connected from non-Qt threads (like uvicorn's asyncio
+            # thread pool) silently fail to deliver.  psygnal has no such restriction.
+            import os
+            _old_backend = os.environ.get("PYMM_SIGNALS_BACKEND")
+            os.environ["PYMM_SIGNALS_BACKEND"] = "psygnal"
+            try:
+                if cfg_type == "virtual":
+                    from pymmcore_plus.experimental.unicore import UniMMCore
+                    core = UniMMCore()
+                else:
+                    from pymmcore_plus import CMMCorePlus
+                    core = CMMCorePlus()
+            finally:
+                if _old_backend is None:
+                    os.environ.pop("PYMM_SIGNALS_BACKEND", None)
+                else:
+                    os.environ["PYMM_SIGNALS_BACKEND"] = _old_backend
 
             logger.info(f"Loading cfg with {type(core).__name__}")
             core.loadSystemConfiguration(self._cfg_path)
