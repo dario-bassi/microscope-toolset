@@ -783,8 +783,24 @@ class MCPServer(QWidget):
         self._track_open_btn.clicked.connect(self._open_workspace)
 
         # ── Restore persisted settings ────────────────────────────────────
-        self._remote_url_edit.setText(self._settings.value("remote_url", ""))
-        self._proxy_port_edit.setText(self._settings.value("proxy_port", "5601"))
+        # For proxy host/port: cascade QSettings → .env → hardcoded default.
+        # This lets the lab admin set PROXY_CORE_HOST/PORT in .env so the
+        # fields are pre-filled on first run; a user who changes them manually
+        # keeps their own value (stored in QSettings) on subsequent runs.
+        try:
+            _ui = get_user_information()
+            _env_host = _ui.get("proxy_core_host") or "127.0.0.1"
+            _env_port = _ui.get("proxy_core_port") or "5601"
+        except Exception:
+            _env_host, _env_port = "127.0.0.1", "5601"
+        _env_url = f"http://{_env_host}:{_env_port}"
+
+        self._remote_url_edit.setText(
+            self._settings.value("remote_url") or _env_url
+        )
+        self._proxy_port_edit.setText(
+            self._settings.value("proxy_port") or _env_port
+        )
         self._mcp_host_edit.setText(self._settings.value("mcp_host", "127.0.0.1"))
         self._mcp_port_edit.setText(self._settings.value("mcp_port", "5500"))
         self._bench_port_edit.setText(self._settings.value("bench_port", "5602"))

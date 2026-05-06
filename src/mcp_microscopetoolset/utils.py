@@ -58,6 +58,8 @@ def get_user_information() -> dict:
     user_information['benchmark_agent_enable'] = os.getenv("BENCHMARK_KNOWLEDGE_ENABLED")
     user_information['anthropic_model'] = os.getenv("ANTHROPIC_MODEL", "claude-haiku-4-5-20251001")
     user_information['embed_model'] = os.getenv("EMBED_MODEL", "BAAI/bge-small-en-v1.5")
+    user_information['proxy_core_host'] = os.getenv("PROXY_CORE_HOST", "127.0.0.1")
+    user_information['proxy_core_port'] = os.getenv("PROXY_CORE_PORT", "5601")
 
     return user_information
 
