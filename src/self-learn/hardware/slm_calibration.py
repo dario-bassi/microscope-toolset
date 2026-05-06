@@ -45,7 +45,6 @@ import json
 import logging
 import time
 from pathlib import Path
-from typing import Optional
 
 import numpy as np
 from scipy import ndimage
@@ -56,6 +55,7 @@ logger = logging.getLogger(__name__)
 # ---------------------------------------------------------------------------
 # Public API
 # ---------------------------------------------------------------------------
+
 
 def find_slm_conjugate_z(
     core,
@@ -114,8 +114,7 @@ def find_slm_conjugate_z(
     core.setPosition(z_device, z_center)
     core.waitForDevice(z_device)
 
-    logger.info("SLM conjugate plane found at Z=%.1f um (laplacian_var=%.0f)",
-                best_z, best_metric)
+    logger.info("SLM conjugate plane found at Z=%.1f um (laplacian_var=%.0f)", best_z, best_metric)
     return best_z
 
 
@@ -161,22 +160,29 @@ def calibrate_slm(
     margin_x = max(50, int(slm_w * 0.12))
     margin_y = max(50, int(slm_h * 0.17))
     calib_points = [
-        (margin_x, margin_y),                       # top-left region
-        (slm_w - margin_x, margin_y),               # top-right region
-        (slm_w // 2, slm_h - margin_y),             # bottom-center
+        (margin_x, margin_y),  # top-left region
+        (slm_w - margin_x, margin_y),  # top-right region
+        (slm_w // 2, slm_h - margin_y),  # bottom-center
     ]
     # 3 different test points
     test_points = [
-        (slm_w // 4, slm_h // 2),                   # left-center
-        (3 * slm_w // 4, slm_h // 2),               # right-center
-        (slm_w // 2, slm_h // 4),                    # top-center
+        (slm_w // 4, slm_h // 2),  # left-center
+        (3 * slm_w // 4, slm_h // 2),  # right-center
+        (slm_w // 2, slm_h // 4),  # top-center
     ]
 
     # --- Acquire calibration dots ---
     logger.info("Acquiring %d calibration dots...", len(calib_points))
     calib_results = _acquire_dots(
-        core, slm_device, channel_group, channel_config,
-        calib_points, z_conjugate, exposure_ms, dot_radius, run_mda_fn,
+        core,
+        slm_device,
+        channel_group,
+        channel_config,
+        calib_points,
+        z_conjugate,
+        exposure_ms,
+        dot_radius,
+        run_mda_fn,
     )
     if len(calib_results) < 3:
         raise RuntimeError(
@@ -187,16 +193,31 @@ def calibrate_slm(
     # --- Compute affine (exact from 3 points) ---
     fwd_mat, inv_mat = _compute_affine_3pt(calib_results)
 
-    logger.info("Affine (SLM->Cam): cam_x = %.4f*slm_x + %.4f*slm_y + %.4f",
-                fwd_mat[0, 0], fwd_mat[0, 1], fwd_mat[0, 2])
-    logger.info("Affine (SLM->Cam): cam_y = %.4f*slm_x + %.4f*slm_y + %.4f",
-                fwd_mat[1, 0], fwd_mat[1, 1], fwd_mat[1, 2])
+    logger.info(
+        "Affine (SLM->Cam): cam_x = %.4f*slm_x + %.4f*slm_y + %.4f",
+        fwd_mat[0, 0],
+        fwd_mat[0, 1],
+        fwd_mat[0, 2],
+    )
+    logger.info(
+        "Affine (SLM->Cam): cam_y = %.4f*slm_x + %.4f*slm_y + %.4f",
+        fwd_mat[1, 0],
+        fwd_mat[1, 1],
+        fwd_mat[1, 2],
+    )
 
     # --- Verify with 3 test dots ---
     logger.info("Acquiring %d verification dots...", len(test_points))
     test_results = _acquire_dots(
-        core, slm_device, channel_group, channel_config,
-        test_points, z_conjugate, exposure_ms, dot_radius, run_mda_fn,
+        core,
+        slm_device,
+        channel_group,
+        channel_config,
+        test_points,
+        z_conjugate,
+        exposure_ms,
+        dot_radius,
+        run_mda_fn,
     )
 
     max_err = 0.0
@@ -204,13 +225,24 @@ def calibrate_slm(
         pred = fwd_mat @ np.array([slm_x, slm_y, 1.0])
         err = np.sqrt((pred[0] - cam_x) ** 2 + (pred[1] - cam_y) ** 2)
         max_err = max(max_err, err)
-        logger.info("  SLM(%d,%d): predicted cam(%.1f,%.1f), actual cam(%.1f,%.1f), err=%.1f px",
-                     slm_x, slm_y, pred[0], pred[1], cam_x, cam_y, err)
+        logger.info(
+            "  SLM(%d,%d): predicted cam(%.1f,%.1f), actual cam(%.1f,%.1f), err=%.1f px",
+            slm_x,
+            slm_y,
+            pred[0],
+            pred[1],
+            cam_x,
+            cam_y,
+            err,
+        )
 
     verified = max_err < verification_threshold_px
     if not verified:
-        logger.warning("Verification FAILED: max_err=%.1f px > threshold=%.1f px",
-                       max_err, verification_threshold_px)
+        logger.warning(
+            "Verification FAILED: max_err=%.1f px > threshold=%.1f px",
+            max_err,
+            verification_threshold_px,
+        )
 
     # --- Gather metadata ---
     objective = _get_objective_label(core)
@@ -289,6 +321,7 @@ def load_calibration(path: str | Path) -> dict:
 # Internal helpers
 # ---------------------------------------------------------------------------
 
+
 def _get_slm_size(core, slm_device: str) -> tuple[int, int]:
     """Query SLM resolution from the device."""
     w = int(core.getSLMWidth(slm_device))
@@ -297,31 +330,42 @@ def _get_slm_size(core, slm_device: str) -> tuple[int, int]:
 
 
 def _make_grid_mask(
-    slm_w: int, slm_h: int, spacing: int, radius: int,
+    slm_w: int,
+    slm_h: int,
+    spacing: int,
+    radius: int,
 ) -> np.ndarray:
     """Create a grid of dots as a uint8 mask."""
     mask = np.zeros((slm_h, slm_w), dtype=np.uint8)
     for cy in range(spacing // 2, slm_h, spacing):
         for cx in range(spacing // 2, slm_w, spacing):
             yy, xx = np.ogrid[:slm_h, :slm_w]
-            circle = ((xx - cx) ** 2 + (yy - cy) ** 2) <= radius ** 2
+            circle = ((xx - cx) ** 2 + (yy - cy) ** 2) <= radius**2
             mask[circle] = 255
     return mask
 
 
 def _make_dot_mask(
-    slm_w: int, slm_h: int, cx: int, cy: int, radius: int,
+    slm_w: int,
+    slm_h: int,
+    cx: int,
+    cy: int,
+    radius: int,
 ) -> np.ndarray:
     """Create a single-dot mask."""
     mask = np.zeros((slm_h, slm_w), dtype=np.uint8)
     yy, xx = np.ogrid[:slm_h, :slm_w]
-    circle = ((xx - cx) ** 2 + (yy - cy) ** 2) <= radius ** 2
+    circle = ((xx - cx) ** 2 + (yy - cy) ** 2) <= radius**2
     mask[circle] = 255
     return mask
 
 
 def _snap_with_slm(
-    core, slm_device: str, z_device: str, mask: np.ndarray, z_pos: float,
+    core,
+    slm_device: str,
+    z_device: str,
+    mask: np.ndarray,
+    z_pos: float,
 ) -> np.ndarray:
     """Upload SLM mask, move Z, open shutter, acquire one frame, close shutter.
 
@@ -352,7 +396,7 @@ def _snap_with_slm(
                 break
         if core.getRemainingImageCount() < 1:
             core.setShutterOpen(False)
-            raise RuntimeError("No image returned from acquisition")
+            raise RuntimeError("No image returned from acquisition") from None
         img = core.popNextImage()
 
     core.setShutterOpen(False)
@@ -381,8 +425,16 @@ def _acquire_dots(
 
     if run_mda_fn is not None:
         return _acquire_dots_mda(
-            run_mda_fn, slm_device, channel_group, channel_config,
-            points, z_conjugate, exposure_ms, dot_radius, slm_w, slm_h,
+            run_mda_fn,
+            slm_device,
+            channel_group,
+            channel_config,
+            points,
+            z_conjugate,
+            exposure_ms,
+            dot_radius,
+            slm_w,
+            slm_h,
         )
 
     # Manual fallback
@@ -465,8 +517,9 @@ def _acquire_dots_mda(
 
 
 def _detect_centroid(
-    image: np.ndarray, threshold_frac: float = 0.4,
-) -> Optional[tuple[float, float]]:
+    image: np.ndarray,
+    threshold_frac: float = 0.4,
+) -> tuple[float, float] | None:
     """Detect the centroid of the brightest blob in an image.
 
     Returns (cam_x, cam_y) or None if no blob detected.
@@ -501,11 +554,13 @@ def _compute_affine_3pt(
     coeffs_x = np.linalg.solve(A, cam[:, 0])
     coeffs_y = np.linalg.solve(A, cam[:, 1])
 
-    fwd = np.array([
-        [coeffs_x[0], coeffs_x[1], coeffs_x[2]],
-        [coeffs_y[0], coeffs_y[1], coeffs_y[2]],
-        [0, 0, 1],
-    ])
+    fwd = np.array(
+        [
+            [coeffs_x[0], coeffs_x[1], coeffs_x[2]],
+            [coeffs_y[0], coeffs_y[1], coeffs_y[2]],
+            [0, 0, 1],
+        ]
+    )
     inv = np.linalg.inv(fwd)
     return fwd, inv
 

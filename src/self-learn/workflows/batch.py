@@ -16,8 +16,9 @@ from skimage.measure import label, regionprops
 from useq import MDASequence
 
 
-def tile_and_analyze(core, analyze_fn, grid=(2, 2), channel='brightfield',
-                     group='Fake', overlap=0.1, center=None):
+def tile_and_analyze(
+    core, analyze_fn, grid=(2, 2), channel="brightfield", group="Fake", overlap=0.1, center=None
+):
     """Acquire a grid of tiles and analyze each.
 
     Args:
@@ -57,12 +58,12 @@ def tile_and_analyze(core, analyze_fn, grid=(2, 2), channel='brightfield',
         for c in range(cols):
             x = cx + (c - (cols - 1) / 2) * step
             y = cy + (r - (rows - 1) / 2) * step
-            positions.append({'x': x, 'y': y})
+            positions.append({"x": x, "y": y})
 
     # Acquire tiles via MDA
     tiles = []
     seq = MDASequence(
-        channels=[{'config': channel, 'group': group}],
+        channels=[{"config": channel, "group": group}],
         stage_positions=positions,
     )
 
@@ -73,24 +74,23 @@ def tile_and_analyze(core, analyze_fn, grid=(2, 2), channel='brightfield',
 
     # Analyze each tile
     per_tile = []
-    for i, (tile, pos) in enumerate(zip(tiles, positions)):
+    for i, (tile, pos) in enumerate(zip(tiles, positions, strict=False)):
         result = analyze_fn(tile)
-        result['position'] = (pos['x'], pos['y'])
-        result['tile_index'] = (i // cols, i % cols)
+        result["position"] = (pos["x"], pos["y"])
+        result["tile_index"] = (i // cols, i % cols)
         per_tile.append(result)
 
     # Aggregate
     agg = aggregate_results(per_tile)
 
     return {
-        'per_tile': per_tile,
-        'aggregate': agg,
-        'n_tiles': len(per_tile),
+        "per_tile": per_tile,
+        "aggregate": agg,
+        "n_tiles": len(per_tile),
     }
 
 
-def multi_position_measure(core, positions, measure_fn, channel='brightfield',
-                           group='Fake'):
+def multi_position_measure(core, positions, measure_fn, channel="brightfield", group="Fake"):
     """Measure at specific pre-defined positions.
 
     Args:
@@ -112,14 +112,14 @@ def multi_position_measure(core, positions, measure_fn, channel='brightfield',
     pos_list = []
     for p in positions:
         if isinstance(p, (tuple, list)):
-            pos_list.append({'x': p[0], 'y': p[1]})
+            pos_list.append({"x": p[0], "y": p[1]})
         else:
             pos_list.append(p)
 
     # Acquire
     tiles = []
     seq = MDASequence(
-        channels=[{'config': channel, 'group': group}],
+        channels=[{"config": channel, "group": group}],
         stage_positions=pos_list,
     )
 
@@ -130,15 +130,15 @@ def multi_position_measure(core, positions, measure_fn, channel='brightfield',
 
     # Measure
     measurements = []
-    for tile, pos in zip(tiles, pos_list):
+    for tile, pos in zip(tiles, pos_list, strict=False):
         result = measure_fn(tile)
-        result['position'] = (pos['x'], pos['y'])
+        result["position"] = (pos["x"], pos["y"])
         measurements.append(result)
 
     return {
-        'measurements': measurements,
-        'aggregate': aggregate_results(measurements),
-        'n_positions': len(measurements),
+        "measurements": measurements,
+        "aggregate": aggregate_results(measurements),
+        "n_positions": len(measurements),
     }
 
 
@@ -163,7 +163,7 @@ def aggregate_results(results):
     numeric_keys = set()
     for r in results:
         for k, v in r.items():
-            if k in ('position', 'tile_index'):
+            if k in ("position", "tile_index"):
                 continue
             if isinstance(v, (int, float, np.integer, np.floating)):
                 numeric_keys.add(k)
@@ -179,11 +179,11 @@ def aggregate_results(results):
 
         if values:
             arr = np.array(values)
-            agg[f'{key}_mean'] = round(float(arr.mean()), 4)
-            agg[f'{key}_std'] = round(float(arr.std()), 4)
-            agg[f'{key}_median'] = round(float(np.median(arr)), 4)
-            agg[f'{key}_total'] = round(float(arr.sum()), 4)
-            agg[f'{key}_n'] = len(values)
+            agg[f"{key}_mean"] = round(float(arr.mean()), 4)
+            agg[f"{key}_std"] = round(float(arr.std()), 4)
+            agg[f"{key}_median"] = round(float(np.median(arr)), 4)
+            agg[f"{key}_total"] = round(float(arr.sum()), 4)
+            agg[f"{key}_n"] = len(values)
 
     return agg
 
@@ -216,26 +216,26 @@ def measure_nuclear_expression(image, threshold=30, min_area=20):
 
     if not cells:
         return {
-            'n_cells': 0,
-            'nuclear_mean': 0.0,
-            'nuclear_max': 0.0,
-            'nuclear_min': 0.0,
-            'nuclear_fraction': 0.0,
-            'image_mean': float(img.mean()),
+            "n_cells": 0,
+            "nuclear_mean": 0.0,
+            "nuclear_max": 0.0,
+            "nuclear_min": 0.0,
+            "nuclear_fraction": 0.0,
+            "image_mean": float(img.mean()),
         }
 
     intensities = [float(p.intensity_mean) for p in cells]
     return {
-        'n_cells': len(cells),
-        'nuclear_mean': float(np.mean(intensities)),
-        'nuclear_max': float(np.max(intensities)),
-        'nuclear_min': float(np.min(intensities)),
-        'nuclear_fraction': float(binary.sum() / img.size),
-        'image_mean': float(img.mean()),
+        "n_cells": len(cells),
+        "nuclear_mean": float(np.mean(intensities)),
+        "nuclear_max": float(np.max(intensities)),
+        "nuclear_min": float(np.min(intensities)),
+        "nuclear_fraction": float(binary.sum() / img.size),
+        "image_mean": float(img.mean()),
     }
 
 
-def identify_hotspot(per_tile, key='nuclear_mean', z_threshold=1.5):
+def identify_hotspot(per_tile, key="nuclear_mean", z_threshold=1.5):
     """Identify tile(s) with elevated expression relative to the population.
 
     Uses a z-score approach: tiles with expression > z_threshold standard
@@ -264,12 +264,12 @@ def identify_hotspot(per_tile, key='nuclear_mean', z_threshold=1.5):
 
     if len(arr) < 2 or arr.std() == 0:
         return {
-            'hotspot_indices': [],
-            'hotspot_positions': [],
-            'hotspot_mean': float(arr.mean()) if len(arr) > 0 else 0.0,
-            'baseline_mean': float(arr.mean()) if len(arr) > 0 else 0.0,
-            'fold_change': 1.0,
-            'all_values': values,
+            "hotspot_indices": [],
+            "hotspot_positions": [],
+            "hotspot_mean": float(arr.mean()) if len(arr) > 0 else 0.0,
+            "baseline_mean": float(arr.mean()) if len(arr) > 0 else 0.0,
+            "fold_change": 1.0,
+            "all_values": values,
         }
 
     median = float(np.median(arr))
@@ -288,7 +288,7 @@ def identify_hotspot(per_tile, key='nuclear_mean', z_threshold=1.5):
         if arr[max_idx] > median * 1.1:
             hotspot_idx = [max_idx]
 
-    hotspot_positions = [per_tile[i].get('position', (0, 0)) for i in hotspot_idx]
+    hotspot_positions = [per_tile[i].get("position", (0, 0)) for i in hotspot_idx]
     hotspot_vals = [values[i] for i in hotspot_idx]
     baseline_vals = [v for i, v in enumerate(values) if i not in hotspot_idx]
 
@@ -302,7 +302,7 @@ def identify_hotspot(per_tile, key='nuclear_mean', z_threshold=1.5):
         positions = []
         weights = []
         for i in hotspot_idx:
-            pos = per_tile[i].get('position', None)
+            pos = per_tile[i].get("position", None)
             if pos is not None:
                 positions.append(pos)
                 weights.append(values[i])
@@ -314,11 +314,11 @@ def identify_hotspot(per_tile, key='nuclear_mean', z_threshold=1.5):
                 weighted_centroid = tuple(float(v) for v in (w_arr @ pos_arr) / w_sum)
 
     return {
-        'hotspot_indices': hotspot_idx,
-        'hotspot_positions': hotspot_positions,
-        'hotspot_centroid': weighted_centroid,
-        'hotspot_mean': hotspot_mean,
-        'baseline_mean': baseline_mean,
-        'fold_change': fold_change,
-        'all_values': values,
+        "hotspot_indices": hotspot_idx,
+        "hotspot_positions": hotspot_positions,
+        "hotspot_centroid": weighted_centroid,
+        "hotspot_mean": hotspot_mean,
+        "baseline_mean": baseline_mean,
+        "fold_change": fold_change,
+        "all_values": values,
     }

@@ -14,7 +14,7 @@ Functions:
 """
 
 import numpy as np
-from scipy import optimize, ndimage
+from scipy import ndimage, optimize
 
 
 def measure_activation(stack, roi_mask, reference_mask=None):
@@ -49,10 +49,10 @@ def measure_activation(stack, roi_mask, reference_mask=None):
         corrected = roi_int.copy()
 
     return {
-        'roi_intensity': roi_int,
-        'reference_intensity': ref_int,
-        'corrected': corrected,
-        'n_frames': n,
+        "roi_intensity": roi_int,
+        "reference_intensity": ref_int,
+        "corrected": corrected,
+        "n_frames": n,
     }
 
 
@@ -86,7 +86,7 @@ def signal_spread(stack, center_mask, timepoints=None, radial_bins=5):
     cy, cx = ndimage.center_of_mass(center_mask)
     h, w = stack.shape[1:]
     yy, xx = np.mgrid[:h, :w]
-    dist = np.sqrt((yy - cy)**2 + (xx - cx)**2)
+    dist = np.sqrt((yy - cy) ** 2 + (xx - cx) ** 2)
 
     # Compute max radius of center mask for ring sizing
     max_center_r = float(dist[center_mask].max()) if center_mask.sum() > 0 else 10
@@ -117,14 +117,14 @@ def signal_spread(stack, center_mask, timepoints=None, radial_bins=5):
         spread_rate = 0.0
 
     return {
-        'profiles': profiles,
-        'radii': radii,
-        'spread_rate': round(spread_rate, 4),
-        'timepoints': timepoints,
+        "profiles": profiles,
+        "radii": radii,
+        "spread_rate": round(spread_rate, 4),
+        "timepoints": timepoints,
     }
 
 
-def half_life(timepoints, intensity, method='exponential'):
+def half_life(timepoints, intensity, method="exponential"):
     """Estimate signal half-life from decay curve.
 
     Args:
@@ -144,28 +144,32 @@ def half_life(timepoints, intensity, method='exponential'):
 
     if len(t) < 3 or y[0] <= 0:
         return {
-            'half_life': 0.0, 'decay_rate': 0.0,
-            'r_squared': 0.0, 'fitted': y.copy(),
+            "half_life": 0.0,
+            "decay_rate": 0.0,
+            "r_squared": 0.0,
+            "fitted": y.copy(),
         }
 
-    if method == 'interpolation':
+    if method == "interpolation":
         half_val = y[0] / 2
         below = np.where(y <= half_val)[0]
         if len(below) > 0:
             idx = below[0]
             if idx > 0:
                 # Linear interpolation
-                t_half = t[idx-1] + (half_val - y[idx-1]) / (y[idx] - y[idx-1]) * (t[idx] - t[idx-1])
+                t_half = t[idx - 1] + (half_val - y[idx - 1]) / (y[idx] - y[idx - 1]) * (
+                    t[idx] - t[idx - 1]
+                )
             else:
                 t_half = t[0]
         else:
             t_half = t[-1]  # Never reached half
 
         return {
-            'half_life': round(float(t_half - t[0]), 4),
-            'decay_rate': 0.0,
-            'r_squared': 0.0,
-            'fitted': y.copy(),
+            "half_life": round(float(t_half - t[0]), 4),
+            "decay_rate": 0.0,
+            "r_squared": 0.0,
+            "fitted": y.copy(),
         }
 
     # Exponential fit: y = A * exp(-k * t) + C
@@ -177,18 +181,20 @@ def half_life(timepoints, intensity, method='exponential'):
 
     try:
         popt, _ = optimize.curve_fit(
-            model, t - t[0], y,
+            model,
+            t - t[0],
+            y,
             p0=[y0 - y_end, 0.1, y_end],
             bounds=([0, 1e-8, 0], [y0 * 2, 100, y0]),
             maxfev=5000,
         )
         A, k, C = popt
         fitted = model(t - t[0], *popt)
-        ss_res = np.sum((y - fitted)**2)
-        ss_tot = np.sum((y - y.mean())**2)
+        ss_res = np.sum((y - fitted) ** 2)
+        ss_tot = np.sum((y - y.mean()) ** 2)
         r2 = 1 - ss_res / ss_tot if ss_tot > 0 else 0.0
 
-        t_half = np.log(2) / k if k > 0 else float('inf')
+        t_half = np.log(2) / k if k > 0 else float("inf")
 
     except (RuntimeError, ValueError):
         k = 0.0
@@ -197,14 +203,14 @@ def half_life(timepoints, intensity, method='exponential'):
         fitted = y.copy()
 
     return {
-        'half_life': round(float(t_half), 4),
-        'decay_rate': round(float(k), 6),
-        'r_squared': round(float(max(r2, 0.0)), 4),
-        'fitted': fitted,
+        "half_life": round(float(t_half), 4),
+        "decay_rate": round(float(k), 6),
+        "r_squared": round(float(max(r2, 0.0)), 4),
+        "fitted": fitted,
     }
 
 
-def transport_rate(stack, roi_mask, direction='right', strip_width=10):
+def transport_rate(stack, roi_mask, direction="right", strip_width=10):
     """Measure directional transport from activation zone.
 
     Tracks how signal moves in a specific direction by measuring
@@ -235,14 +241,14 @@ def transport_rate(stack, roi_mask, direction='right', strip_width=10):
         img = stack[t]
         threshold = img.mean() + 2 * img.std()
 
-        if direction in ('right', 'left'):
+        if direction in ("right", "left"):
             # Profile along x-axis
-            profile = img[int(cy)-strip_width//2:int(cy)+strip_width//2, :].mean(axis=0)
+            profile = img[int(cy) - strip_width // 2 : int(cy) + strip_width // 2, :].mean(axis=0)
         else:
             # Profile along y-axis
-            profile = img[:, int(cx)-strip_width//2:int(cx)+strip_width//2].mean(axis=1)
+            profile = img[:, int(cx) - strip_width // 2 : int(cx) + strip_width // 2].mean(axis=1)
 
-        if direction in ('left', 'up'):
+        if direction in ("left", "up"):
             profile = profile[::-1]
 
         # Find wavefront (furthest pixel above threshold)
@@ -261,9 +267,9 @@ def transport_rate(stack, roi_mask, direction='right', strip_width=10):
         velocity = 0.0
 
     return {
-        'wavefront_positions': wavefronts,
-        'velocity': round(velocity, 4),
-        'peak_positions': peaks,
+        "wavefront_positions": wavefronts,
+        "velocity": round(velocity, 4),
+        "peak_positions": peaks,
     }
 
 
@@ -298,8 +304,8 @@ def activation_efficiency(pre_image, post_image, roi_mask):
     contrast = post_roi / post_bg if post_bg > 0 else 0.0
 
     return {
-        'efficiency': round(fold, 4),
-        'pre_intensity': round(pre_roi, 4),
-        'post_intensity': round(post_roi, 4),
-        'contrast_ratio': round(contrast, 4),
+        "efficiency": round(fold, 4),
+        "pre_intensity": round(pre_roi, 4),
+        "post_intensity": round(post_roi, 4),
+        "contrast_ratio": round(contrast, 4),
     }

@@ -24,8 +24,7 @@ from scipy import ndimage, optimize
 from skimage import filters, morphology
 
 
-def measure_confluency(image, method='otsu', threshold=None,
-                       min_cell_area=10, return_mask=False):
+def measure_confluency(image, method="otsu", threshold=None, min_cell_area=10, return_mask=False):
     """Measure cell confluency (fraction of FOV covered by cells).
 
     Args:
@@ -54,30 +53,34 @@ def measure_confluency(image, method='otsu', threshold=None,
     # Determine if cells are bright or dark
     # Use edge intensity vs center intensity
     h, w = image.shape
-    edge_vals = np.concatenate([
-        image[0, :], image[-1, :],
-        image[:, 0], image[:, -1],
-    ])
-    center = image[h // 4:3 * h // 4, w // 4:3 * w // 4]
+    edge_vals = np.concatenate(
+        [
+            image[0, :],
+            image[-1, :],
+            image[:, 0],
+            image[:, -1],
+        ]
+    )
+    center = image[h // 4 : 3 * h // 4, w // 4 : 3 * w // 4]
     cells_are_bright = np.median(center) > np.median(edge_vals)
 
     # Threshold
     smoothed = ndimage.gaussian_filter(image, sigma=2)
 
-    if method == 'otsu':
+    if method == "otsu":
         thresh = filters.threshold_otsu(smoothed)
-    elif method == 'adaptive':
+    elif method == "adaptive":
         block_size = max(11, min(h, w) // 8 | 1)
         thresh_img = filters.threshold_local(smoothed, block_size)
         mask = smoothed > thresh_img if cells_are_bright else smoothed < thresh_img
-    elif method == 'manual':
+    elif method == "manual":
         if threshold is None:
             raise ValueError("Must provide threshold for method='manual'")
         thresh = threshold
     else:
         raise ValueError(f"Unknown method: {method}")
 
-    if method != 'adaptive':
+    if method != "adaptive":
         if cells_are_bright:
             mask = smoothed > thresh
         else:
@@ -86,8 +89,7 @@ def measure_confluency(image, method='otsu', threshold=None,
     # Clean mask
     mask = ndimage.binary_fill_holes(mask)
     if mask.any() and min_cell_area > 1:
-        mask = morphology.remove_small_objects(
-            mask, max_size=min_cell_area - 1)
+        mask = morphology.remove_small_objects(mask, max_size=min_cell_area - 1)
 
     cell_area = int(mask.sum())
     total_area = mask.size
@@ -98,19 +100,19 @@ def measure_confluency(image, method='otsu', threshold=None,
     n_objects = labeled.max()
 
     result = {
-        'confluency': round(confluency, 4),
-        'confluency_percent': round(confluency * 100, 2),
-        'cell_area_px': cell_area,
-        'total_area_px': total_area,
-        'n_objects': n_objects,
+        "confluency": round(confluency, 4),
+        "confluency_percent": round(confluency * 100, 2),
+        "cell_area_px": cell_area,
+        "total_area_px": total_area,
+        "n_objects": n_objects,
     }
     if return_mask:
-        result['mask'] = mask
+        result["mask"] = mask
 
     return result
 
 
-def confluency_timecourse(images, method='otsu', min_cell_area=10):
+def confluency_timecourse(images, method="otsu", min_cell_area=10):
     """Track confluency over multiple frames.
 
     Args:
@@ -136,25 +138,24 @@ def confluency_timecourse(images, method='otsu', min_cell_area=10):
     n_objects_list = []
 
     for img in images:
-        result = measure_confluency(img, method=method,
-                                    min_cell_area=min_cell_area)
-        confluencies.append(result['confluency'])
-        n_objects_list.append(result['n_objects'])
+        result = measure_confluency(img, method=method, min_cell_area=min_cell_area)
+        confluencies.append(result["confluency"])
+        n_objects_list.append(result["n_objects"])
 
     initial = confluencies[0] if confluencies else 0
     final = confluencies[-1] if confluencies else 0
 
     return {
-        'confluencies': confluencies,
-        'n_objects': n_objects_list,
-        'initial': round(initial, 4),
-        'final': round(final, 4),
-        'change': round(final - initial, 4),
-        'max_confluency': round(max(confluencies) if confluencies else 0, 4),
+        "confluencies": confluencies,
+        "n_objects": n_objects_list,
+        "initial": round(initial, 4),
+        "final": round(final, 4),
+        "change": round(final - initial, 4),
+        "max_confluency": round(max(confluencies) if confluencies else 0, 4),
     }
 
 
-def growth_curve(timepoints, confluencies, model='logistic'):
+def growth_curve(timepoints, confluencies, model="logistic"):
     """Fit growth model to confluency data.
 
     Args:
@@ -178,51 +179,51 @@ def growth_curve(timepoints, confluencies, model='logistic'):
 
     if len(t) < 3:
         return {
-            'model': model,
-            'params': {},
-            'r_squared': 0.0,
-            'predicted': c.copy(),
-            'growth_rate': 0.0,
+            "model": model,
+            "params": {},
+            "r_squared": 0.0,
+            "predicted": c.copy(),
+            "growth_rate": 0.0,
         }
 
-    if model == 'logistic':
+    if model == "logistic":
+
         def logistic(t, K, r, t0):
             return K / (1 + np.exp(-r * (t - t0)))
 
         try:
             p0 = [max(c), 0.1, t[len(t) // 2]]
             bounds = ([0, 0, t[0] - 100], [1.5, 10, t[-1] + 100])
-            popt, _ = optimize.curve_fit(logistic, t, c, p0=p0,
-                                         bounds=bounds, maxfev=5000)
+            popt, _ = optimize.curve_fit(logistic, t, c, p0=p0, bounds=bounds, maxfev=5000)
             predicted = logistic(t, *popt)
-            params = {'K': popt[0], 'r': popt[1], 't0': popt[2]}
+            params = {"K": popt[0], "r": popt[1], "t0": popt[2]}
             rate = popt[1]
         except (RuntimeError, ValueError):
             predicted = np.full_like(c, np.mean(c))
             params = {}
             rate = 0.0
 
-    elif model == 'exponential':
+    elif model == "exponential":
+
         def exp_growth(t, C0, r):
             return C0 * np.exp(r * t)
 
         try:
             c_pos = np.maximum(c, 1e-6)
             p0 = [c_pos[0], 0.01]
-            popt, _ = optimize.curve_fit(exp_growth, t, c_pos, p0=p0,
-                                         maxfev=5000)
+            popt, _ = optimize.curve_fit(exp_growth, t, c_pos, p0=p0, maxfev=5000)
             predicted = exp_growth(t, *popt)
-            params = {'C0': popt[0], 'r': popt[1]}
+            params = {"C0": popt[0], "r": popt[1]}
             rate = popt[1]
         except (RuntimeError, ValueError):
             predicted = np.full_like(c, np.mean(c))
             params = {}
             rate = 0.0
 
-    elif model == 'linear':
+    elif model == "linear":
         coeffs = np.polyfit(t, c, 1)
         predicted = np.polyval(coeffs, t)
-        params = {'slope': coeffs[0], 'intercept': coeffs[1]}
+        params = {"slope": coeffs[0], "intercept": coeffs[1]}
         rate = coeffs[0]
 
     else:
@@ -234,15 +235,15 @@ def growth_curve(timepoints, confluencies, model='logistic'):
     r_squared = 1 - ss_res / ss_tot if ss_tot > 0 else 0.0
 
     return {
-        'model': model,
-        'params': {k: round(v, 6) for k, v in params.items()},
-        'r_squared': round(r_squared, 4),
-        'predicted': predicted,
-        'growth_rate': round(float(rate), 6),
+        "model": model,
+        "params": {k: round(v, 6) for k, v in params.items()},
+        "r_squared": round(r_squared, 4),
+        "predicted": predicted,
+        "growth_rate": round(float(rate), 6),
     }
 
 
-def doubling_time(timepoints, values, method='regression'):
+def doubling_time(timepoints, values, method="regression"):
     """Estimate population doubling time from growth data.
 
     Args:
@@ -265,21 +266,21 @@ def doubling_time(timepoints, values, method='regression'):
 
     if len(t) < 2 or np.all(v <= 0):
         return {
-            'doubling_time': None,
-            'growth_rate': 0.0,
-            'method': method,
-            'r_squared': 0.0,
+            "doubling_time": None,
+            "growth_rate": 0.0,
+            "method": method,
+            "r_squared": 0.0,
         }
 
-    if method == 'regression':
+    if method == "regression":
         # Log-linear regression
         pos = v > 0
         if pos.sum() < 2:
             return {
-                'doubling_time': None,
-                'growth_rate': 0.0,
-                'method': method,
-                'r_squared': 0.0,
+                "doubling_time": None,
+                "growth_rate": 0.0,
+                "method": method,
+                "r_squared": 0.0,
             }
         log_v = np.log(v[pos])
         t_pos = t[pos]
@@ -295,23 +296,23 @@ def doubling_time(timepoints, values, method='regression'):
         dt = np.log(2) / rate if rate > 0 else None
 
         return {
-            'doubling_time': round(dt, 4) if dt is not None else None,
-            'growth_rate': round(rate, 6),
-            'method': method,
-            'r_squared': round(r2, 4),
+            "doubling_time": round(dt, 4) if dt is not None else None,
+            "growth_rate": round(rate, 6),
+            "method": method,
+            "r_squared": round(r2, 4),
         }
 
-    elif method == 'direct':
+    elif method == "direct":
         # Find first time the value doubles from initial
         v0 = v[0]
         target = v0 * 2
         above = np.where(v >= target)[0]
         if len(above) == 0:
             return {
-                'doubling_time': None,
-                'growth_rate': 0.0,
-                'method': method,
-                'r_squared': 0.0,
+                "doubling_time": None,
+                "growth_rate": 0.0,
+                "method": method,
+                "r_squared": 0.0,
             }
         idx = above[0]
         if idx > 0:
@@ -328,10 +329,10 @@ def doubling_time(timepoints, values, method='regression'):
         rate = np.log(2) / dt if dt > 0 else 0.0
 
         return {
-            'doubling_time': round(float(dt), 4) if dt > 0 else None,
-            'growth_rate': round(float(rate), 6),
-            'method': method,
-            'r_squared': 0.0,
+            "doubling_time": round(float(dt), 4) if dt > 0 else None,
+            "growth_rate": round(float(rate), 6),
+            "method": method,
+            "r_squared": 0.0,
         }
 
     else:

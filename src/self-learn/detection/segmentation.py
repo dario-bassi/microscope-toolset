@@ -13,7 +13,7 @@ Functions:
 
 import numpy as np
 from scipy import ndimage
-from skimage import filters, morphology, measure, segmentation, feature
+from skimage import filters, measure, morphology, segmentation
 
 
 def watershed_split(binary_mask, min_distance=7):
@@ -34,9 +34,9 @@ def watershed_split(binary_mask, min_distance=7):
 
     if not binary.any():
         return {
-            'labeled': np.zeros_like(binary, dtype=int),
-            'n_cells': 0,
-            'centroids': [],
+            "labeled": np.zeros_like(binary, dtype=int),
+            "n_cells": 0,
+            "centroids": [],
         }
 
     # Distance transform — peaks at cell centers
@@ -44,8 +44,8 @@ def watershed_split(binary_mask, min_distance=7):
 
     # Find local maxima as markers
     from skimage.feature import peak_local_max
-    coords = peak_local_max(dist, min_distance=min_distance,
-                            labels=binary)
+
+    coords = peak_local_max(dist, min_distance=min_distance, labels=binary)
 
     if len(coords) == 0:
         # No peaks found — treat as single object
@@ -53,9 +53,9 @@ def watershed_split(binary_mask, min_distance=7):
         props = measure.regionprops(labeled)
         centroids = [(p.centroid[0], p.centroid[1]) for p in props]
         return {
-            'labeled': labeled,
-            'n_cells': len(props),
-            'centroids': centroids,
+            "labeled": labeled,
+            "n_cells": len(props),
+            "centroids": centroids,
         }
 
     # Create markers from peaks
@@ -70,14 +70,13 @@ def watershed_split(binary_mask, min_distance=7):
     centroids = [(p.centroid[0], p.centroid[1]) for p in props]
 
     return {
-        'labeled': labeled,
-        'n_cells': len(props),
-        'centroids': centroids,
+        "labeled": labeled,
+        "n_cells": len(props),
+        "centroids": centroids,
     }
 
 
-def adaptive_threshold(image, block_size=51, offset=0, method='gaussian',
-                       min_area=20):
+def adaptive_threshold(image, block_size=51, offset=0, method="gaussian", min_area=20):
     """Local adaptive thresholding for uneven illumination.
 
     Args:
@@ -95,33 +94,29 @@ def adaptive_threshold(image, block_size=51, offset=0, method='gaussian',
     """
     img = np.asarray(image, dtype=np.float64)
 
-    if method == 'gaussian':
-        thresh = filters.threshold_local(img, block_size,
-                                         method='gaussian', offset=offset)
-    elif method == 'mean':
-        thresh = filters.threshold_local(img, block_size,
-                                         method='mean', offset=offset)
+    if method == "gaussian":
+        thresh = filters.threshold_local(img, block_size, method="gaussian", offset=offset)
+    elif method == "mean":
+        thresh = filters.threshold_local(img, block_size, method="mean", offset=offset)
     else:
         raise ValueError(f"method must be 'gaussian' or 'mean', got '{method}'")
 
     binary = img > thresh
 
     if min_area > 0:
-        binary = morphology.remove_small_objects(binary,
-                                                 max_size=min_area)
+        binary = morphology.remove_small_objects(binary, max_size=min_area)
 
     labeled = measure.label(binary)
     n_objects = labeled.max()
 
     return {
-        'binary': binary,
-        'labeled': labeled,
-        'n_objects': n_objects,
+        "binary": binary,
+        "labeled": labeled,
+        "n_objects": n_objects,
     }
 
 
-def segment_by_markers(intensity_image, marker_image, threshold=None,
-                       min_area=20):
+def segment_by_markers(intensity_image, marker_image, threshold=None, min_area=20):
     """Marker-controlled watershed using a second channel.
 
     Use membrane/boundary channel to define cell boundaries, and
@@ -150,16 +145,15 @@ def segment_by_markers(intensity_image, marker_image, threshold=None,
 
     marker_binary = markers_img > threshold
     if min_area > 0:
-        marker_binary = morphology.remove_small_objects(marker_binary,
-                                                        max_size=min_area)
+        marker_binary = morphology.remove_small_objects(marker_binary, max_size=min_area)
 
     markers = measure.label(marker_binary)
 
     if markers.max() == 0:
         return {
-            'labeled': np.zeros_like(intensity, dtype=int),
-            'n_cells': 0,
-            'centroids': [],
+            "labeled": np.zeros_like(intensity, dtype=int),
+            "n_cells": 0,
+            "centroids": [],
         }
 
     # Use intensity image gradient as watershed landscape
@@ -170,9 +164,9 @@ def segment_by_markers(intensity_image, marker_image, threshold=None,
     centroids = [(p.centroid[0], p.centroid[1]) for p in props]
 
     return {
-        'labeled': labeled,
-        'n_cells': len(props),
-        'centroids': centroids,
+        "labeled": labeled,
+        "n_cells": len(props),
+        "centroids": centroids,
     }
 
 
@@ -197,9 +191,9 @@ def separate_touching(binary_mask, erosion_radius=2, min_area=20):
 
     if not binary.any():
         return {
-            'labeled': np.zeros_like(binary, dtype=int),
-            'n_cells': 0,
-            'centroids': [],
+            "labeled": np.zeros_like(binary, dtype=int),
+            "n_cells": 0,
+            "centroids": [],
         }
 
     # Erode to separate touching cells
@@ -225,7 +219,7 @@ def separate_touching(binary_mask, erosion_radius=2, min_area=20):
     centroids = [(p.centroid[0], p.centroid[1]) for p in props]
 
     return {
-        'labeled': labeled,
-        'n_cells': len(props),
-        'centroids': centroids,
+        "labeled": labeled,
+        "n_cells": len(props),
+        "centroids": centroids,
     }

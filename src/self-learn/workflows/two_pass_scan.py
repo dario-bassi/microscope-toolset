@@ -17,7 +17,8 @@ Functions:
     analysis_pass            -- Standard 40x per-cell analysis helper
 """
 
-from typing import Any, Callable, Generator, List, Optional, Sequence, Tuple
+from collections.abc import Callable, Sequence
+from typing import Any
 
 import numpy as np
 from scipy import ndimage
@@ -25,16 +26,16 @@ from skimage import filters, measure, morphology
 from skimage.feature import blob_log
 from useq import MDAEvent
 
-from ..hardware.core import run_events, set_objective, get_pixel_size
+from ..hardware.core import get_pixel_size, run_events, set_objective
 
 
 def build_position_events(
-    positions: Sequence[Tuple[float, float]],
+    positions: Sequence[tuple[float, float]],
     channel_config: str,
     channel_group: str,
     exposure: float = 50.0,
-    metadata: Optional[dict] = None,
-) -> List[MDAEvent]:
+    metadata: dict | None = None,
+) -> list[MDAEvent]:
     """Create MDAEvents for a list of stage positions.
 
     Args:
@@ -59,11 +60,11 @@ def build_position_events(
     meta = metadata or {}
     return [
         MDAEvent(
-            channel={'config': channel_config, 'group': channel_group},
+            channel={"config": channel_config, "group": channel_group},
             x_pos=float(x),
             y_pos=float(y),
             exposure=exposure,
-            metadata={'position_idx': i, 'position_xy': (x, y), **meta},
+            metadata={"position_idx": i, "position_xy": (x, y), **meta},
         )
         for i, (x, y) in enumerate(positions)
     ]
@@ -74,15 +75,15 @@ def two_pass_mda(
     survey_channel: str,
     analysis_channel: str,
     group: str,
-    survey_positions: Sequence[Tuple[float, float]],
-    analysis_positions: Sequence[Tuple[float, float]],
-    survey_callback: Optional[Callable] = None,
-    analysis_callback: Optional[Callable] = None,
+    survey_positions: Sequence[tuple[float, float]],
+    analysis_positions: Sequence[tuple[float, float]],
+    survey_callback: Callable | None = None,
+    analysis_callback: Callable | None = None,
     survey_mag: int = 10,
     analysis_mag: int = 40,
     survey_exposure: float = 50.0,
     analysis_exposure: float = 100.0,
-) -> Tuple[List, List]:
+) -> tuple[list, list]:
     """Execute a two-pass MDA acquisition: survey then per-object analysis.
 
     Pass 1 (Survey):
@@ -140,8 +141,11 @@ def two_pass_mda(
     # ── Pass 1: Survey ────────────────────────────────────────────────────────
     set_objective(core, survey_mag)
     survey_events = build_position_events(
-        survey_positions, survey_channel, group, survey_exposure,
-        metadata={'pass': 'survey', 'mag': survey_mag},
+        survey_positions,
+        survey_channel,
+        group,
+        survey_exposure,
+        metadata={"pass": "survey", "mag": survey_mag},
     )
 
     survey_frames = []
@@ -155,8 +159,11 @@ def two_pass_mda(
     # ── Pass 2: Analysis ──────────────────────────────────────────────────────
     set_objective(core, analysis_mag)
     analysis_events = build_position_events(
-        analysis_positions, analysis_channel, group, analysis_exposure,
-        metadata={'pass': 'analysis', 'mag': analysis_mag},
+        analysis_positions,
+        analysis_channel,
+        group,
+        analysis_exposure,
+        metadata={"pass": "analysis", "mag": analysis_mag},
     )
 
     analysis_frames = []
@@ -181,7 +188,7 @@ def detect_nuclei_log(
     min_area: int = 30,
     max_area: int = 8000,
     edge_margin_px: int = 15,
-) -> List[Tuple[float, float]]:
+) -> list[tuple[float, float]]:
     """Detect nuclei using multi-scale Laplacian-of-Gaussian blob detection.
 
     More robust than Otsu threshold for varying-intensity nuclei. Uses LoG
@@ -218,19 +225,29 @@ def detect_nuclei_log(
         return []
     gray_norm = (gray - g_min) / (g_max - g_min)
 
-    blobs = blob_log(gray_norm, min_sigma=min_sigma, max_sigma=max_sigma,
-                     num_sigma=8, threshold=log_threshold, overlap=0.3)
+    blobs = blob_log(
+        gray_norm,
+        min_sigma=min_sigma,
+        max_sigma=max_sigma,
+        num_sigma=8,
+        threshold=log_threshold,
+        overlap=0.3,
+    )
 
     positions = []
     for blob in blobs:
         cy, cx, sigma = blob
         cy, cx = float(cy), float(cx)
-        area = int(np.pi * sigma ** 2)
+        area = int(np.pi * sigma**2)
 
         if area < min_area or area > max_area:
             continue
-        if (cy < edge_margin_px or cy > H - edge_margin_px or
-                cx < edge_margin_px or cx > W - edge_margin_px):
+        if (
+            cy < edge_margin_px
+            or cy > H - edge_margin_px
+            or cx < edge_margin_px
+            or cx > W - edge_margin_px
+        ):
             continue
 
         world_x = stage_x + (cx - W / 2) * pixel_size
@@ -244,7 +261,7 @@ def survey_nuclei_pass(
     core,
     channel: str,
     group: str,
-    survey_positions: Sequence[Tuple[float, float]],
+    survey_positions: Sequence[tuple[float, float]],
     objective_mag: int = 10,
     min_nucleus_area: int = 80,
     max_nucleus_area: int = 8000,
@@ -253,7 +270,7 @@ def survey_nuclei_pass(
     log_min_sigma: float = 1.0,
     log_max_sigma: float = 8.0,
     log_threshold: float = 0.05,
-) -> List[Tuple[float, float]]:
+) -> list[tuple[float, float]]:
     """Standard 10x nucleus survey: returns list of nucleus world positions.
 
     Scans survey_positions, segments DAPI/nucleus channel, converts
@@ -292,10 +309,15 @@ def survey_nuclei_pass(
 
         if use_log:
             positions = detect_nuclei_log(
-                gray, sx, sy, ps,
-                min_sigma=log_min_sigma, max_sigma=log_max_sigma,
+                gray,
+                sx,
+                sy,
+                ps,
+                min_sigma=log_min_sigma,
+                max_sigma=log_max_sigma,
                 log_threshold=log_threshold,
-                min_area=min_nucleus_area, max_area=max_nucleus_area,
+                min_area=min_nucleus_area,
+                max_area=max_nucleus_area,
                 edge_margin_px=edge_margin_px,
             )
             world_positions.extend(positions)
@@ -316,8 +338,12 @@ def survey_nuclei_pass(
                 cy, cx = p.centroid
                 if p.area < min_nucleus_area or p.area > max_nucleus_area:
                     continue
-                if (cy < edge_margin_px or cy > H - edge_margin_px or
-                        cx < edge_margin_px or cx > W - edge_margin_px):
+                if (
+                    cy < edge_margin_px
+                    or cy > H - edge_margin_px
+                    or cx < edge_margin_px
+                    or cx > W - edge_margin_px
+                ):
                     continue
                 world_x = sx + (cx - W / 2) * ps
                 world_y = sy + (cy - H / 2) * ps
@@ -331,11 +357,11 @@ def analysis_pass(
     core,
     channel: str,
     group: str,
-    analysis_positions: Sequence[Tuple[float, float]],
+    analysis_positions: Sequence[tuple[float, float]],
     analysis_fn: Callable,
     objective_mag: int = 40,
     exposure: float = 100.0,
-) -> List[Any]:
+) -> list[Any]:
     """Execute MDA analysis pass at each position using a custom callback.
 
     Args:
@@ -366,8 +392,11 @@ def analysis_pass(
     """
     set_objective(core, objective_mag)
     events = build_position_events(
-        analysis_positions, channel, group, exposure,
-        metadata={'pass': 'analysis', 'mag': objective_mag},
+        analysis_positions,
+        channel,
+        group,
+        exposure,
+        metadata={"pass": "analysis", "mag": objective_mag},
     )
 
     results = []

@@ -13,12 +13,11 @@ Usage:
     save_overlay(img, cells, 'exp_001', 'detected_cells')
 """
 
-import numpy as np
 import cv2
-import os
+import numpy as np
 
 
-def save_snapshot(img, experiment_id, label='snapshot'):
+def save_snapshot(img, experiment_id, label="snapshot"):
     """Save a grayscale image as PNG with auto-scaling.
 
     Args:
@@ -29,18 +28,19 @@ def save_snapshot(img, experiment_id, label='snapshot'):
     Returns:
         str: Path to saved file.
     """
-    path = f'/tmp/{experiment_id}_{label}.png'
+    path = f"/tmp/{experiment_id}_{label}.png"  # nosec B108
     img_f = img.astype(float)
     if img_f.max() > img_f.min():
-        scaled = ((img_f - img_f.min()) / (img_f.max() - img_f.min()) * 255)
+        scaled = (img_f - img_f.min()) / (img_f.max() - img_f.min()) * 255
     else:
         scaled = np.zeros_like(img_f)
     cv2.imwrite(path, scaled.astype(np.uint8))
     return path
 
 
-def save_overlay(img, cells, experiment_id, label='overlay',
-                 marker_color=(0, 255, 0), marker_radius=8):
+def save_overlay(
+    img, cells, experiment_id, label="overlay", marker_color=(0, 255, 0), marker_radius=8
+):
     """Save image with cell centroids marked as circles.
 
     Args:
@@ -55,12 +55,12 @@ def save_overlay(img, cells, experiment_id, label='overlay',
     Returns:
         str: Path to saved file.
     """
-    path = f'/tmp/{experiment_id}_{label}.png'
+    path = f"/tmp/{experiment_id}_{label}.png"  # nosec B108
 
     # Auto-scale to 8-bit
     img_f = img.astype(float)
     if img_f.max() > img_f.min():
-        scaled = ((img_f - img_f.min()) / (img_f.max() - img_f.min()) * 255)
+        scaled = (img_f - img_f.min()) / (img_f.max() - img_f.min()) * 255
     else:
         scaled = np.zeros_like(img_f)
     gray = scaled.astype(np.uint8)
@@ -70,8 +70,8 @@ def save_overlay(img, cells, experiment_id, label='overlay',
 
     for c in cells:
         if isinstance(c, dict):
-            cx = int(c.get('x', c.get('px', 0)))
-            cy = int(c.get('y', c.get('py', 0)))
+            cx = int(c.get("x", c.get("px", 0)))
+            cy = int(c.get("y", c.get("py", 0)))
         elif isinstance(c, (tuple, list)):
             cx, cy = int(c[0]), int(c[1])
         else:
@@ -82,7 +82,7 @@ def save_overlay(img, cells, experiment_id, label='overlay',
     return path
 
 
-def save_composite(images, titles, experiment_id, label='composite', cols=3):
+def save_composite(images, titles, experiment_id, label="composite", cols=3):
     """Save a composite image showing multiple channels side by side.
 
     Args:
@@ -95,7 +95,7 @@ def save_composite(images, titles, experiment_id, label='composite', cols=3):
     Returns:
         str: Path to saved file.
     """
-    path = f'/tmp/{experiment_id}_{label}.png'
+    path = f"/tmp/{experiment_id}_{label}.png"  # nosec B108
 
     n = len(images)
     rows = (n + cols - 1) // cols
@@ -104,7 +104,7 @@ def save_composite(images, titles, experiment_id, label='composite', cols=3):
 
     canvas = np.zeros((rows * (h + title_h), cols * w, 3), dtype=np.uint8)
 
-    for i, (img, title) in enumerate(zip(images, titles)):
+    for i, (img, title) in enumerate(zip(images, titles, strict=False)):
         r, c = divmod(i, cols)
         y0 = r * (h + title_h)
         x0 = c * w
@@ -112,19 +112,20 @@ def save_composite(images, titles, experiment_id, label='composite', cols=3):
         # Scale image
         img_f = img.astype(float)
         if img_f.max() > img_f.min():
-            scaled = ((img_f - img_f.min()) / (img_f.max() - img_f.min()) * 255)
+            scaled = (img_f - img_f.min()) / (img_f.max() - img_f.min()) * 255
         else:
             scaled = np.zeros_like(img_f)
         gray = scaled.astype(np.uint8)
         bgr = cv2.cvtColor(gray, cv2.COLOR_GRAY2BGR)
 
         # Title bar
-        canvas[y0:y0 + title_h, x0:x0 + w] = (40, 40, 40)
-        cv2.putText(canvas, title, (x0 + 5, y0 + 20),
-                    cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 255, 255), 1)
+        canvas[y0 : y0 + title_h, x0 : x0 + w] = (40, 40, 40)
+        cv2.putText(
+            canvas, title, (x0 + 5, y0 + 20), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 255, 255), 1
+        )
 
         # Image
-        canvas[y0 + title_h:y0 + title_h + h, x0:x0 + w] = bgr
+        canvas[y0 + title_h : y0 + title_h + h, x0 : x0 + w] = bgr
 
     cv2.imwrite(path, canvas)
     return path

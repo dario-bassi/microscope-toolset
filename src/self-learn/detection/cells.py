@@ -4,14 +4,21 @@ Provides detection functions that work through standard pymmcore-plus API.
 Supports brightfield and fluorescence imaging across multiple magnifications.
 """
 
-import numpy as np
 import cv2
+import numpy as np
 from scipy import ndimage
 from scipy.ndimage import binary_fill_holes
 
 
-def detect_cells(image, threshold_sigma=2.5, min_area_px=30, max_area_px=None,
-                 pixel_size_um=1.0, fill_holes=True, global_stats=None):
+def detect_cells(
+    image,
+    threshold_sigma=2.5,
+    min_area_px=30,
+    max_area_px=None,
+    pixel_size_um=1.0,
+    fill_holes=True,
+    global_stats=None,
+):
     """Detect cells in a grayscale image using adaptive thresholding.
 
     Args:
@@ -45,9 +52,7 @@ def detect_cells(image, threshold_sigma=2.5, min_area_px=30, max_area_px=None,
     thresh = mean_val + threshold_sigma * std_val
     binary = (img > thresh).astype(np.uint8)
 
-    num_labels, labels, stats, centroids = cv2.connectedComponentsWithStats(
-        binary, connectivity=8
-    )
+    num_labels, labels, stats, centroids = cv2.connectedComponentsWithStats(binary, connectivity=8)
 
     cells = []
     for i in range(1, num_labels):
@@ -81,7 +86,7 @@ def detect_cells(image, threshold_sigma=2.5, min_area_px=30, max_area_px=None,
             cnt = max(contours, key=cv2.contourArea)
             perimeter = cv2.arcLength(cnt, True)
             if perimeter > 0:
-                circularity = 4 * np.pi * area / (perimeter ** 2)
+                circularity = 4 * np.pi * area / (perimeter**2)
             hull = cv2.convexHull(cnt)
             hull_area = cv2.contourArea(hull)
             if hull_area > 0:
@@ -92,27 +97,33 @@ def detect_cells(image, threshold_sigma=2.5, min_area_px=30, max_area_px=None,
                 if axes[0] > 0:
                     eccentricity = 1.0 - min(axes) / max(axes)
 
-        cells.append({
-            "centroid_px": (float(cx), float(cy)),
-            "area_px": int(area),
-            "area_um2": float(area * pixel_size_um ** 2),
-            "peak": float(region_vals.max()),
-            "mean_intensity": float(region_vals.mean()),
-            "intensity_std": float(region_vals.std()),
-            "bbox": (int(x), int(y), int(w), int(h)),
-            "circularity": float(circularity),
-            "solidity": float(solidity),
-            "eccentricity": float(eccentricity),
-        })
+        cells.append(
+            {
+                "centroid_px": (float(cx), float(cy)),
+                "area_px": int(area),
+                "area_um2": float(area * pixel_size_um**2),
+                "peak": float(region_vals.max()),
+                "mean_intensity": float(region_vals.mean()),
+                "intensity_std": float(region_vals.std()),
+                "bbox": (int(x), int(y), int(w), int(h)),
+                "circularity": float(circularity),
+                "solidity": float(solidity),
+                "eccentricity": float(eccentricity),
+            }
+        )
 
     cells.sort(key=lambda c: c["area_px"], reverse=True)
     return cells
 
 
-def detect_cells_multichannel(core, brightfield_config="brightfield",
-                              nucleus_config="nucleus-channel",
-                              config_group=None,
-                              threshold_sigma=2.5, min_area_px=20):
+def detect_cells_multichannel(
+    core,
+    brightfield_config="brightfield",
+    nucleus_config="nucleus-channel",
+    config_group=None,
+    threshold_sigma=2.5,
+    min_area_px=20,
+):
     """Detect cells using nucleus fluorescence for clean separation.
 
     Nucleus channel gives one bright spot per cell — no rings, no clumps.
@@ -131,14 +142,16 @@ def detect_cells_multichannel(core, brightfield_config="brightfield",
     """
     if config_group is None:
         from ..hardware.config import get_config
+
         cfg = get_config(core)
         config_group = cfg.channel_group
     if config_group is not None:
         core.setConfig(config_group, nucleus_config)
     core.snapImage()
     img = core.getImage()
-    return detect_cells(img, threshold_sigma=threshold_sigma,
-                        min_area_px=min_area_px, fill_holes=False)
+    return detect_cells(
+        img, threshold_sigma=threshold_sigma, min_area_px=min_area_px, fill_holes=False
+    )
 
 
 def find_bright_centroid(image, threshold_sigma=2.5, window=64):
@@ -236,10 +249,12 @@ def detect_blobs_log(image, sigma=4, peak_thresh=1.0, min_intensity=0):
         cy = float(ys.mean())
         cx = float(xs.mean())
         resp = float(log[ys[0], xs[0]])
-        blobs.append({
-            'centroid_px': (cx, cy),
-            'log_response': resp,
-        })
+        blobs.append(
+            {
+                "centroid_px": (cx, cy),
+                "log_response": resp,
+            }
+        )
     return blobs
 
 
@@ -289,8 +304,7 @@ def detect_nuclei_hae(image, min_area_px=8, sigma=4, peak_thresh=0.5):
         List of dicts with 'centroid_px' (cx, cy) and 'log_response'.
     """
     hema = extract_hematoxylin(image)
-    return detect_blobs_log(hema, sigma=sigma, peak_thresh=peak_thresh,
-                            min_intensity=0)
+    return detect_blobs_log(hema, sigma=sigma, peak_thresh=peak_thresh, min_intensity=0)
 
 
 def detect_point_source(image, smooth_sigma=3):
@@ -378,8 +392,9 @@ def merge_nearby_centroids(centroids, threshold_px=6):
     return merged
 
 
-def count_objects_dt(mask, filter_size=5, dt_threshold=1.5,
-                     fill_holes=True, return_centroids=False):
+def count_objects_dt(
+    mask, filter_size=5, dt_threshold=1.5, fill_holes=True, return_centroids=False
+):
     """Count objects in a binary mask using distance transform local maxima.
 
     Splits touching/overlapping objects by finding peaks in the distance
@@ -441,9 +456,9 @@ def watershed_split(mask, min_distance=7, dt_threshold=2.0, fill_holes=True):
             centroids: List of (cx, cy) tuples.
             areas: List of areas in pixels.
     """
-    from skimage.segmentation import watershed
-    from skimage.feature import peak_local_max
     from scipy.ndimage import distance_transform_edt
+    from skimage.feature import peak_local_max
+    from skimage.segmentation import watershed
 
     mask = np.asarray(mask, dtype=bool)
     if fill_holes:
@@ -451,17 +466,16 @@ def watershed_split(mask, min_distance=7, dt_threshold=2.0, fill_holes=True):
 
     if not mask.any():
         return {
-            'labeled': np.zeros_like(mask, dtype=int),
-            'n_objects': 0,
-            'centroids': [],
-            'areas': [],
+            "labeled": np.zeros_like(mask, dtype=int),
+            "n_objects": 0,
+            "centroids": [],
+            "areas": [],
         }
 
     dt = distance_transform_edt(mask)
 
     # Find seeds as local maxima of distance transform
-    coords = peak_local_max(dt, min_distance=min_distance,
-                            threshold_abs=dt_threshold, labels=mask)
+    coords = peak_local_max(dt, min_distance=min_distance, threshold_abs=dt_threshold, labels=mask)
     if len(coords) == 0:
         # No peaks found — treat entire mask as one object
         labeled, n = ndimage.label(mask)
@@ -472,10 +486,10 @@ def watershed_split(mask, min_distance=7, dt_threshold=2.0, fill_holes=True):
             centroids.append((float(xs.mean()), float(ys.mean())))
             areas.append(int(len(xs)))
         return {
-            'labeled': labeled,
-            'n_objects': n,
-            'centroids': centroids,
-            'areas': areas,
+            "labeled": labeled,
+            "n_objects": n,
+            "centroids": centroids,
+            "areas": areas,
         }
 
     # Create seed markers
@@ -497,15 +511,16 @@ def watershed_split(mask, min_distance=7, dt_threshold=2.0, fill_holes=True):
         areas.append(int(len(xs)))
 
     return {
-        'labeled': labeled,
-        'n_objects': len(centroids),
-        'centroids': centroids,
-        'areas': areas,
+        "labeled": labeled,
+        "n_objects": len(centroids),
+        "centroids": centroids,
+        "areas": areas,
     }
 
 
-def count_nuclei_fluorescence(image, threshold=12, min_area=10, min_mean=15,
-                               edge_margin=3, return_details=False):
+def count_nuclei_fluorescence(
+    image, threshold=12, min_area=10, min_mean=15, edge_margin=3, return_details=False
+):
     """Count fluorescent nuclei (bright on dark) with proper edge handling.
 
     Proven pattern from ch406 (9/10): threshold → CC → filter by area and
@@ -546,28 +561,30 @@ def count_nuclei_fluorescence(image, threshold=12, min_area=10, min_mean=15,
             continue
 
         cy, cx = p.centroid
-        is_edge = (cy < edge_margin or cy >= h - edge_margin or
-                   cx < edge_margin or cx >= w - edge_margin)
+        is_edge = (
+            cy < edge_margin or cy >= h - edge_margin or cx < edge_margin or cx >= w - edge_margin
+        )
 
-        cells.append({
-            'centroid_px': (float(cx), float(cy)),
-            'area': p.area,
-            'mean_intensity': float(p.intensity_mean),
-            'max_intensity': int(p.intensity_max),
-            'eccentricity': float(p.eccentricity),
-            'is_edge': is_edge,
-        })
+        cells.append(
+            {
+                "centroid_px": (float(cx), float(cy)),
+                "area": p.area,
+                "mean_intensity": float(p.intensity_mean),
+                "max_intensity": int(p.intensity_max),
+                "eccentricity": float(p.eccentricity),
+                "is_edge": is_edge,
+            }
+        )
 
     total = len(cells)
-    interior = sum(1 for c in cells if not c['is_edge'])
+    interior = sum(1 for c in cells if not c["is_edge"])
 
     if return_details:
         return total, interior, cells
     return total
 
 
-def count_bacteria_bf(image, threshold=10, magnification=40, fov_px=512,
-                      return_centroids=False):
+def count_bacteria_bf(image, threshold=10, magnification=40, fov_px=512, return_centroids=False):
     """Count bacteria in a brightfield image with magnification-aware size filtering.
 
     Bacteria are DARK on gray background. Detects by inverting (median - pixel)
@@ -642,10 +659,18 @@ def count_bacteria_bf(image, threshold=10, magnification=40, fov_px=512,
     return count
 
 
-def count_nuclei_adaptive(image, block_size=31, offset=-2, min_area=8,
-                          watershed_min_dist=3, dt_threshold=1.0,
-                          log_sigma=2.5, log_thresh=0.5,
-                          edge_margin=3, return_details=False):
+def count_nuclei_adaptive(
+    image,
+    block_size=31,
+    offset=-2,
+    min_area=8,
+    watershed_min_dist=3,
+    dt_threshold=1.0,
+    log_sigma=2.5,
+    log_thresh=0.5,
+    edge_margin=3,
+    return_details=False,
+):
     """Count densely packed nuclei using adaptive threshold + watershed + LoG.
 
     Designed for cases where nuclei are small (5-10 px diameter) and closely
@@ -674,16 +699,15 @@ def count_nuclei_adaptive(image, block_size=31, offset=-2, min_area=8,
         If return_details: dict with count_adaptive, count_log,
             count_consensus, centroids_watershed, centroids_log.
     """
-    from skimage import filters, morphology, measure
-    from skimage.segmentation import watershed as ws_func
+    from skimage import filters, measure, morphology
     from skimage.feature import peak_local_max
+    from skimage.segmentation import watershed as ws_func
 
     img = np.asarray(image, dtype=np.float64)
     h, w = img.shape
 
     # Step 1: Adaptive local threshold
-    thresh_map = filters.threshold_local(img, block_size,
-                                          method='gaussian', offset=offset)
+    thresh_map = filters.threshold_local(img, block_size, method="gaussian", offset=offset)
     binary = img > thresh_map
 
     # Clean small objects
@@ -693,8 +717,9 @@ def count_nuclei_adaptive(image, block_size=31, offset=-2, min_area=8,
     # Step 2: Watershed splitting
     if binary.any():
         dt = ndimage.distance_transform_edt(binary)
-        coords = peak_local_max(dt, min_distance=watershed_min_dist,
-                                threshold_abs=dt_threshold, labels=binary)
+        coords = peak_local_max(
+            dt, min_distance=watershed_min_dist, threshold_abs=dt_threshold, labels=binary
+        )
         if len(coords) > 0:
             markers = np.zeros_like(binary, dtype=int)
             for i, (y, x) in enumerate(coords, 1):
@@ -743,13 +768,13 @@ def count_nuclei_adaptive(image, block_size=31, offset=-2, min_area=8,
 
     if return_details:
         return {
-            'count_adaptive': count_ws,
-            'count_log': count_log,
-            'count_consensus': count_consensus,
-            'centroids_watershed': centroids_ws,
-            'centroids_log': centroids_log,
-            'binary_mask': binary,
-            'labeled_watershed': labeled_ws,
+            "count_adaptive": count_ws,
+            "count_log": count_log,
+            "count_consensus": count_consensus,
+            "centroids_watershed": centroids_ws,
+            "centroids_log": centroids_log,
+            "binary_mask": binary,
+            "labeled_watershed": labeled_ws,
         }
     return count_consensus
 

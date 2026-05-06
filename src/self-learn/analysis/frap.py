@@ -54,10 +54,10 @@ def measure_frap_curve(stack, roi_mask, reference_mask=None):
         corrected = raw.copy()
 
     return {
-        'raw_intensity': raw,
-        'corrected_intensity': corrected,
-        'reference_intensity': ref,
-        'n_frames': n_frames,
+        "raw_intensity": raw,
+        "corrected_intensity": corrected,
+        "reference_intensity": ref,
+        "n_frames": n_frames,
     }
 
 
@@ -101,10 +101,10 @@ def normalize_frap(intensity, bleach_frame, pre_bleach_frames=None):
     bleach_depth = (pre_mean - bleach_val) / pre_mean if pre_mean > 0 else 0.0
 
     return {
-        'normalized': normalized,
-        'pre_bleach_intensity': round(pre_mean, 4),
-        'bleach_intensity': round(bleach_val, 4),
-        'bleach_depth': round(max(bleach_depth, 0.0), 4),
+        "normalized": normalized,
+        "pre_bleach_intensity": round(pre_mean, 4),
+        "bleach_intensity": round(bleach_val, 4),
+        "bleach_depth": round(max(bleach_depth, 0.0), 4),
     }
 
 
@@ -137,8 +137,11 @@ def fit_frap_recovery(timepoints, intensity, bleach_frame):
 
     if len(t_post) < 3:
         return {
-            'tau': 0.0, 'half_time': 0.0, 'plateau': 0.0,
-            'r_squared': 0.0, 'fitted': intensity.copy(),
+            "tau": 0.0,
+            "half_time": 0.0,
+            "plateau": 0.0,
+            "r_squared": 0.0,
+            "fitted": intensity.copy(),
         }
 
     i0 = float(i_post[0])
@@ -149,7 +152,9 @@ def fit_frap_recovery(timepoints, intensity, bleach_frame):
 
     try:
         popt, _ = optimize.curve_fit(
-            model, t_post, i_post,
+            model,
+            t_post,
+            i_post,
             p0=[i_inf_est, float(t_post[-1]) / 3],
             bounds=([0, 1e-6], [np.inf, np.inf]),
             maxfev=5000,
@@ -158,8 +163,8 @@ def fit_frap_recovery(timepoints, intensity, bleach_frame):
 
         # R² calculation
         fitted_post = model(t_post, *popt)
-        ss_res = np.sum((i_post - fitted_post)**2)
-        ss_tot = np.sum((i_post - i_post.mean())**2)
+        ss_res = np.sum((i_post - fitted_post) ** 2)
+        ss_tot = np.sum((i_post - i_post.mean()) ** 2)
         r2 = 1 - ss_res / ss_tot if ss_tot > 0 else 0.0
 
         # Full fitted curve
@@ -176,11 +181,11 @@ def fit_frap_recovery(timepoints, intensity, bleach_frame):
     half_time = tau * np.log(2)
 
     return {
-        'tau': round(float(tau), 4),
-        'half_time': round(float(half_time), 4),
-        'plateau': round(float(i_inf), 4),
-        'r_squared': round(float(max(r2, 0.0)), 4),
-        'fitted': fitted,
+        "tau": round(float(tau), 4),
+        "half_time": round(float(half_time), 4),
+        "plateau": round(float(i_inf), 4),
+        "r_squared": round(float(max(r2, 0.0)), 4),
+        "fitted": fitted,
     }
 
 
@@ -223,13 +228,13 @@ def mobile_fraction(normalized_curve, bleach_frame):
     mf = max(min(mf, 1.0), 0.0)
 
     return {
-        'mobile_fraction': round(mf, 4),
-        'immobile_fraction': round(1.0 - mf, 4),
-        'plateau': round(plateau, 4),
+        "mobile_fraction": round(mf, 4),
+        "immobile_fraction": round(1.0 - mf, 4),
+        "plateau": round(plateau, 4),
     }
 
 
-def diffusion_coefficient(half_time, roi_radius, geometry='circle'):
+def diffusion_coefficient(half_time, roi_radius, geometry="circle"):
     """Estimate effective diffusion coefficient from FRAP recovery.
 
     Uses the Soumpasis (1983) model for circular bleach spots:
@@ -249,24 +254,24 @@ def diffusion_coefficient(half_time, roi_radius, geometry='circle'):
     """
     if half_time <= 0 or roi_radius <= 0:
         return {
-            'D_eff': 0.0,
-            'roi_radius': float(roi_radius),
-            'half_time': float(half_time),
-            'model': geometry,
+            "D_eff": 0.0,
+            "roi_radius": float(roi_radius),
+            "half_time": float(half_time),
+            "model": geometry,
         }
 
-    if geometry == 'circle':
+    if geometry == "circle":
         # Soumpasis model
         D = 0.224 * roi_radius**2 / half_time
-    elif geometry == 'strip':
+    elif geometry == "strip":
         # Strip geometry: D = w² / (4 * t_1/2)
         D = roi_radius**2 / (4 * half_time)
     else:
         raise ValueError(f"Unknown geometry: {geometry}")
 
     return {
-        'D_eff': round(float(D), 6),
-        'roi_radius': float(roi_radius),
-        'half_time': float(half_time),
-        'model': geometry,
+        "D_eff": round(float(D), 6),
+        "roi_radius": float(roi_radius),
+        "half_time": float(half_time),
+        "model": geometry,
     }

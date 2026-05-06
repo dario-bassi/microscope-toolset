@@ -40,9 +40,9 @@ def skeletonize_network(mask, min_branch_length=0):
     total_length = _skeleton_length(skel)
 
     return {
-        'skeleton': skel,
-        'total_length': round(total_length, 2),
-        'n_pixels': int(skel.sum()),
+        "skeleton": skel,
+        "total_length": round(total_length, 2),
+        "n_pixels": int(skel.sum()),
     }
 
 
@@ -63,11 +63,8 @@ def detect_junctions(skeleton):
     """
     skel = np.asarray(skeleton, dtype=bool)
     # Count neighbors for each skeleton pixel
-    kernel = np.array([[1, 1, 1],
-                       [1, 0, 1],
-                       [1, 1, 1]], dtype=int)
-    neighbor_count = ndimage.convolve(skel.astype(int), kernel,
-                                      mode='constant', cval=0)
+    kernel = np.array([[1, 1, 1], [1, 0, 1], [1, 1, 1]], dtype=int)
+    neighbor_count = ndimage.convolve(skel.astype(int), kernel, mode="constant", cval=0)
     junction_mask = skel & (neighbor_count >= 3)
 
     # Cluster nearby junction pixels (they often come in groups of 2-3)
@@ -78,9 +75,9 @@ def detect_junctions(skeleton):
         positions.append((int(np.mean(ys)), int(np.mean(xs))))
 
     return {
-        'positions': positions,
-        'n_junctions': len(positions),
-        'junction_mask': junction_mask,
+        "positions": positions,
+        "n_junctions": len(positions),
+        "junction_mask": junction_mask,
     }
 
 
@@ -99,19 +96,16 @@ def detect_endpoints(skeleton):
             endpoint_mask: 2D binary array.
     """
     skel = np.asarray(skeleton, dtype=bool)
-    kernel = np.array([[1, 1, 1],
-                       [1, 0, 1],
-                       [1, 1, 1]], dtype=int)
-    neighbor_count = ndimage.convolve(skel.astype(int), kernel,
-                                      mode='constant', cval=0)
+    kernel = np.array([[1, 1, 1], [1, 0, 1], [1, 1, 1]], dtype=int)
+    neighbor_count = ndimage.convolve(skel.astype(int), kernel, mode="constant", cval=0)
     endpoint_mask = skel & (neighbor_count == 1)
 
-    positions = list(zip(*np.where(endpoint_mask)))
+    positions = list(zip(*np.where(endpoint_mask), strict=False))
 
     return {
-        'positions': positions,
-        'n_endpoints': len(positions),
-        'endpoint_mask': endpoint_mask,
+        "positions": positions,
+        "n_endpoints": len(positions),
+        "endpoint_mask": endpoint_mask,
     }
 
 
@@ -143,7 +137,7 @@ def measure_network(mask, pixel_size=1.0, min_branch_length=5):
 
     # Skeletonize
     skel_info = skeletonize_network(mask, min_branch_length)
-    skeleton = skel_info['skeleton']
+    skeleton = skel_info["skeleton"]
 
     # Junctions and endpoints
     junc = detect_junctions(skeleton)
@@ -154,16 +148,16 @@ def measure_network(mask, pixel_size=1.0, min_branch_length=5):
 
     # Branch lengths
     branch_lengths = []
-    for b in branches['branches']:
-        branch_lengths.append(float(b['length']) * pixel_size)
+    for b in branches["branches"]:
+        branch_lengths.append(float(b["length"]) * pixel_size)
 
     mean_bl = float(np.mean(branch_lengths)) if branch_lengths else 0.0
 
     # Mesh count: Euler number approach
     # For a planar graph: V - E + F = 2 (Euler formula)
     # meshes = E - V + 1 for connected graph
-    n_v = junc['n_junctions'] + endp['n_endpoints']
-    n_e = branches['n_branches']
+    n_v = junc["n_junctions"] + endp["n_endpoints"]
+    n_e = branches["n_branches"]
     n_meshes = max(n_e - n_v + 1, 0)
 
     # Network area and lacunarity
@@ -179,16 +173,16 @@ def measure_network(mask, pixel_size=1.0, min_branch_length=5):
         lacunarity = 1.0
 
     return {
-        'total_length': round(skel_info['total_length'] * pixel_size, 2),
-        'n_branches': branches['n_branches'],
-        'n_junctions': junc['n_junctions'],
-        'n_endpoints': endp['n_endpoints'],
-        'mean_branch_length': round(mean_bl, 2),
-        'n_meshes': n_meshes,
-        'network_area': round(network_area, 2),
-        'lacunarity': round(lacunarity, 4),
-        'junction_positions': junc['positions'],
-        'endpoint_positions': endp['positions'],
+        "total_length": round(skel_info["total_length"] * pixel_size, 2),
+        "n_branches": branches["n_branches"],
+        "n_junctions": junc["n_junctions"],
+        "n_endpoints": endp["n_endpoints"],
+        "mean_branch_length": round(mean_bl, 2),
+        "n_meshes": n_meshes,
+        "network_area": round(network_area, 2),
+        "lacunarity": round(lacunarity, 4),
+        "junction_positions": junc["positions"],
+        "endpoint_positions": endp["positions"],
     }
 
 
@@ -214,16 +208,12 @@ def segment_branches(skeleton):
     skel = np.asarray(skeleton, dtype=bool)
 
     # Find junction pixels
-    kernel = np.array([[1, 1, 1],
-                       [1, 0, 1],
-                       [1, 1, 1]], dtype=int)
-    neighbor_count = ndimage.convolve(skel.astype(int), kernel,
-                                      mode='constant', cval=0)
+    kernel = np.array([[1, 1, 1], [1, 0, 1], [1, 1, 1]], dtype=int)
+    neighbor_count = ndimage.convolve(skel.astype(int), kernel, mode="constant", cval=0)
     junction_mask = skel & (neighbor_count >= 3)
 
     # Dilate junctions slightly to split cleanly
-    dilated_junc = ndimage.binary_dilation(junction_mask,
-                                           structure=np.ones((3, 3)))
+    dilated_junc = ndimage.binary_dilation(junction_mask, structure=np.ones((3, 3)))
 
     # Remove junctions from skeleton
     branches_mask = skel & ~dilated_junc
@@ -236,25 +226,27 @@ def segment_branches(skeleton):
         length = _skeleton_length(branch_pixels)
 
         # Find endpoints of this branch
-        nc = ndimage.convolve(branch_pixels.astype(int), kernel,
-                              mode='constant', cval=0)
+        nc = ndimage.convolve(branch_pixels.astype(int), kernel, mode="constant", cval=0)
         ep_mask = branch_pixels & (nc == 1)
-        endpoints = list(zip(*np.where(ep_mask)))
+        endpoints = list(zip(*np.where(ep_mask), strict=False))
 
-        branches.append({
-            'label': i,
-            'length': round(length, 2),
-            'pixels': n_px,
-            'endpoints': endpoints,
-        })
+        branches.append(
+            {
+                "label": i,
+                "length": round(length, 2),
+                "pixels": n_px,
+                "endpoints": endpoints,
+            }
+        )
 
     return {
-        'n_branches': n_branches,
-        'branches': branches,
+        "n_branches": n_branches,
+        "branches": branches,
     }
 
 
 # ── Private helpers ──────────────────────────────────────────────────────
+
 
 def _skeleton_length(skeleton):
     """Compute skeleton length accounting for diagonal connectivity.
@@ -266,17 +258,11 @@ def _skeleton_length(skeleton):
         return 0.0
 
     # Count orthogonal and diagonal neighbors
-    kernel_ortho = np.array([[0, 1, 0],
-                              [1, 0, 1],
-                              [0, 1, 0]], dtype=int)
-    kernel_diag = np.array([[1, 0, 1],
-                             [0, 0, 0],
-                             [1, 0, 1]], dtype=int)
+    kernel_ortho = np.array([[0, 1, 0], [1, 0, 1], [0, 1, 0]], dtype=int)
+    kernel_diag = np.array([[1, 0, 1], [0, 0, 0], [1, 0, 1]], dtype=int)
 
-    n_ortho = ndimage.convolve(skel.astype(int), kernel_ortho,
-                                mode='constant', cval=0)
-    n_diag = ndimage.convolve(skel.astype(int), kernel_diag,
-                               mode='constant', cval=0)
+    n_ortho = ndimage.convolve(skel.astype(int), kernel_ortho, mode="constant", cval=0)
+    n_diag = ndimage.convolve(skel.astype(int), kernel_diag, mode="constant", cval=0)
 
     # Each connection is counted twice (once from each end)
     total_ortho = (skel * n_ortho).sum() / 2.0
@@ -290,13 +276,10 @@ def _prune_short_branches(skeleton, min_length):
     skel = skeleton.copy()
 
     # Find junction and endpoint pixels
-    kernel = np.array([[1, 1, 1],
-                       [1, 0, 1],
-                       [1, 1, 1]], dtype=int)
+    kernel = np.array([[1, 1, 1], [1, 0, 1], [1, 1, 1]], dtype=int)
 
     for _ in range(min_length):
-        neighbor_count = ndimage.convolve(skel.astype(int), kernel,
-                                          mode='constant', cval=0)
+        neighbor_count = ndimage.convolve(skel.astype(int), kernel, mode="constant", cval=0)
         # Endpoints with 1 neighbor
         endpoints = skel & (neighbor_count == 1)
         if not endpoints.any():

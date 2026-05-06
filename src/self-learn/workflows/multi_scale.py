@@ -19,12 +19,14 @@ Typical usage:
 
 import numpy as np
 
+from ..hardware.config import _mag_to_pixel_size, get_config
 from ..hardware.core import (
-    snap, move_to, get_position, set_objective, get_objective,
-    fov_size, pixel_to_world, world_to_pixel,
+    get_position,
+    move_to,
+    pixel_to_world,
+    set_objective,
+    snap,
 )
-from ..hardware.config import get_config, _mag_to_pixel_size
-
 
 # ---------------------------------------------------------------------------
 # Magnification selection
@@ -32,14 +34,14 @@ from ..hardware.config import get_config, _mag_to_pixel_size
 
 # Expected object diameters (µm) by sample type
 OBJECT_SIZES = {
-    'bacteria':    (0.5, 3),
-    'yeast':       (3, 8),
-    'mammalian':   (10, 30),
-    'neuron_soma': (10, 25),
-    'tissue':      (5, 15),        # nuclei in tissue
-    'colony':      (50, 500),
-    'worm':        (50, 1000),
-    'spheroid':    (100, 500),
+    "bacteria": (0.5, 3),
+    "yeast": (3, 8),
+    "mammalian": (10, 30),
+    "neuron_soma": (10, 25),
+    "tissue": (5, 15),  # nuclei in tissue
+    "colony": (50, 500),
+    "worm": (50, 1000),
+    "spheroid": (100, 500),
 }
 
 # Available standard magnifications, ascending
@@ -74,24 +76,24 @@ def suggest_magnification(object_size_um, target_pixels=40, available_mags=None)
         object_px = object_size_um / pixel_size
         if object_px >= target_pixels:
             return {
-                'mag': mag,
-                'object_px': round(object_px, 1),
-                'pixel_size_um': pixel_size,
-                'fov_um': 512 * pixel_size,
+                "mag": mag,
+                "object_px": round(object_px, 1),
+                "pixel_size_um": pixel_size,
+                "fov_um": 512 * pixel_size,
             }
 
     # If even highest mag is insufficient, use it anyway
     highest = max(mags)
     pixel_size = _mag_to_pixel_size(highest)
     return {
-        'mag': highest,
-        'object_px': round(object_size_um / pixel_size, 1),
-        'pixel_size_um': pixel_size,
-        'fov_um': 512 * pixel_size,
+        "mag": highest,
+        "object_px": round(object_size_um / pixel_size, 1),
+        "pixel_size_um": pixel_size,
+        "fov_um": 512 * pixel_size,
     }
 
 
-def scale_params(mag, sample_type='mammalian'):
+def scale_params(mag, sample_type="mammalian"):
     """Return detection parameters scaled for a magnification.
 
     Provides sensible defaults for threshold, minimum area, and edge
@@ -129,17 +131,18 @@ def scale_params(mag, sample_type='mammalian'):
         threshold_sigma = 2.0
 
     return {
-        'threshold_sigma': threshold_sigma,
-        'min_area_px': min_area_px,
-        'max_area_px': max_area_px,
-        'edge_margin_px': edge_margin,
-        'pixel_size_um': pixel_size,
+        "threshold_sigma": threshold_sigma,
+        "min_area_px": min_area_px,
+        "max_area_px": max_area_px,
+        "edge_margin_px": edge_margin,
+        "pixel_size_um": pixel_size,
     }
 
 
 # ---------------------------------------------------------------------------
 # Overview workflow
 # ---------------------------------------------------------------------------
+
 
 def overview_first(core, channel=None, detect_fn=None, overview_mag=10):
     """Snap a mandatory 10x overview before any high-mag work.
@@ -182,13 +185,13 @@ def overview_first(core, channel=None, detect_fn=None, overview_mag=10):
     has_signal = img_std > 5  # more than flat background
 
     result = {
-        'image': img,
-        'mag': overview_mag,
-        'position': pos,
-        'fov_um': fov_um,
-        'pixel_size_um': pixel_size,
-        'mean_intensity': mean_int,
-        'has_signal': has_signal,
+        "image": img,
+        "mag": overview_mag,
+        "position": pos,
+        "fov_um": fov_um,
+        "pixel_size_um": pixel_size,
+        "mean_intensity": mean_int,
+        "has_signal": has_signal,
     }
 
     # Optional detection
@@ -203,14 +206,14 @@ def overview_first(core, channel=None, detect_fn=None, overview_mag=10):
                 wx, wy = pixel_to_world(x, y, pos[0], pos[1], config=cfg)
                 centroids_world.append([wx, wy])
             centroids_world = np.array(centroids_world)
-            result['centroids_world'] = centroids_world
-            result['cell_count'] = len(centroids_world)
+            result["centroids_world"] = centroids_world
+            result["cell_count"] = len(centroids_world)
         else:
-            result['centroids_world'] = np.empty((0, 2))
-            result['cell_count'] = 0
+            result["centroids_world"] = np.empty((0, 2))
+            result["cell_count"] = 0
     else:
-        result['centroids_world'] = None
-        result['cell_count'] = None
+        result["centroids_world"] = None
+        result["cell_count"] = None
 
     return result
 
@@ -219,8 +222,16 @@ def overview_first(core, channel=None, detect_fn=None, overview_mag=10):
 # Multi-scale measurement
 # ---------------------------------------------------------------------------
 
-def multi_scale_measure(core, targets, zoom_mag=40, detect_fn=None,
-                        measure_fn=None, channel=None, return_to_overview=True):
+
+def multi_scale_measure(
+    core,
+    targets,
+    zoom_mag=40,
+    detect_fn=None,
+    measure_fn=None,
+    channel=None,
+    return_to_overview=True,
+):
     """Visit target positions at high magnification and measure.
 
     Args:
@@ -254,23 +265,23 @@ def multi_scale_measure(core, targets, zoom_mag=40, detect_fn=None,
         img = snap(core, channel=channel)
 
         entry = {
-            'position': (x, y),
-            'image': img,
-            'mag': zoom_mag,
-            'pixel_size_um': pixel_size,
+            "position": (x, y),
+            "image": img,
+            "mag": zoom_mag,
+            "pixel_size_um": pixel_size,
         }
 
         if detect_fn is not None:
             centroids = detect_fn(img)
-            entry['detections'] = centroids if centroids is not None else []
+            entry["detections"] = centroids if centroids is not None else []
         else:
-            entry['detections'] = None
+            entry["detections"] = None
 
         if measure_fn is not None:
             measurements = measure_fn(img)
-            entry['measurements'] = measurements
+            entry["measurements"] = measurements
         else:
-            entry['measurements'] = None
+            entry["measurements"] = None
 
         results.append(entry)
 
@@ -303,29 +314,28 @@ def validate_object_size(object_size_um, mag, min_pixels=10, ideal_pixels=30):
 
     if object_px < min_pixels:
         return {
-            'object_px': round(object_px, 1),
-            'status': 'too_small',
-            'message': f'Object is {object_px:.0f}px at {mag}x — need higher mag',
-            'suggested_mag': suggestion['mag'],
+            "object_px": round(object_px, 1),
+            "status": "too_small",
+            "message": f"Object is {object_px:.0f}px at {mag}x — need higher mag",
+            "suggested_mag": suggestion["mag"],
         }
     elif object_px > 300:
         return {
-            'object_px': round(object_px, 1),
-            'status': 'use_lower_mag',
-            'message': f'Object is {object_px:.0f}px at {mag}x — could use lower mag',
-            'suggested_mag': suggestion['mag'],
+            "object_px": round(object_px, 1),
+            "status": "use_lower_mag",
+            "message": f"Object is {object_px:.0f}px at {mag}x — could use lower mag",
+            "suggested_mag": suggestion["mag"],
         }
     else:
         return {
-            'object_px': round(object_px, 1),
-            'status': 'ok',
-            'message': f'Object is {object_px:.0f}px at {mag}x — good resolution',
-            'suggested_mag': mag,
+            "object_px": round(object_px, 1),
+            "status": "ok",
+            "message": f"Object is {object_px:.0f}px at {mag}x — good resolution",
+            "suggested_mag": mag,
         }
 
 
-def multi_position_events(positions, channels, exposure=50.0,
-                          z_pos=None, channel_group=None):
+def multi_position_events(positions, channels, exposure=50.0, z_pos=None, channel_group=None):
     """Generate MDA events for multi-position, multi-channel acquisition.
 
     Creates a flat list of MDAEvent objects visiting each position with
@@ -351,17 +361,17 @@ def multi_position_events(positions, channels, exposure=50.0,
 
     events = []
     for x, y in positions:
-        for ch, exp in zip(channels, exposures):
+        for ch, exp in zip(channels, exposures, strict=False):
             kwargs = {
-                'x_pos': float(x),
-                'y_pos': float(y),
-                'channel': {'config': ch},
-                'exposure': exp,
+                "x_pos": float(x),
+                "y_pos": float(y),
+                "channel": {"config": ch},
+                "exposure": exp,
             }
             if channel_group is not None:
-                kwargs['channel'] = {'config': ch, 'group': channel_group}
+                kwargs["channel"] = {"config": ch, "group": channel_group}
             if z_pos is not None:
-                kwargs['z_pos'] = float(z_pos)
+                kwargs["z_pos"] = float(z_pos)
             events.append(MDAEvent(**kwargs))
 
     return events

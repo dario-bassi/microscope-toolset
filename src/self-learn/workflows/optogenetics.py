@@ -22,14 +22,13 @@ Real microscope note:
 """
 
 import numpy as np
+from scipy.ndimage import gaussian_filter, label
 from useq import MDAEvent, SLMImage
-from scipy.ndimage import label, gaussian_filter
 
-from ..hardware.core import run_events, make_slm_circle
+from ..hardware.core import make_slm_circle, run_events
 
 
-def detect_somata_fluorescence(image, min_area=50, edge_margin=20, sigma=3.0,
-                               percentile=95):
+def detect_somata_fluorescence(image, min_area=50, edge_margin=20, sigma=3.0, percentile=95):
     """Detect neuron somata from a structural fluorescence image.
 
     Uses high-threshold connected components on Gaussian-smoothed image.
@@ -75,13 +74,16 @@ def detect_somata_fluorescence(image, min_area=50, edge_margin=20, sigma=3.0,
             continue
 
         radius = float(np.sqrt(area / np.pi))
-        somata.append({
-            'id': len(somata),
-            'cx': cx, 'cy': cy,
-            'area': area,
-            'label': i,
-            'radius': radius,
-        })
+        somata.append(
+            {
+                "id": len(somata),
+                "cx": cx,
+                "cy": cy,
+                "area": area,
+                "label": i,
+                "radius": radius,
+            }
+        )
 
     return somata
 
@@ -110,20 +112,29 @@ def make_soma_rois(somata, labeled_image, dilation=1.3, min_radius=12):
     rois = {}
 
     for s in somata:
-        base_mask = labeled_image == s['label']
-        roi_r = max(min_radius, s['radius'] * dilation)
-        circ = ((xx - s['cx'])**2 + (yy - s['cy'])**2) <= roi_r**2
-        rois[s['id']] = base_mask | circ
+        base_mask = labeled_image == s["label"]
+        roi_r = max(min_radius, s["radius"] * dilation)
+        circ = ((xx - s["cx"]) ** 2 + (yy - s["cy"]) ** 2) <= roi_r**2
+        rois[s["id"]] = base_mask | circ
 
     return rois
 
 
-def slm_stimulation_experiment(core, channel_config, channel_group,
-                               target_center, slm_radius=20,
-                               n_baseline=8, n_stim=10, n_recovery=8,
-                               baseline_interval=2.0, stim_interval=1.5,
-                               recovery_interval=2.0, exposure=100.0,
-                               decay_wait=0.0):
+def slm_stimulation_experiment(
+    core,
+    channel_config,
+    channel_group,
+    target_center,
+    slm_radius=20,
+    n_baseline=8,
+    n_stim=10,
+    n_recovery=8,
+    baseline_interval=2.0,
+    stim_interval=1.5,
+    recovery_interval=2.0,
+    exposure=100.0,
+    decay_wait=0.0,
+):
     """Run a complete baseline → stimulation → recovery experiment.
 
     Uses MDA events with min_start_time for proper temporal spacing.
@@ -155,44 +166,41 @@ def slm_stimulation_experiment(core, channel_config, channel_group,
 
     ch_kw = {"config": channel_config, "group": channel_group}
     data = {
-        'baseline_frames': [],
-        'stim_frames': [],
-        'recovery_frames': [],
+        "baseline_frames": [],
+        "stim_frames": [],
+        "recovery_frames": [],
     }
-    current_phase = ['baseline']
+    current_phase = ["baseline"]
 
     def on_frame(img, event):
-        key = current_phase[0] + '_frames'
+        key = current_phase[0] + "_frames"
         data[key].append(img.copy())
 
     # Phase 1: Baseline
-    current_phase[0] = 'baseline'
+    current_phase[0] = "baseline"
     baseline_events = [
-        MDAEvent(channel=ch_kw, exposure=exposure,
-                 min_start_time=i * baseline_interval)
+        MDAEvent(channel=ch_kw, exposure=exposure, min_start_time=i * baseline_interval)
         for i in range(n_baseline)
     ]
     run_events(core, baseline_events, on_frame=on_frame)
 
     # Phase 2: Stimulation
-    current_phase[0] = 'stim'
+    current_phase[0] = "stim"
     cx, cy = int(target_center[0]), int(target_center[1])
     slm_mask = make_slm_circle((cx, cy), slm_radius, size=512)
     slm = SLMImage(data=slm_mask, device="SLM")
 
     stim_events = [
-        MDAEvent(channel=ch_kw, exposure=exposure, slm_image=slm,
-                 min_start_time=i * stim_interval)
+        MDAEvent(channel=ch_kw, exposure=exposure, slm_image=slm, min_start_time=i * stim_interval)
         for i in range(n_stim)
     ]
     run_events(core, stim_events, on_frame=on_frame)
 
     # Phase 3: Recovery
-    current_phase[0] = 'recovery'
+    current_phase[0] = "recovery"
     core.setSLMPixelsTo("SLM", 0)
     recovery_events = [
-        MDAEvent(channel=ch_kw, exposure=exposure,
-                 min_start_time=i * recovery_interval)
+        MDAEvent(channel=ch_kw, exposure=exposure, min_start_time=i * recovery_interval)
         for i in range(n_recovery)
     ]
     run_events(core, recovery_events, on_frame=on_frame)
@@ -212,42 +220,51 @@ def analyze_stimulation(data, soma_rois, target_id):
         Dict mapping soma_id -> dict with baseline_mean, stim_mean,
         recovery_mean, dff_mean, dff_peak, is_target, traces.
     """
-    from ..analysis.intensity import extract_roi_traces, compute_dff
+    from ..analysis.intensity import extract_roi_traces
 
     results = {}
 
-    for phase_key in ['baseline_frames', 'stim_frames', 'recovery_frames']:
+    for phase_key in ["baseline_frames", "stim_frames", "recovery_frames"]:
         frames = data[phase_key]
         if not frames:
             continue
         traces = extract_roi_traces(frames, soma_rois)
         for sid, trace in traces.items():
             if sid not in results:
-                results[sid] = {'is_target': (sid == target_id)}
-            short_key = phase_key.replace('_frames', '')
-            results[sid][f'{short_key}_trace'] = trace
-            results[sid][f'{short_key}_mean'] = float(trace.mean())
+                results[sid] = {"is_target": (sid == target_id)}
+            short_key = phase_key.replace("_frames", "")
+            results[sid][f"{short_key}_trace"] = trace
+            results[sid][f"{short_key}_mean"] = float(trace.mean())
 
     # Compute ΔF/F using baseline as F₀
-    for sid, r in results.items():
-        bl = r.get('baseline_mean', 0)
-        st = r.get('stim_mean', 0)
+    for _sid, r in results.items():
+        bl = r.get("baseline_mean", 0)
+        st = r.get("stim_mean", 0)
         if bl > 1:
-            r['dff_mean'] = (st - bl) / bl
-            st_trace = r.get('stim_trace', np.array([st]))
-            r['dff_peak'] = float((st_trace.max() - bl) / bl)
+            r["dff_mean"] = (st - bl) / bl
+            st_trace = r.get("stim_trace", np.array([st]))
+            r["dff_peak"] = float((st_trace.max() - bl) / bl)
         else:
-            r['dff_mean'] = st - bl
-            r['dff_peak'] = st - bl
+            r["dff_mean"] = st - bl
+            r["dff_peak"] = st - bl
 
     return results
 
 
-def connectivity_mapping(core, soma_positions, channel_config='nucleus-channel',
-                         channel_group='Fake', slm_radius=20, exposure=50,
-                         n_post_frames=6, post_interval=0.1, refractory_wait=4.0,
-                         soma_roi_radius=15, resting_threshold=50,
-                         response_threshold=120):
+def connectivity_mapping(
+    core,
+    soma_positions,
+    channel_config="nucleus-channel",
+    channel_group="Fake",
+    slm_radius=20,
+    exposure=50,
+    n_post_frames=6,
+    post_interval=0.1,
+    refractory_wait=4.0,
+    soma_roi_radius=15,
+    resting_threshold=50,
+    response_threshold=120,
+):
     """Map directed functional connectivity by stimulating each neuron.
 
     For each neuron in turn: apply SLM stimulation, capture rapid post-stim
@@ -279,7 +296,8 @@ def connectivity_mapping(core, soma_positions, channel_config='nucleus-channel',
             n_connections: int, total directed edges.
     """
     import time
-    from ..hardware.core import snap, make_slm_circle, run_events
+
+    from ..hardware.core import make_slm_circle, run_events, snap
 
     n_neurons = len(soma_positions)
     ch_kw = {"config": channel_config, "group": channel_group}
@@ -294,8 +312,8 @@ def connectivity_mapping(core, soma_positions, channel_config='nucleus-channel',
             y0, y1 = max(0, ri - r), min(h, ri + r + 1)
             x0, x1 = max(0, ci - r), min(w, ci + r + 1)
             patch = img[y0:y1, x0:x1].astype(float)
-            yy, xx = np.mgrid[0:patch.shape[0], 0:patch.shape[1]]
-            mask = ((xx - (ci - x0))**2 + (yy - (ri - y0))**2) <= r**2
+            yy, xx = np.mgrid[0 : patch.shape[0], 0 : patch.shape[1]]
+            mask = ((xx - (ci - x0)) ** 2 + (yy - (ri - y0)) ** 2) <= r**2
             vals.append(float(patch[mask].mean()) if mask.any() else 0.0)
         return vals
 
@@ -309,12 +327,9 @@ def connectivity_mapping(core, soma_positions, channel_config='nucleus-channel',
         baseline_vals = _measure_somata(baseline_img)
 
         # SLM stimulation
-        slm_mask = make_slm_circle((cx, cy), radius=slm_radius, size=512,
-                                   core=core)
+        slm_mask = make_slm_circle((cx, cy), radius=slm_radius, size=512, core=core)
         slm = SLMImage(data=slm_mask, device="SLM")
-        stim_frames = run_events(core, [
-            MDAEvent(channel=ch_kw, exposure=exposure, slm_image=slm)
-        ])
+        stim_frames = run_events(core, [MDAEvent(channel=ch_kw, exposure=exposure, slm_image=slm)])
         stim_vals = _measure_somata(stim_frames[0][0])
 
         # Post-stim cascade frames
@@ -325,9 +340,9 @@ def connectivity_mapping(core, soma_positions, channel_config='nucleus-channel',
             post_vals_list.append(_measure_somata(post_img))
 
         all_data[stim_idx] = {
-            'baseline': baseline_vals,
-            'stim': stim_vals,
-            'post': post_vals_list,
+            "baseline": baseline_vals,
+            "stim": stim_vals,
+            "post": post_vals_list,
         }
 
         time.sleep(refractory_wait)
@@ -338,8 +353,8 @@ def connectivity_mapping(core, soma_positions, channel_config='nucleus-channel',
     adjacency = {i: [] for i in range(n_neurons)}
     for stim_idx in range(n_neurons):
         data = all_data[stim_idx]
-        baseline = data['baseline']
-        post = data['post']
+        baseline = data["baseline"]
+        post = data["post"]
         if not post:
             continue
         post1 = post[0]
@@ -371,7 +386,7 @@ def connectivity_mapping(core, soma_positions, channel_config='nucleus-channel',
     n_connections = sum(len(v) for v in adjacency.values())
 
     return {
-        'adjacency': adjacency,
-        'stim_data': all_data,
-        'n_connections': n_connections,
+        "adjacency": adjacency,
+        "stim_data": all_data,
+        "n_connections": n_connections,
     }

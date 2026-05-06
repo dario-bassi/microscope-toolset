@@ -5,11 +5,10 @@ common in tissue pathology and cell biology.
 """
 
 import numpy as np
-from skimage import measure, morphology, filters
+from skimage import filters, measure, morphology
 
 
-def segment_nuclei(image, method='otsu', min_area=20, max_area=None,
-                   fill_holes=True):
+def segment_nuclei(image, method="otsu", min_area=20, max_area=None, fill_holes=True):
     """Segment nuclei from a fluorescence image.
 
     Args:
@@ -31,15 +30,16 @@ def segment_nuclei(image, method='otsu', min_area=20, max_area=None,
 
     if isinstance(method, (int, float)):
         thresh = float(method)
-    elif method == 'otsu':
+    elif method == "otsu":
         thresh = float(filters.threshold_otsu(img))
-    elif method == 'li':
+    elif method == "li":
         thresh = float(filters.threshold_li(img))
-    elif method == 'triangle':
+    elif method == "triangle":
         thresh = float(filters.threshold_triangle(img))
     else:
-        raise ValueError(f"Unknown method: {method}. Use 'otsu', 'li', "
-                         "'triangle', or a numeric threshold.")
+        raise ValueError(
+            f"Unknown method: {method}. Use 'otsu', 'li', " "'triangle', or a numeric threshold."
+        )
 
     binary = img > thresh
 
@@ -58,15 +58,14 @@ def segment_nuclei(image, method='otsu', min_area=20, max_area=None,
     props = measure.regionprops(labeled, intensity_image=image)
 
     return {
-        'labeled': labeled,
-        'props': props,
-        'binary': binary,
-        'threshold': thresh,
+        "labeled": labeled,
+        "props": props,
+        "binary": binary,
+        "threshold": thresh,
     }
 
 
-def measure_objects(props, pixel_size=1.0, edge_margin=10,
-                    image_shape=None):
+def measure_objects(props, pixel_size=1.0, edge_margin=10, image_shape=None):
     """Extract morphometric measurements from regionprops.
 
     Args:
@@ -96,33 +95,34 @@ def measure_objects(props, pixel_size=1.0, edge_margin=10,
 
         if image_shape is not None:
             h, w = image_shape
-            if (cy < edge_margin or cy > h - edge_margin or
-                    cx < edge_margin or cx > w - edge_margin):
+            if cy < edge_margin or cy > h - edge_margin or cx < edge_margin or cx > w - edge_margin:
                 continue
 
         area_px = p.area
-        area_um2 = area_px * pixel_size ** 2
+        area_um2 = area_px * pixel_size**2
         d_um = 2 * np.sqrt(area_px / np.pi) * pixel_size
         major = p.axis_major_length * pixel_size
         minor = p.axis_minor_length * pixel_size
 
-        results.append({
-            'centroid_px': (cy, cx),
-            'centroid_um': (cy * pixel_size, cx * pixel_size),
-            'area_px': int(area_px),
-            'area_um2': float(area_um2),
-            'diameter_um': float(d_um),
-            'major_um': float(major),
-            'minor_um': float(minor),
-            'eccentricity': float(p.eccentricity),
-            'solidity': float(p.solidity),
-            'label': p.label,
-        })
+        results.append(
+            {
+                "centroid_px": (cy, cx),
+                "centroid_um": (cy * pixel_size, cx * pixel_size),
+                "area_px": int(area_px),
+                "area_um2": float(area_um2),
+                "diameter_um": float(d_um),
+                "major_um": float(major),
+                "minor_um": float(minor),
+                "eccentricity": float(p.eccentricity),
+                "solidity": float(p.solidity),
+                "label": p.label,
+            }
+        )
 
     return results
 
 
-def population_stats(measurements, key='diameter_um'):
+def population_stats(measurements, key="diameter_um"):
     """Compute population statistics for a morphometric measurement.
 
     Args:
@@ -136,30 +136,37 @@ def population_stats(measurements, key='diameter_um'):
     values = np.array([m[key] for m in measurements])
     n = len(values)
     if n == 0:
-        return {'count': 0, 'mean': 0, 'std': 0, 'median': 0,
-                'min': 0, 'max': 0, 'cv': 0, 'percentiles': {}}
+        return {
+            "count": 0,
+            "mean": 0,
+            "std": 0,
+            "median": 0,
+            "min": 0,
+            "max": 0,
+            "cv": 0,
+            "percentiles": {},
+        }
 
     pcts = {}
     for p in [10, 25, 50, 75, 90, 95]:
-        pcts[f'P{p}'] = float(np.percentile(values, p))
+        pcts[f"P{p}"] = float(np.percentile(values, p))
 
     mean = float(values.mean())
     std = float(values.std())
 
     return {
-        'count': n,
-        'mean': mean,
-        'std': std,
-        'median': float(np.median(values)),
-        'min': float(values.min()),
-        'max': float(values.max()),
-        'cv': std / mean if mean > 0 else 0.0,
-        'percentiles': pcts,
+        "count": n,
+        "mean": mean,
+        "std": std,
+        "median": float(np.median(values)),
+        "min": float(values.min()),
+        "max": float(values.max()),
+        "cv": std / mean if mean > 0 else 0.0,
+        "percentiles": pcts,
     }
 
 
-def identify_outliers(measurements, key='diameter_um', method='zscore',
-                      threshold=2.0):
+def identify_outliers(measurements, key="diameter_um", method="zscore", threshold=2.0):
     """Identify outlier objects in a population.
 
     Args:
@@ -183,23 +190,23 @@ def identify_outliers(measurements, key='diameter_um', method='zscore',
 
     if n < 3:
         return {
-            'outlier_indices': [],
-            'outlier_values': [],
-            'threshold_value': float('inf'),
-            'method': method,
-            'normal_mean': float(values.mean()) if n > 0 else 0,
-            'normal_std': float(values.std()) if n > 0 else 0,
+            "outlier_indices": [],
+            "outlier_values": [],
+            "threshold_value": float("inf"),
+            "method": method,
+            "normal_mean": float(values.mean()) if n > 0 else 0,
+            "normal_std": float(values.std()) if n > 0 else 0,
         }
 
-    if method == 'zscore':
+    if method == "zscore":
         mean = values.mean()
         std = values.std()
         thresh_val = mean + threshold * std
-    elif method == 'iqr':
+    elif method == "iqr":
         q25, q75 = np.percentile(values, [25, 75])
         iqr = q75 - q25
         thresh_val = q75 + threshold * iqr
-    elif method == 'ratio':
+    elif method == "ratio":
         median = np.median(values)
         thresh_val = threshold * median
     else:
@@ -211,12 +218,12 @@ def identify_outliers(measurements, key='diameter_um', method='zscore',
     normal_vals = values[values <= thresh_val]
 
     return {
-        'outlier_indices': outlier_idx,
-        'outlier_values': outlier_vals,
-        'threshold_value': float(thresh_val),
-        'method': method,
-        'normal_mean': float(normal_vals.mean()) if len(normal_vals) > 0 else 0,
-        'normal_std': float(normal_vals.std()) if len(normal_vals) > 0 else 0,
+        "outlier_indices": outlier_idx,
+        "outlier_values": outlier_vals,
+        "threshold_value": float(thresh_val),
+        "method": method,
+        "normal_mean": float(normal_vals.mean()) if len(normal_vals) > 0 else 0,
+        "normal_std": float(normal_vals.std()) if len(normal_vals) > 0 else 0,
     }
 
 
@@ -246,27 +253,35 @@ def measure_rois(image, positions, radius=10, names=None):
         pixels = image[mask]
         name = names[i] if names is not None else f"roi_{i}"
         if len(pixels) == 0:
-            results.append({
-                'name': name, 'center': (row, col), 'radius': radius,
-                'mean': 0.0, 'std': 0.0, 'max': 0.0, 'min': 0.0,
-                'n_pixels': 0,
-            })
+            results.append(
+                {
+                    "name": name,
+                    "center": (row, col),
+                    "radius": radius,
+                    "mean": 0.0,
+                    "std": 0.0,
+                    "max": 0.0,
+                    "min": 0.0,
+                    "n_pixels": 0,
+                }
+            )
         else:
-            results.append({
-                'name': name,
-                'center': (row, col),
-                'radius': radius,
-                'mean': float(pixels.mean()),
-                'std': float(pixels.std()),
-                'max': float(pixels.max()),
-                'min': float(pixels.min()),
-                'n_pixels': int(len(pixels)),
-            })
+            results.append(
+                {
+                    "name": name,
+                    "center": (row, col),
+                    "radius": radius,
+                    "mean": float(pixels.mean()),
+                    "std": float(pixels.std()),
+                    "max": float(pixels.max()),
+                    "min": float(pixels.min()),
+                    "n_pixels": int(len(pixels)),
+                }
+            )
     return results
 
 
-def to_world_coords(measurements, stage_x, stage_y, pixel_size,
-                     image_center=(256, 256)):
+def to_world_coords(measurements, stage_x, stage_y, pixel_size, image_center=(256, 256)):
     """Add world coordinates to measurement dicts.
 
     Args:
@@ -280,7 +295,7 @@ def to_world_coords(measurements, stage_x, stage_y, pixel_size,
     """
     cy_center, cx_center = image_center
     for m in measurements:
-        py, px = m['centroid_px']
-        m['world_x'] = stage_x + (px - cx_center) * pixel_size
-        m['world_y'] = stage_y + (py - cy_center) * pixel_size
+        py, px = m["centroid_px"]
+        m["world_x"] = stage_x + (px - cx_center) * pixel_size
+        m["world_y"] = stage_y + (py - cy_center) * pixel_size
     return measurements

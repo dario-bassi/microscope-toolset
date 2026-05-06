@@ -1,14 +1,14 @@
 import logging
-from src.postqrl.connection import DBConnection
+
+from psycopg2.extras import Json
+
 from pgvector.psycopg2 import register_vector
-from typing import List
+from src.postqrl.connection import DBConnection
 
 logger = logging.getLogger(__name__)
-from psycopg2.extras import Json
 
 
 class LoggerDB:
-
     def __init__(self, connection: DBConnection):
         self.connection = connection
         self.initialize()
@@ -51,8 +51,7 @@ class LoggerDB:
             logger.error("The database contains already a collection called %s", collection_name)
         try:
             with connection.cursor() as cur:
-                cur.execute(f"""
-                CREATE TABLE {collection_name}(
+                cur.execute(f"""                CREATE TABLE {collection_name}(
                 id SERIAL PRIMARY KEY,
                 prompt TEXT NOT NULL,
                 output TEXT NOT NULL,
@@ -76,16 +75,24 @@ class LoggerDB:
         connection = self.connection.get_connect()
 
         if collection_name not in self.list_collection():
-            logger.error(f"The collection {collection_name} doesn't exist or is not present into the database.")
+            logger.error(
+                f"The collection {collection_name} doesn't exist or is not present into the database."
+            )
 
         try:
             with connection.cursor() as cur:
-                cur.execute(f"""
-                SELECT * FROM {collection_name}
+                cur.execute(f"""                SELECT * FROM {collection_name}
                 """)
                 return [
-                    {"prompt": row[1], "output": row[2], "feedback": row[3], "category": row[4], "embedding": row[5]}
-                    for row in cur.fetchall()]
+                    {
+                        "prompt": row[1],
+                        "output": row[2],
+                        "feedback": row[3],
+                        "category": row[4],
+                        "embedding": row[5],
+                    }
+                    for row in cur.fetchall()
+                ]
         except Exception as e:
             logger.error(e)
             return []
@@ -96,15 +103,20 @@ class LoggerDB:
         connection = self.connection.get_connect()
 
         if collection_name not in self.list_collection():
-            logger.error(f"The collection {collection_name} doesn't exist or is not present into the database.")
+            logger.error(
+                f"The collection {collection_name} doesn't exist or is not present into the database."
+            )
 
         try:
             with connection.cursor() as cur:
-                cur.execute("""
+                cur.execute(
+                    """
                 SELECT column_name
                 FROM information_schema.columns
                 WHERE table_name = %s
-                """, (collection_name,))
+                """,
+                    (collection_name,),
+                )
                 return cur.fetchall()
         except Exception as e:
             logger.error(e)
@@ -116,7 +128,9 @@ class LoggerDB:
         connection = self.connection.get_connect()
 
         if collection_name not in self.list_collection():
-            logger.error(f"The collection {collection_name} doesn't exist or is not present into the database.")
+            logger.error(
+                f"The collection {collection_name} doesn't exist or is not present into the database."
+            )
 
         if len(update) == 0:
             logger.error("No updated values available.")
@@ -128,10 +142,12 @@ class LoggerDB:
             with connection.cursor() as cur:
                 for i in update:
                     value_to_update = update[i]
-                    cur.execute(f"""
-                    UPDATE %s
+                    cur.execute(
+                        f"""                    UPDATE %s
                     SET %s = {value_to_update}
-                    """, (collection_name, i))
+                    """,
+                        (collection_name, i),
+                    )
                     cur.commit()
                     logger.info(f"The value of {i} was changed in {value_to_update}")
         except Exception as e:
@@ -139,25 +155,30 @@ class LoggerDB:
         finally:
             self.connection.put_connect(connection)
 
-    def insert(self, collection_name: str, data_dict, embeddings=List[float]):
-
+    def insert(self, collection_name: str, data_dict, embeddings=list[float]):
         connection = self.connection.get_connect()
 
         if collection_name not in self.list_collection():
             logger.error(f"The collection {collection_name} is not in the database")
 
         try:
-
             with connection.cursor() as cur:
                 register_vector(cur)
                 print("cursor run in insertion")
-                cur.execute(f"""
-                INSERT INTO {collection_name}
+                cur.execute(
+                    f"""                INSERT INTO {collection_name}
                 (prompt, output, feedback, category, embedding, metadata)
                 VALUES (%s, %s, %s, %s, %s, %s)
-                """, (
-                data_dict["prompt"], data_dict["output"], data_dict["feedback"], data_dict["category"],
-                embeddings, Json(data_dict)))
+                """,
+                    (
+                        data_dict["prompt"],
+                        data_dict["output"],
+                        data_dict["feedback"],
+                        data_dict["category"],
+                        embeddings,
+                        Json(data_dict),
+                    ),
+                )
 
                 connection.commit()
                 print("Vector inserted successfully using custom adapter!")
@@ -168,7 +189,6 @@ class LoggerDB:
             self.connection.put_connect(connection)
 
     def delete(self, collection_name: str):
-
         connection = self.connection.get_connect()
 
         if collection_name not in self.list_collection():
@@ -176,8 +196,7 @@ class LoggerDB:
 
         try:
             with connection.cursor() as cur:
-                cur.execute(f"""
-                DROP TABLE IF EXISTS {collection_name}
+                cur.execute(f"""                DROP TABLE IF EXISTS {collection_name}
                 """)
 
                 logger.info(f"The collection {collection_name} was permanently deleted.")
@@ -188,9 +207,7 @@ class LoggerDB:
         finally:
             self.connection.put_connect(connection)
 
-
     def query(self):
-
         pass
 
     def query_by_category(self, collection_name: str, category: str, k: int = 10) -> list[dict]:
@@ -201,12 +218,21 @@ class LoggerDB:
 
         try:
             with connection.cursor() as cur:
-                cur.execute(f"""
-                SELECT * FROM {collection_name} WHERE category = %s LIMIT %s
-                """, (category, k))
+                cur.execute(
+                    f"""                SELECT * FROM {collection_name} WHERE category = %s LIMIT %s
+                """,
+                    (category, k),
+                )
                 return [
-                    {"prompt": row[1], "output": row[2], "feedback": row[3], "category": row[4], "embedding": row[5]}
-                    for row in cur.fetchall()]
+                    {
+                        "prompt": row[1],
+                        "output": row[2],
+                        "feedback": row[3],
+                        "category": row[4],
+                        "embedding": row[5],
+                    }
+                    for row in cur.fetchall()
+                ]
         except Exception as e:
             logger.error(e)
             return []
@@ -221,15 +247,24 @@ class LoggerDB:
         try:
             with connection.cursor() as cur:
                 register_vector(cur)
-                cur.execute(f"""
-                SELECT prompt, output, feedback, category, (embedding <-> %s::vector) AS distance, embedding
+                cur.execute(
+                    f"""                SELECT prompt, output, feedback, category, (embedding <-> %s::vector) AS distance, embedding
                 FROM {collection_name}
                 ORDER BY distance
                 LIMIT %s
-                """, (vector, k))
+                """,
+                    (vector, k),
+                )
                 return [
-                    {"prompt": row[0], "output": row[1], "feedback": row[2], "category": row[3], "distance": row[4]}
-                    for row in cur.fetchall()]
+                    {
+                        "prompt": row[0],
+                        "output": row[1],
+                        "feedback": row[2],
+                        "category": row[3],
+                        "distance": row[4],
+                    }
+                    for row in cur.fetchall()
+                ]
         except Exception as e:
             logger.error(e)
             return []
@@ -243,23 +278,29 @@ class LoggerDB:
             logger.error(f"The collection {collection_name} is not into the database.")
         try:
             with connection.cursor() as cur:
-                cur.execute(f"""
-                SELECT * FROM {collection_name} WHERE feedback = %s LIMIT %s
-                """, (feedback, k))
+                cur.execute(
+                    f"""                SELECT * FROM {collection_name} WHERE feedback = %s LIMIT %s
+                """,
+                    (feedback, k),
+                )
                 return [
-                    {"prompt": row[1], "output": row[2], "feedback": row[3], "category": row[4], "embedding": row[5]}
-                    for row in cur.fetchall()]
+                    {
+                        "prompt": row[1],
+                        "output": row[2],
+                        "feedback": row[3],
+                        "category": row[4],
+                        "embedding": row[5],
+                    }
+                    for row in cur.fetchall()
+                ]
         except Exception as e:
             logger.error(e)
             return []
         finally:
             self.connection.put_connect(connection)
 
-
     def close(self):
-
         try:
             self.connection.disconnect()
         except Exception as e:
             logger.error(e)
-

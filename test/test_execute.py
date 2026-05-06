@@ -1,13 +1,16 @@
 """Tests for src/local/execute.py — import validation and viewer safety checks."""
-import pytest
-from unittest.mock import patch
-from pymmcore_plus import CMMCorePlus
-from src.local import Execute
 
+from unittest.mock import patch
+
+import pytest
+from pymmcore_plus import CMMCorePlus
+
+from src.local import Execute
 
 # ---------------------------------------------------------------------------
 # Fixture
 # ---------------------------------------------------------------------------
+
 
 @pytest.fixture
 def executor():
@@ -20,8 +23,8 @@ def executor():
 # _get_missing_imports
 # ---------------------------------------------------------------------------
 
-class TestGetMissingImports:
 
+class TestGetMissingImports:
     def test_no_imports(self, executor):
         assert executor._get_missing_imports("x = 1 + 1") == []
 
@@ -63,8 +66,8 @@ class TestGetMissingImports:
 # is_safe_viewer
 # ---------------------------------------------------------------------------
 
-class TestIsSafeViewer:
 
+class TestIsSafeViewer:
     def test_safe_code(self, executor):
         assert executor.is_safe_viewer("x = 1\nprint(x)") is True
 
@@ -90,8 +93,8 @@ class TestIsSafeViewer:
 # _preimport_dependencies
 # ---------------------------------------------------------------------------
 
-class TestPreimportDependencies:
 
+class TestPreimportDependencies:
     def test_no_missing_returns_empty(self, executor):
         failed = executor._preimport_dependencies("import os\nimport sys")
         assert failed == []
@@ -118,8 +121,8 @@ class TestPreimportDependencies:
 # run_code_new
 # ---------------------------------------------------------------------------
 
-class TestRunCodeNew:
 
+class TestRunCodeNew:
     def test_invalid_mode_returns_error(self, executor):
         result = executor.run_code_new("x = 1", execution_mode="streaming")
         assert "Invalid execution mode" in result
@@ -131,8 +134,7 @@ class TestRunCodeNew:
     def test_missing_package_returns_error(self, executor):
         with patch.object(executor, "_install_library", return_value=False):
             result = executor.run_code_new(
-                "import _fake_pkg_xyz_does_not_exist",
-                execution_mode="buffered"
+                "import _fake_pkg_xyz_does_not_exist", execution_mode="buffered"
             )
         assert "Missing packages" in result
         assert "_fake_pkg_xyz_does_not_exist" in result
@@ -156,8 +158,7 @@ class TestRunCodeNew:
 
     def test_stderr_captured_in_output(self, executor):
         result = executor.run_code_new(
-            "import sys; sys.stderr.write('a warning')",
-            execution_mode="buffered"
+            "import sys; sys.stderr.write('a warning')", execution_mode="buffered"
         )
         assert "a warning" in result
 
@@ -167,11 +168,11 @@ class TestRunCodeNew:
 # ---------------------------------------------------------------------------
 
 # ---------------------------------------------------------------------------
-# is_safe_code 
+# is_safe_code
 # ---------------------------------------------------------------------------
 
-class TestIsSafeCode:
 
+class TestIsSafeCode:
     def test_safe_code(self, executor):
         safe, reason = executor.is_safe_code("x = mmc.getXPosition()")
         assert safe is True
@@ -231,13 +232,11 @@ class TestIsSafeCode:
 
 
 class TestConfirmationFlow:
-
     def test_missing_package_not_auto_installed(self, executor):
         """run_code_new must NOT silently install — it should surface the failure."""
         with patch.object(executor, "_install_library", return_value=False) as mock_install:
             result = executor.run_code_new(
-                "import _fake_pkg_xyz_does_not_exist",
-                execution_mode="buffered"
+                "import _fake_pkg_xyz_does_not_exist", execution_mode="buffered"
             )
         # install was attempted once for the missing package
         mock_install.assert_called_once_with("_fake_pkg_xyz_does_not_exist")
@@ -254,7 +253,7 @@ class TestConfirmationFlow:
     def test_install_then_run_succeeds(self, executor):
         """Simulate the two-step flow: install → run."""
         # Step 1: detect missing
-        missing = executor._get_missing_imports("import os")   # os is always present
+        missing = executor._get_missing_imports("import os")  # os is always present
         assert missing == []
         # Step 2: run without issue
         result = executor.run_code_new('print("after install")', execution_mode="buffered")
@@ -262,24 +261,24 @@ class TestConfirmationFlow:
 
 
 # ---------------------------------------------------------------------------
-# Library guards 
+# Library guards
 # ---------------------------------------------------------------------------
 
-import ast as _ast
-import numpy as np
-from src.local.execute import (
-    Execute,
-    _cellpose_diameter_guard,
-    _cellpose_channels_guard,
-    _cellpose_flow_threshold_guard,
-    _cellpose_cellprob_threshold_guard,
-    _install_cellpose_size_guard,
+import ast as _ast  # noqa: E402
+
+import numpy as np  # noqa: E402
+
+from src.local.execute import (  # noqa: E402
     _CELLPOSE_SIZE_THRESHOLD,
+    _cellpose_cellprob_threshold_guard,
+    _cellpose_channels_guard,
+    _cellpose_diameter_guard,
+    _cellpose_flow_threshold_guard,
+    _install_cellpose_size_guard,
 )
 
 
 class TestGetImportedModules:
-
     def test_empty_code(self, executor):
         assert executor._get_imported_modules("x = 1") == set()
 
@@ -304,7 +303,6 @@ class TestGetImportedModules:
 
 
 class TestCheckLibraryGuards:
-
     def test_no_guard_registered_passes(self, executor):
         ok, reason = executor._check_library_guards("import os\nprint('hi')")
         assert ok is True
@@ -317,6 +315,7 @@ class TestCheckLibraryGuards:
     def test_custom_guard_triggered(self, executor):
         def _always_fail(tree):
             return False, "test guard triggered"
+
         Execute.register_library_guard("_test_lib_guard_xyz", _always_fail)
         try:
             ok, reason = executor._check_library_guards("import _test_lib_guard_xyz")
@@ -329,6 +328,7 @@ class TestCheckLibraryGuards:
     def test_custom_guard_not_triggered_when_lib_absent(self, executor):
         def _always_fail(tree):
             return False, "should not run"
+
         Execute.register_library_guard("_test_lib_guard_absent", _always_fail)
         try:
             ok, _ = executor._check_library_guards("import os")
@@ -342,7 +342,6 @@ class TestCheckLibraryGuards:
 
 
 class TestCellposeDiameterGuard:
-
     def _tree(self, code):
         return _ast.parse(code)
 
@@ -376,7 +375,6 @@ class TestCellposeDiameterGuard:
 
 
 class TestCellposeChannelsGuard:
-
     def _tree(self, code):
         return _ast.parse(code)
 
@@ -395,7 +393,6 @@ class TestCellposeChannelsGuard:
 
 
 class TestCellposeFlowThresholdGuard:
-
     def _tree(self, code):
         return _ast.parse(code)
 
@@ -412,12 +409,16 @@ class TestCellposeFlowThresholdGuard:
         assert ok is True
 
     def test_too_high_fails(self):
-        ok, reason = _cellpose_flow_threshold_guard(self._tree("model.eval(img, flow_threshold=5.0)"))
+        ok, reason = _cellpose_flow_threshold_guard(
+            self._tree("model.eval(img, flow_threshold=5.0)")
+        )
         assert ok is False
         assert "flow_threshold" in reason
 
     def test_negative_fails(self):
-        ok, reason = _cellpose_flow_threshold_guard(self._tree("model.eval(img, flow_threshold=-1.0)"))
+        ok, reason = _cellpose_flow_threshold_guard(
+            self._tree("model.eval(img, flow_threshold=-1.0)")
+        )
         assert ok is False
         assert "flow_threshold" in reason
 
@@ -433,25 +434,32 @@ class TestCellposeFlowThresholdGuard:
 
 
 class TestCellposeCellprobThresholdGuard:
-
     def _tree(self, code):
         return _ast.parse(code)
 
     def test_valid_value_passes(self):
-        ok, _ = _cellpose_cellprob_threshold_guard(self._tree("model.eval(img, cellprob_threshold=0.0)"))
+        ok, _ = _cellpose_cellprob_threshold_guard(
+            self._tree("model.eval(img, cellprob_threshold=0.0)")
+        )
         assert ok is True
 
     def test_boundary_passes(self):
-        ok, _ = _cellpose_cellprob_threshold_guard(self._tree("model.eval(img, cellprob_threshold=6.0)"))
+        ok, _ = _cellpose_cellprob_threshold_guard(
+            self._tree("model.eval(img, cellprob_threshold=6.0)")
+        )
         assert ok is True
 
     def test_too_high_fails(self):
-        ok, reason = _cellpose_cellprob_threshold_guard(self._tree("model.eval(img, cellprob_threshold=10.0)"))
+        ok, reason = _cellpose_cellprob_threshold_guard(
+            self._tree("model.eval(img, cellprob_threshold=10.0)")
+        )
         assert ok is False
         assert "cellprob_threshold" in reason
 
     def test_too_low_fails(self):
-        ok, reason = _cellpose_cellprob_threshold_guard(self._tree("model.eval(img, cellprob_threshold=-10.0)"))
+        ok, reason = _cellpose_cellprob_threshold_guard(
+            self._tree("model.eval(img, cellprob_threshold=-10.0)")
+        )
         assert ok is False
         assert "cellprob_threshold" in reason
 
@@ -460,7 +468,9 @@ class TestCellposeCellprobThresholdGuard:
         assert ok is True
 
     def test_variable_value_passes(self):
-        ok, _ = _cellpose_cellprob_threshold_guard(self._tree("model.eval(img, cellprob_threshold=prob)"))
+        ok, _ = _cellpose_cellprob_threshold_guard(
+            self._tree("model.eval(img, cellprob_threshold=prob)")
+        )
         assert ok is True
 
 
@@ -468,8 +478,8 @@ class TestCellposeCellprobThresholdGuard:
 # Runtime guards — cellpose image size
 # ---------------------------------------------------------------------------
 
-import sys
-import types
+import sys  # noqa: E402
+import types  # noqa: E402
 
 
 @pytest.fixture()
@@ -478,7 +488,6 @@ def fake_cellpose():
     Inject a minimal fake cellpose.models into sys.modules so tests
     work regardless of whether real cellpose is installed or what API version it has.
     """
-    from unittest.mock import MagicMock
 
     class FakeCellpose:
         def eval(self, x, *args, **kwargs):
@@ -519,7 +528,7 @@ class TestCellposeSizeGuard:
         assert td is not None
         try:
             small = np.zeros((256, 256), dtype=np.uint8)
-            FakeCellpose.eval(FakeCellpose(), small)   # must not raise
+            FakeCellpose.eval(FakeCellpose(), small)  # must not raise
         finally:
             td()
         assert FakeCellpose.eval is original_eval
@@ -530,7 +539,9 @@ class TestCellposeSizeGuard:
         td = _install_cellpose_size_guard(namespace)
         assert td is not None
         try:
-            large = np.zeros((_CELLPOSE_SIZE_THRESHOLD + 1, _CELLPOSE_SIZE_THRESHOLD + 1), dtype=np.uint8)
+            large = np.zeros(
+                (_CELLPOSE_SIZE_THRESHOLD + 1, _CELLPOSE_SIZE_THRESHOLD + 1), dtype=np.uint8
+            )
             with pytest.raises(RuntimeError, match="exceeds"):
                 FakeCellpose.eval(FakeCellpose(), large)
         finally:
@@ -543,7 +554,7 @@ class TestCellposeSizeGuard:
         assert td is not None
         try:
             large = np.zeros((1024, 1024), dtype=np.uint8)
-            FakeCellpose.eval(FakeCellpose(), large)   # must not raise
+            FakeCellpose.eval(FakeCellpose(), large)  # must not raise
         finally:
             td()
 

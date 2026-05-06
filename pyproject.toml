@@ -149,6 +149,15 @@ ignore = [
     "B008",  # do not perform function calls in default arguments
 ]
 
+[tool.ruff.lint.per-file-ignores]
+"src/self-learn/__init__.py" = ["F401"]
+"src/self-learn/analysis/__init__.py" = ["F401"]
+"src/self-learn/detection/__init__.py" = ["F401"]
+"src/self-learn/hardware/__init__.py" = ["F401"]
+"src/self-learn/utils/__init__.py" = ["F401"]
+"src/self-learn/workflows/__init__.py" = ["F401"]
+"src/benchmarking/tests/*/initialize_test.py" = ["F821"]
+
 [tool.ruff.lint.isort]
 known-first-party = ["src"]
 
@@ -162,6 +171,10 @@ testpaths  = ["test"]
 
 [tool.bandit]
 # B101  assert used — fine in tests and guards
+# B404  import subprocess — required for launching ES/PG/proxy processes
 # B603  subprocess with list args — used to open workspace folder in Explorer
 # B607  partial executable path — we call "explorer", "open", "xdg-open" by name
-skips = ["B101", "B603", "B607"]
+# B110  try/except/pass — used throughout for graceful degradation of optional features
+# B112  try/except/continue — same rationale as B110
+# B608  SQL f-strings in log_db.py use internal collection_name identifiers, not user input
+skips = ["B101", "B404", "B603", "B607", "B110", "B112", "B608"]

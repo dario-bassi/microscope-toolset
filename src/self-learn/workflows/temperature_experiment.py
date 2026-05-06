@@ -24,9 +24,9 @@ Real microscope note:
     Current n_equil=3 may be insufficient on real hardware; increase to 10–30 frames.
 """
 
-import numpy as np
-from typing import Optional, List, Tuple, Dict, Any
+from typing import Any
 
+import numpy as np
 
 # ---- Biological constants ------------------------------------------------
 
@@ -46,6 +46,7 @@ YEAST_SUB_OPTIMAL_STATES = [1, 0, 2, 3]  # 4, 20, 25, 30°C
 
 # ---- Cell counting utilities ---------------------------------------------
 
+
 def count_yeast_blobs(image, threshold=0.15, min_sigma=2.0, max_sigma=8.0):
     """Count yeast cells via Laplacian of Gaussian blob detection.
 
@@ -63,14 +64,14 @@ def count_yeast_blobs(image, threshold=0.15, min_sigma=2.0, max_sigma=8.0):
         int: Number of detected cells (minimum 1 to avoid division by zero).
     """
     from skimage.feature import blob_log
+
     img = np.asarray(image, dtype=float)
     img_max = img.max()
     if img_max <= 0:
         return 1
     img_norm = img / img_max
     try:
-        blobs = blob_log(img_norm, min_sigma=min_sigma, max_sigma=max_sigma,
-                         threshold=threshold)
+        blobs = blob_log(img_norm, min_sigma=min_sigma, max_sigma=max_sigma, threshold=threshold)
         return max(int(len(blobs)), 1)
     except Exception:
         return 1
@@ -89,10 +90,10 @@ def count_yeast_watershed(image, min_area=50, max_area=5000):
     Returns:
         int: Number of detected cells.
     """
+    from scipy.ndimage import distance_transform_edt, label
+    from skimage.feature import peak_local_max
     from skimage.filters import threshold_otsu
     from skimage.morphology import remove_small_objects
-    from scipy.ndimage import label, distance_transform_edt
-    from skimage.feature import peak_local_max
     from skimage.segmentation import watershed
 
     img = np.asarray(image, dtype=float)
@@ -127,7 +128,7 @@ def count_yeast_watershed(image, min_area=50, max_area=5000):
     return max(count, 1)
 
 
-def estimate_budding_rate(counts: List[int], n_snaps: Optional[int] = None) -> float:
+def estimate_budding_rate(counts: list[int], n_snaps: int | None = None) -> float:
     """Estimate budding rate per cell per snap from count timeseries.
 
     Uses linear regression over all counts (more robust than start-end).
@@ -157,16 +158,17 @@ def estimate_budding_rate(counts: List[int], n_snaps: Optional[int] = None) -> f
 
 # ---- Experiment protocol ---------------------------------------------------
 
+
 def measure_growth_rate_at_temp(
-        core,
-        state: int,
-        group: str,
-        channel: str,
-        n_equil: int = 3,
-        n_measure: int = 30,
-        temp_device: str = "Temperature",
-        count_fn=None,
-) -> Dict[str, Any]:
+    core,
+    state: int,
+    group: str,
+    channel: str,
+    n_equil: int = 3,
+    n_measure: int = 30,
+    temp_device: str = "Temperature",
+    count_fn=None,
+) -> dict[str, Any]:
     """Measure growth rate at a single temperature setpoint.
 
     Protocol:
@@ -191,8 +193,9 @@ def measure_growth_rate_at_temp(
         dict with keys:
             state, temp_C, counts, rate, n_start, n_end
     """
-    from src.hardware.core import run_events
     from useq import MDASequence
+
+    from src.hardware.core import run_events
 
     if count_fn is None:
         count_fn = count_yeast_blobs
@@ -226,27 +229,28 @@ def measure_growth_rate_at_temp(
     counts = [count_fn(f) for f in frames]
     rate = estimate_budding_rate(counts)
 
-    temp_map = getattr(core, '_temp_map', YEAST_TEMP_MAP)
+    temp_map = getattr(core, "_temp_map", YEAST_TEMP_MAP)
     temp_C = temp_map.get(state, -1)
 
     return {
-        'state': int(state),
-        'temp_C': int(temp_C),
-        'counts': counts,
-        'n_start': counts[0],
-        'n_end': counts[-1],
-        'rate': float(rate),
+        "state": int(state),
+        "temp_C": int(temp_C),
+        "counts": counts,
+        "n_start": counts[0],
+        "n_end": counts[-1],
+        "rate": float(rate),
     }
 
 
 # ---- Q10 Fitting ---------------------------------------------------------
 
+
 def estimate_q10(
-        temps_C: List[float],
-        rates: List[float],
-        t_optimal: float = YEAST_OPTIMAL_TEMP,
-        sub_optimal_only: bool = True,
-) -> Dict[str, float]:
+    temps_C: list[float],
+    rates: list[float],
+    t_optimal: float = YEAST_OPTIMAL_TEMP,
+    sub_optimal_only: bool = True,
+) -> dict[str, float]:
     """Estimate Q10 temperature coefficient from rate measurements.
 
     Uses log-linear regression: log(rate) = (T - T_opt)/10 × log(Q10)
@@ -275,8 +279,13 @@ def estimate_q10(
 
     n_points = int(valid.sum())
     if n_points < 2:
-        return {'Q10': YEAST_Q10_EXPECTED, 'slope': 0.0, 'intercept': 0.0,
-                'r_squared': 0.0, 'n_points': n_points}
+        return {
+            "Q10": YEAST_Q10_EXPECTED,
+            "slope": 0.0,
+            "intercept": 0.0,
+            "r_squared": 0.0,
+            "n_points": n_points,
+        }
 
     T_fit = temps[valid]
     R_fit = rates[valid]
@@ -300,15 +309,15 @@ def estimate_q10(
     Q10 = float(np.clip(Q10, 1.0, 10.0))
 
     return {
-        'Q10': round(Q10, 4),
-        'slope': round(float(slope), 4),
-        'intercept': round(float(intercept), 4),
-        'r_squared': round(r_sq, 4),
-        'n_points': n_points,
+        "Q10": round(Q10, 4),
+        "slope": round(float(slope), 4),
+        "intercept": round(float(intercept), 4),
+        "r_squared": round(r_sq, 4),
+        "n_points": n_points,
     }
 
 
-def yeast_optimal_temp_state() -> Tuple[int, float]:
+def yeast_optimal_temp_state() -> tuple[int, float]:
     """Return the known optimal temperature state for S. cerevisiae.
 
     Biology: yeast grows optimally at 30°C. Never trust measurement alone
@@ -320,7 +329,7 @@ def yeast_optimal_temp_state() -> Tuple[int, float]:
     return YEAST_OPTIMAL_STATE, float(YEAST_OPTIMAL_TEMP)
 
 
-def select_counting_channel(core, group: str, channels: List[str]) -> str:
+def select_counting_channel(core, group: str, channels: list[str]) -> str:
     """Select the best channel for yeast cell counting.
 
     Prefers nucleus-channel (Calcofluor-White) which gives clean bright
@@ -342,30 +351,31 @@ def select_counting_channel(core, group: str, channels: List[str]) -> str:
             img = img[:, :, 0]
         return count_yeast_blobs(img.astype(float))
 
-    if 'nucleus-channel' in channels:
-        nc = snap_count('nucleus-channel')
-        bf = snap_count('brightfield') if 'brightfield' in channels else 0
+    if "nucleus-channel" in channels:
+        nc = snap_count("nucleus-channel")
+        snap_count("brightfield") if "brightfield" in channels else 0
         if nc >= 5:
-            return 'nucleus-channel'
+            return "nucleus-channel"
 
-    if 'brightfield' in channels:
-        return 'brightfield'
+    if "brightfield" in channels:
+        return "brightfield"
 
-    return channels[0] if channels else 'brightfield'
+    return channels[0] if channels else "brightfield"
 
 
 # ---- Sprint 56: Regression-based rate measurement ------------------------
 
+
 def measure_growth_rate_at_temp_v2(
-        core,
-        state: int,
-        group: str,
-        channel: str,
-        n_equil: int = 2,
-        n_measure: int = 12,
-        temp_device: str = "Temperature",
-        count_fn=None,
-) -> Dict[str, Any]:
+    core,
+    state: int,
+    group: str,
+    channel: str,
+    n_equil: int = 2,
+    n_measure: int = 12,
+    temp_device: str = "Temperature",
+    count_fn=None,
+) -> dict[str, Any]:
     """Measure growth rate at a single temperature using log-linear regression.
 
     Improvement over measure_growth_rate_at_temp():
@@ -403,11 +413,13 @@ def measure_growth_rate_at_temp_v2(
             n_end:              float, regression-estimated end count
             method:             str, 'log_linear_regression'
     """
-    from src.analysis.kinetics import measure_growth_rate_series
-    from src.hardware.core import run_events
     from useq import MDASequence
 
+    from src.analysis.kinetics import measure_growth_rate_series
+    from src.hardware.core import run_events
+
     if count_fn is None:
+
         def count_fn(img):
             return count_yeast_blobs(img, threshold=0.12, min_sigma=2.0, max_sigma=10.0)
 
@@ -438,34 +450,34 @@ def measure_growth_rate_at_temp_v2(
     # Regression-based rate
     reg = measure_growth_rate_series(counts)
 
-    temp_map = getattr(core, '_temp_map', YEAST_TEMP_MAP)
+    temp_map = getattr(core, "_temp_map", YEAST_TEMP_MAP)
     temp_C = temp_map.get(state, -1)
 
     return {
-        'state': int(state),
-        'temp_C': int(temp_C),
-        'counts': counts,
-        'rate_per_frame': reg['rate_per_frame'],
-        'doubling_time_frames': reg['doubling_time_frames'],
-        'r_squared': reg['r_squared'],
-        'n_start': reg['n_start'],
-        'n_end': reg['n_end'],
-        'method': reg['method'],
+        "state": int(state),
+        "temp_C": int(temp_C),
+        "counts": counts,
+        "rate_per_frame": reg["rate_per_frame"],
+        "doubling_time_frames": reg["doubling_time_frames"],
+        "r_squared": reg["r_squared"],
+        "n_start": reg["n_start"],
+        "n_end": reg["n_end"],
+        "method": reg["method"],
     }
 
 
 def temperature_response_curve_v2(
-        core,
-        states: List[int],
-        group: str,
-        channel: str,
-        n_equil: int = 2,
-        n_measure: int = 12,
-        temp_device: str = "Temperature",
-        t_optimal: float = YEAST_OPTIMAL_TEMP,
-        count_fn=None,
-        n_bootstrap: int = 500,
-) -> Dict[str, Any]:
+    core,
+    states: list[int],
+    group: str,
+    channel: str,
+    n_equil: int = 2,
+    n_measure: int = 12,
+    temp_device: str = "Temperature",
+    t_optimal: float = YEAST_OPTIMAL_TEMP,
+    count_fn=None,
+    n_bootstrap: int = 500,
+) -> dict[str, Any]:
     """Multi-temperature growth rate experiment with regression + CI reporting.
 
     Runs measure_growth_rate_at_temp_v2() for each state, then fits Q10 with
@@ -506,39 +518,47 @@ def temperature_response_curve_v2(
     results = []
     for state in states:
         r = measure_growth_rate_at_temp_v2(
-            core, state, group, channel,
-            n_equil=n_equil, n_measure=n_measure,
-            temp_device=temp_device, count_fn=count_fn,
+            core,
+            state,
+            group,
+            channel,
+            n_equil=n_equil,
+            n_measure=n_measure,
+            temp_device=temp_device,
+            count_fn=count_fn,
         )
         results.append(r)
-        print(f"  {r['temp_C']}°C: rate={r['rate_per_frame']:.5f}, "
-              f"R²={r['r_squared']:.3f}, counts={r['counts'][:3]}...")
+        print(
+            f"  {r['temp_C']}°C: rate={r['rate_per_frame']:.5f}, "
+            f"R²={r['r_squared']:.3f}, counts={r['counts'][:3]}..."
+        )
 
-    temps_C = [r['temp_C'] for r in results]
-    rates = [r['rate_per_frame'] for r in results]
-    r_sq_vals = [r['r_squared'] for r in results]
+    temps_C = [r["temp_C"] for r in results]
+    rates = [r["rate_per_frame"] for r in results]
+    r_sq_vals = [r["r_squared"] for r in results]
 
     # Find empirical optimum
     best_idx = int(np.argmax(rates))
     T_opt_measured = float(temps_C[best_idx])
-    T_opt_state = int(results[best_idx]['state'])
+    T_opt_state = int(results[best_idx]["state"])
 
     # Q10 fit with CI (sub-optimal only: T <= t_optimal)
     ci_result = fit_q10_with_ci(
-        temps_C, rates,
+        temps_C,
+        rates,
         ref_temp=t_optimal,
         n_bootstrap=n_bootstrap,
     )
 
     return {
-        'results': results,
-        'Q10': ci_result['Q10'],
-        'Q10_ci_lo': ci_result.get('Q10_ci_lo', ci_result['Q10']),
-        'Q10_ci_hi': ci_result.get('Q10_ci_hi', ci_result['Q10']),
-        'Q10_std': ci_result.get('Q10_std', 0.0),
-        'T_optimal_C': T_opt_measured,
-        'T_optimal_state': T_opt_state,
-        'temps_C': temps_C,
-        'rates': rates,
-        'r_squared_values': r_sq_vals,
+        "results": results,
+        "Q10": ci_result["Q10"],
+        "Q10_ci_lo": ci_result.get("Q10_ci_lo", ci_result["Q10"]),
+        "Q10_ci_hi": ci_result.get("Q10_ci_hi", ci_result["Q10"]),
+        "Q10_std": ci_result.get("Q10_std", 0.0),
+        "T_optimal_C": T_opt_measured,
+        "T_optimal_state": T_opt_state,
+        "temps_C": temps_C,
+        "rates": rates,
+        "r_squared_values": r_sq_vals,
     }

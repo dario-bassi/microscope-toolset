@@ -10,26 +10,46 @@ Modules:
 """
 
 from .cells import (
-    detect_cells, detect_cells_multichannel, find_bright_centroid,
-    count_blobs_log, detect_blobs_log, count_objects_dt,
-    merge_nearby_centroids, detect_point_source,
-    extract_hematoxylin, detect_nuclei_hae,
-    count_nuclei_fluorescence, count_nuclei_adaptive,
-    count_bacteria_bf, watershed_split,
+    count_bacteria_bf,
+    count_blobs_log,
+    count_nuclei_adaptive,
+    count_nuclei_fluorescence,
+    count_objects_dt,
+    detect_blobs_log,
+    detect_cells,
+    detect_cells_multichannel,
     detect_fluorescent_centroids,
+    detect_nuclei_hae,
+    detect_point_source,
+    extract_hematoxylin,
+    find_bright_centroid,
+    merge_nearby_centroids,
+    watershed_split,
 )
-from .tissue import segment_tissue, contact_graph, measure_wound_closure
+from .consensus import (
+    consensus_count,
+    merge_detections,
+    validate_detections,
+)
 from .neurons import (
-    detect_somata, count_puncta, estimate_neurite_length,
-    count_primary_processes, classify_neuron, count_branch_points,
+    classify_neuron,
+    count_branch_points,
+    count_primary_processes,
+    count_puncta,
+    detect_somata,
+    estimate_neurite_length,
+)
+from .segmentation import (
+    adaptive_threshold,
+    segment_by_markers,
+    separate_touching,
 )
 from .segmentation import (
     watershed_split as watershed_split_advanced,
-    adaptive_threshold, segment_by_markers, separate_touching,
 )
 from .threshold import (
-    auto_threshold, threshold_sweep, detect_with_retry,
+    auto_threshold,
+    detect_with_retry,
+    threshold_sweep,
 )
-from .consensus import (
-    consensus_count, merge_detections, validate_detections,
-)
+from .tissue import contact_graph, measure_wound_closure, segment_tissue

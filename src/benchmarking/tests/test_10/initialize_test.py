@@ -19,16 +19,16 @@ def create_sim_override():
 
     for i, cell in enumerate(sim._cells):
         cell.is_dying = False
-        cell.n_div    = 0
+        cell.n_div = 0
         cell.brownian_d = TEST_CONFIG["brownian_d"]
 
         if i in g2_indices:
-            cell.cell_cycle_state   = "G2"
+            cell.cell_cycle_state = "G2"
             cell.cell_mitosis_state = "Interphase"
-            cell.current_time_life  = 18.0
+            cell.current_time_life = 18.0
         else:
-            cell.cell_cycle_state   = "G1" if rng.random() < 0.7 else "S"
+            cell.cell_cycle_state = "G1" if rng.random() < 0.7 else "S"
             cell.cell_mitosis_state = "Interphase"
-            cell.current_time_life  = cell._initial_random_time_life()
+            cell.current_time_life = cell._initial_random_time_life()
 
     return sim

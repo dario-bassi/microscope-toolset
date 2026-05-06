@@ -20,12 +20,12 @@ Design:
 
 import numpy as np
 
-
 # ---------------------------------------------------------------------------
 # Focus metrics
 # ---------------------------------------------------------------------------
 
-def focus_metric(img, method='brenner'):
+
+def focus_metric(img, method="brenner"):
     """Compute image sharpness metric.
 
     Higher values indicate sharper (better focused) images.
@@ -39,46 +39,50 @@ def focus_metric(img, method='brenner'):
     """
     img_f = img.astype(np.float64)
 
-    if method == 'brenner':
+    if method == "brenner":
         # Brenner gradient: sum of squared horizontal differences (step=2)
         if img_f.shape[1] > 2:
             dx = img_f[:, 2:] - img_f[:, :-2]
-            return float(np.mean(dx ** 2))
+            return float(np.mean(dx**2))
         return 0.0
 
-    elif method == 'laplacian':
+    elif method == "laplacian":
         # Laplacian variance — measures edges in all directions
         # Manual 3x3 Laplacian kernel (no cv2 dependency)
         kernel = np.array([[0, 1, 0], [1, -4, 1], [0, 1, 0]], dtype=np.float64)
         from scipy.ndimage import convolve
+
         lap = convolve(img_f, kernel)
         return float(np.var(lap))
 
-    elif method == 'normalized_variance':
+    elif method == "normalized_variance":
         # Variance normalized by mean — robust to brightness changes
         mean = img_f.mean()
         if mean > 0:
             return float(np.var(img_f) / mean)
         return 0.0
 
-    elif method == 'sobel':
+    elif method == "sobel":
         # Sum of squared Sobel gradients
         from scipy.ndimage import sobel
+
         gx = sobel(img_f, axis=1)
         gy = sobel(img_f, axis=0)
-        return float(np.mean(gx ** 2 + gy ** 2))
+        return float(np.mean(gx**2 + gy**2))
 
     else:
-        raise ValueError(f"Unknown focus method: {method}. "
-                         f"Use 'brenner', 'laplacian', 'normalized_variance', or 'sobel'.")
+        raise ValueError(
+            f"Unknown focus method: {method}. "
+            f"Use 'brenner', 'laplacian', 'normalized_variance', or 'sobel'."
+        )
 
 
 # ---------------------------------------------------------------------------
 # Z-sweep focus
 # ---------------------------------------------------------------------------
 
-def sweep_focus(core, z_start, z_end, z_step, channel='brightfield',
-                method='brenner'):
+
+def sweep_focus(core, z_start, z_end, z_step, channel="brightfield", method="brenner"):
     """Sweep Z positions and compute focus metric at each.
 
     Args:
@@ -110,10 +114,10 @@ def sweep_focus(core, z_start, z_end, z_step, channel='brightfield',
     best_idx = max(range(len(curve)), key=lambda i: curve[i][1])
 
     return {
-        'best_z': curve[best_idx][0],
-        'best_score': curve[best_idx][1],
-        'curve': curve,
-        'n_snaps': len(curve),
+        "best_z": curve[best_idx][0],
+        "best_score": curve[best_idx][1],
+        "curve": curve,
+        "n_snaps": len(curve),
     }
 
 
@@ -121,9 +125,16 @@ def sweep_focus(core, z_start, z_end, z_step, channel='brightfield',
 # Coarse + fine autofocus
 # ---------------------------------------------------------------------------
 
-def coarse_fine_focus(core, z_range=20.0, coarse_step=2.0, fine_step=0.5,
-                      fine_range=None, channel='brightfield',
-                      method='brenner'):
+
+def coarse_fine_focus(
+    core,
+    z_range=20.0,
+    coarse_step=2.0,
+    fine_step=0.5,
+    fine_range=None,
+    channel="brightfield",
+    method="brenner",
+):
     """Two-pass autofocus: coarse sweep then fine refinement.
 
     Pass 1 (coarse): Large steps over full range to find approximate focus.
@@ -152,23 +163,28 @@ def coarse_fine_focus(core, z_range=20.0, coarse_step=2.0, fine_step=0.5,
         fine_range = coarse_step * 1.5
 
     # Pass 1: Coarse sweep
-    coarse = sweep_focus(core, -z_range, z_range, coarse_step,
-                         channel=channel, method=method)
+    coarse = sweep_focus(core, -z_range, z_range, coarse_step, channel=channel, method=method)
 
     # Pass 2: Fine sweep around coarse best
-    fine_center = coarse['best_z']
-    fine = sweep_focus(core, fine_center - fine_range, fine_center + fine_range,
-                       fine_step, channel=channel, method=method)
+    fine_center = coarse["best_z"]
+    fine = sweep_focus(
+        core,
+        fine_center - fine_range,
+        fine_center + fine_range,
+        fine_step,
+        channel=channel,
+        method=method,
+    )
 
     # Move to best position
-    hw.set_z(core, fine['best_z'])
+    hw.set_z(core, fine["best_z"])
 
     return {
-        'best_z': fine['best_z'],
-        'best_score': fine['best_score'],
-        'coarse_result': coarse,
-        'fine_result': fine,
-        'total_snaps': coarse['n_snaps'] + fine['n_snaps'],
+        "best_z": fine["best_z"],
+        "best_score": fine["best_score"],
+        "coarse_result": coarse,
+        "fine_result": fine,
+        "total_snaps": coarse["n_snaps"] + fine["n_snaps"],
     }
 
 
@@ -176,7 +192,8 @@ def coarse_fine_focus(core, z_range=20.0, coarse_step=2.0, fine_step=0.5,
 # Continuous focus tracking
 # ---------------------------------------------------------------------------
 
-def make_focus_state(initial_z=0.0, method='brenner', check_interval=5):
+
+def make_focus_state(initial_z=0.0, method="brenner", check_interval=5):
     """Create state for continuous focus tracking during timelapse.
 
     Args:
@@ -188,18 +205,19 @@ def make_focus_state(initial_z=0.0, method='brenner', check_interval=5):
         dict with focus tracking state.
     """
     return {
-        'z': float(initial_z),
-        'method': method,
-        'check_interval': check_interval,
-        'frame_count': 0,
-        'best_score': 0.0,
-        'history': [],  # list of (frame, z, score) tuples
-        'drift_velocity': 0.0,  # Z drift rate (um/frame)
+        "z": float(initial_z),
+        "method": method,
+        "check_interval": check_interval,
+        "frame_count": 0,
+        "best_score": 0.0,
+        "history": [],  # list of (frame, z, score) tuples
+        "drift_velocity": 0.0,  # Z drift rate (um/frame)
     }
 
 
-def check_and_correct_focus(core, state, img=None, channel='brightfield',
-                            z_step=0.5, max_correction=5.0):
+def check_and_correct_focus(
+    core, state, img=None, channel="brightfield", z_step=0.5, max_correction=5.0
+):
     """Check focus quality and correct if needed.
 
     Called each frame during timelapse. Only performs correction every
@@ -223,34 +241,33 @@ def check_and_correct_focus(core, state, img=None, channel='brightfield',
     """
     from ..hardware import core as hw
 
-    state['frame_count'] += 1
+    state["frame_count"] += 1
 
     # Measure current focus
     if img is None:
         img = hw.snap(core, channel=channel)
-    current_score = focus_metric(img, method=state['method'])
+    current_score = focus_metric(img, method=state["method"])
 
     # Update history
     current_z = hw.get_z(core)
-    state['history'].append((state['frame_count'], round(current_z, 3),
-                             round(current_score, 4)))
+    state["history"].append((state["frame_count"], round(current_z, 3), round(current_score, 4)))
 
     # Predict Z from drift velocity
-    predicted_z = state['z'] + state['drift_velocity']
+    predicted_z = state["z"] + state["drift_velocity"]
 
     # Check if we should correct
-    should_check = (state['frame_count'] % state['check_interval'] == 0)
+    should_check = state["frame_count"] % state["check_interval"] == 0
 
     if not should_check:
         # Apply predictive correction only
-        if abs(state['drift_velocity']) > 0.01:
+        if abs(state["drift_velocity"]) > 0.01:
             hw.set_z(core, predicted_z)
-            state['z'] = predicted_z
+            state["z"] = predicted_z
         return {
-            'corrected': False,
-            'current_score': round(current_score, 4),
-            'z_correction': 0.0,
-            'predicted_z': round(predicted_z, 3),
+            "corrected": False,
+            "current_score": round(current_score, 4),
+            "z_correction": 0.0,
+            "predicted_z": round(predicted_z, 3),
         }
 
     # Active focus check: sweep 3 positions (current, +step, -step)
@@ -260,7 +277,7 @@ def check_and_correct_focus(core, state, img=None, channel='brightfield',
     for z in z_positions:
         hw.set_z(core, float(z))
         test_img = hw.snap(core, channel=channel)
-        score = focus_metric(test_img, method=state['method'])
+        score = focus_metric(test_img, method=state["method"])
         scores.append((float(z), score))
 
     best_z, best_score = max(scores, key=lambda x: x[1])
@@ -271,26 +288,25 @@ def check_and_correct_focus(core, state, img=None, channel='brightfield',
     else:
         # Move toward better focus, but limit correction
         z_correction = best_z - current_z
-        z_correction = max(-max_correction,
-                           min(max_correction, z_correction))
+        z_correction = max(-max_correction, min(max_correction, z_correction))
         best_z = current_z + z_correction
 
     # Update drift velocity
-    if len(state['history']) >= 2:
-        prev_z = state['z']
+    if len(state["history"]) >= 2:
+        prev_z = state["z"]
         drift = best_z - prev_z
-        state['drift_velocity'] = 0.3 * drift + 0.7 * state['drift_velocity']
+        state["drift_velocity"] = 0.3 * drift + 0.7 * state["drift_velocity"]
 
     # Apply correction
     hw.set_z(core, best_z)
-    state['z'] = best_z
-    state['best_score'] = best_score
+    state["z"] = best_z
+    state["best_score"] = best_score
 
     return {
-        'corrected': abs(z_correction) > 0.001,
-        'current_score': round(best_score, 4),
-        'z_correction': round(z_correction, 3),
-        'predicted_z': round(predicted_z, 3),
+        "corrected": abs(z_correction) > 0.001,
+        "current_score": round(best_score, 4),
+        "z_correction": round(z_correction, 3),
+        "predicted_z": round(predicted_z, 3),
     }
 
 
@@ -298,8 +314,10 @@ def check_and_correct_focus(core, state, img=None, channel='brightfield',
 # MDA-native autofocus
 # ---------------------------------------------------------------------------
 
-def autofocus_mda(z_range=20.0, n_coarse=11, n_fine=11,
-                  method='brenner', exposure=50.0, channel='brightfield'):
+
+def autofocus_mda(
+    z_range=20.0, n_coarse=11, n_fine=11, method="brenner", exposure=50.0, channel="brightfield"
+):
     """MDA-native coarse+fine autofocus.
 
     Returns an event generator and on_frame callback for use with
@@ -328,61 +346,60 @@ def autofocus_mda(z_range=20.0, n_coarse=11, n_fine=11,
     coarse_zs = np.linspace(-z_range, z_range, n_coarse)
 
     shared = {
-        'phase': 'coarse',
-        'scores': [],        # list of (z, score)
-        'best_z': 0.0,
-        'best_score': 0.0,
-        'coarse_best_z': 0.0,
-        'method': method,
-        'n_coarse': 0,
-        'n_fine': 0,
+        "phase": "coarse",
+        "scores": [],  # list of (z, score)
+        "best_z": 0.0,
+        "best_score": 0.0,
+        "coarse_best_z": 0.0,
+        "method": method,
+        "n_coarse": 0,
+        "n_fine": 0,
     }
 
     def on_frame(image, event, meta=None):
         """Compute focus metric for each Z position."""
         z = event.z_pos if event.z_pos is not None else 0.0
-        score = focus_metric(image, method=shared['method'])
-        shared['scores'].append((z, score))
+        score = focus_metric(image, method=shared["method"])
+        shared["scores"].append((z, score))
 
-        if score > shared['best_score']:
-            shared['best_score'] = score
-            shared['best_z'] = z
+        if score > shared["best_score"]:
+            shared["best_score"] = score
+            shared["best_z"] = z
 
     def event_generator():
         # Pass 1: Coarse sweep
-        shared['phase'] = 'coarse'
+        shared["phase"] = "coarse"
         for i, z in enumerate(coarse_zs):
             yield MDAEvent(
                 z_pos=float(z),
                 exposure=exposure,
-                index={'t': 0, 'z': i},
-                metadata={'autofocus_phase': 'coarse', 'z_idx': i},
+                index={"t": 0, "z": i},
+                metadata={"autofocus_phase": "coarse", "z_idx": i},
             )
-        shared['n_coarse'] = len(coarse_zs)
+        shared["n_coarse"] = len(coarse_zs)
 
         # Read coarse best from accumulated scores
-        coarse_best_z = shared['best_z']
-        shared['coarse_best_z'] = coarse_best_z
+        coarse_best_z = shared["best_z"]
+        shared["coarse_best_z"] = coarse_best_z
 
         # Pass 2: Fine sweep around coarse best
         fine_half = (2 * z_range / max(n_coarse - 1, 1)) * 1.5
-        fine_zs = np.linspace(coarse_best_z - fine_half,
-                              coarse_best_z + fine_half, n_fine)
+        fine_zs = np.linspace(coarse_best_z - fine_half, coarse_best_z + fine_half, n_fine)
 
         # Reset best for fine pass
-        shared['phase'] = 'fine'
-        shared['best_score'] = 0.0
-        shared['best_z'] = coarse_best_z
-        shared['scores'] = []
+        shared["phase"] = "fine"
+        shared["best_score"] = 0.0
+        shared["best_z"] = coarse_best_z
+        shared["scores"] = []
 
         for i, z in enumerate(fine_zs):
             yield MDAEvent(
                 z_pos=float(z),
                 exposure=exposure,
-                index={'t': 0, 'z': shared['n_coarse'] + i},
-                metadata={'autofocus_phase': 'fine', 'z_idx': i},
+                index={"t": 0, "z": shared["n_coarse"] + i},
+                metadata={"autofocus_phase": "fine", "z_idx": i},
             )
-        shared['n_fine'] = len(fine_zs)
+        shared["n_fine"] = len(fine_zs)
 
     return event_generator, on_frame, shared
 
@@ -391,13 +408,14 @@ def autofocus_mda(z_range=20.0, n_coarse=11, n_fine=11,
 # Drift-corrected timelapse
 # ---------------------------------------------------------------------------
 
+
 def drift_corrected_timelapse(
     n_frames=20,
     interval=1.0,
     initial_drift_rate=0.0,
     channels=None,
     exposure=50.0,
-    focus_method='brenner',
+    focus_method="brenner",
     smoothing=0.3,
 ):
     """MDA-native timelapse with proactive Z-drift correction.
@@ -442,31 +460,31 @@ def drift_corrected_timelapse(
     channels = channels or [None]
 
     state = {
-        'frame': 0,
-        'z': 0.0,
-        'drift_rate': float(initial_drift_rate),
-        'focus_scores': [],
-        'z_positions': [],
-        'frames': [],           # list of (image, event) per frame
-        'calibrated': initial_drift_rate != 0.0,
-        'method': focus_method,
+        "frame": 0,
+        "z": 0.0,
+        "drift_rate": float(initial_drift_rate),
+        "focus_scores": [],
+        "z_positions": [],
+        "frames": [],  # list of (image, event) per frame
+        "calibrated": initial_drift_rate != 0.0,
+        "method": focus_method,
     }
 
     def on_frame(image, event, meta=None):
         """Track focus quality and update drift estimate."""
-        score = focus_metric(image, method=state['method'])
-        z = event.z_pos if event.z_pos is not None else state['z']
-        state['focus_scores'].append(score)
-        state['z_positions'].append(z)
-        state['frame'] += 1
+        score = focus_metric(image, method=state["method"])
+        z = event.z_pos if event.z_pos is not None else state["z"]
+        state["focus_scores"].append(score)
+        state["z_positions"].append(z)
+        state["frame"] += 1
 
         # Update drift rate from focus trend (after 3+ frames)
-        if len(state['focus_scores']) >= 3:
-            recent = state['focus_scores'][-3:]
+        if len(state["focus_scores"]) >= 3:
+            recent = state["focus_scores"][-3:]
             # If focus is consistently dropping, drift rate needs adjustment
             if recent[-1] < recent[-2] < recent[-3]:
                 # Focus degrading — increase drift correction
-                state['drift_rate'] *= 1.2
+                state["drift_rate"] *= 1.2
             elif recent[-1] > recent[-2]:
                 # Focus improving or stable — current rate is good
                 pass
@@ -474,30 +492,30 @@ def drift_corrected_timelapse(
     def event_generator():
         """Yield MDA events with predictive Z correction."""
         z = 0.0
-        state['z'] = z
+        state["z"] = z
 
         for t in range(n_frames):
             # Apply predictive Z correction (after first frame)
             if t > 0:
-                z += state['drift_rate']
-                state['z'] = z
+                z += state["drift_rate"]
+                state["z"] = z
 
             for c_idx, ch in enumerate(channels):
                 kwargs = {
-                    'z_pos': float(z),
-                    'exposure': exposure,
-                    'min_start_time': t * interval,
-                    'index': {'t': t},
-                    'metadata': {
-                        'timelapse_frame': t,
-                        'predicted_z': round(z, 3),
-                        'drift_rate': round(state['drift_rate'], 4),
+                    "z_pos": float(z),
+                    "exposure": exposure,
+                    "min_start_time": t * interval,
+                    "index": {"t": t},
+                    "metadata": {
+                        "timelapse_frame": t,
+                        "predicted_z": round(z, 3),
+                        "drift_rate": round(state["drift_rate"], 4),
                     },
                 }
                 if ch is not None:
-                    kwargs['channel'] = {'config': ch}
+                    kwargs["channel"] = {"config": ch}
                 if len(channels) > 1:
-                    kwargs['index']['c'] = c_idx
+                    kwargs["index"]["c"] = c_idx
 
                 yield MDAEvent(**kwargs)
 

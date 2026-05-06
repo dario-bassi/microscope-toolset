@@ -412,7 +412,7 @@ The `knowledge/` directory survives across sessions. Use it to:
 | `viewer_screenshot()` | Capture napari view | Document results |
 | `pymmcore_api_database(query)` | Search API docs | "How do I...?" questions |
 | `pdfs_publication_database(query)` | Search papers | Scientific background |
-| `request_user_clarification(message)` | Ask user | Need human input | 
+| `request_user_clarification(message)` | Ask user | Need human input |
 
 ## Codebase Structure
 

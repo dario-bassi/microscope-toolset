@@ -157,4 +157,3 @@ Always re-upload the mask before each use during experiments. If using MDAEvent 
    the DMD active (white mask) to produce signal. This is not just for stimulation.
 9. **Wrong setSLMExposure** — Too short: DMD turns off before camera fires. Too long
    (60s): causes `waitForSystem()` timeout. Match to acquisition needs.
-

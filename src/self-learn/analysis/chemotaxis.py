@@ -14,7 +14,6 @@ Functions:
 """
 
 import numpy as np
-from scipy import stats as scipy_stats
 
 
 def directionality_index(trajectory):
@@ -38,24 +37,24 @@ def directionality_index(trajectory):
         raise ValueError("trajectory must be (N, 2)")
     if len(traj) < 2:
         return {
-            'directionality': 0.0,
-            'net_displacement': 0.0,
-            'total_path': 0.0,
-            'n_steps': 0,
+            "directionality": 0.0,
+            "net_displacement": 0.0,
+            "total_path": 0.0,
+            "n_steps": 0,
         }
 
     steps = np.diff(traj, axis=0)
     step_lengths = np.sqrt(np.sum(steps**2, axis=1))
     total_path = float(step_lengths.sum())
-    net_disp = float(np.sqrt(np.sum((traj[-1] - traj[0])**2)))
+    net_disp = float(np.sqrt(np.sum((traj[-1] - traj[0]) ** 2)))
 
     di = net_disp / total_path if total_path > 0 else 0.0
 
     return {
-        'directionality': round(di, 4),
-        'net_displacement': round(net_disp, 4),
-        'total_path': round(total_path, 4),
-        'n_steps': len(steps),
+        "directionality": round(di, 4),
+        "net_displacement": round(net_disp, 4),
+        "total_path": round(total_path, 4),
+        "n_steps": len(steps),
     }
 
 
@@ -77,11 +76,11 @@ def migration_angles(trajectory, degrees=True):
     traj = np.asarray(trajectory, dtype=float)
     if len(traj) < 2:
         return {
-            'angles': np.array([]),
-            'step_lengths': np.array([]),
-            'mean_angle': 0.0,
-            'angular_std': 0.0,
-            'n_steps': 0,
+            "angles": np.array([]),
+            "step_lengths": np.array([]),
+            "mean_angle": 0.0,
+            "angular_std": 0.0,
+            "n_steps": 0,
         }
 
     steps = np.diff(traj, axis=0)
@@ -91,11 +90,11 @@ def migration_angles(trajectory, degrees=True):
     valid = lengths > 1e-10
     if not valid.any():
         return {
-            'angles': np.array([]),
-            'step_lengths': np.array([]),
-            'mean_angle': 0.0,
-            'angular_std': 0.0,
-            'n_steps': 0,
+            "angles": np.array([]),
+            "step_lengths": np.array([]),
+            "mean_angle": 0.0,
+            "angular_std": 0.0,
+            "n_steps": 0,
         }
 
     angles_rad = np.arctan2(steps[valid, 1], steps[valid, 0])
@@ -119,11 +118,11 @@ def migration_angles(trajectory, degrees=True):
         std_out = float(angular_std)
 
     return {
-        'angles': angles_out,
-        'step_lengths': lengths[valid],
-        'mean_angle': round(mean_out, 2),
-        'angular_std': round(std_out, 2),
-        'n_steps': int(valid.sum()),
+        "angles": angles_out,
+        "step_lengths": lengths[valid],
+        "mean_angle": round(mean_out, 2),
+        "angular_std": round(std_out, 2),
+        "n_steps": int(valid.sum()),
     }
 
 
@@ -158,11 +157,11 @@ def angular_histogram(angles, n_bins=12, weights=None):
     dominant_idx = int(np.argmax(counts))
 
     return {
-        'bin_edges': bin_edges,
-        'bin_centers': bin_centers,
-        'counts': counts,
-        'frequencies': frequencies,
-        'dominant_direction': float(bin_centers[dominant_idx]),
+        "bin_edges": bin_edges,
+        "bin_centers": bin_centers,
+        "counts": counts,
+        "frequencies": frequencies,
+        "dominant_direction": float(bin_centers[dominant_idx]),
     }
 
 
@@ -190,10 +189,10 @@ def persistence_time(trajectory, dt=1.0, max_lag=None):
     traj = np.asarray(trajectory, dtype=float)
     if len(traj) < 4:
         return {
-            'persistence_time': 0.0,
-            'autocorrelation': np.array([]),
-            'lags': np.array([]),
-            'mean_speed': 0.0,
+            "persistence_time": 0.0,
+            "autocorrelation": np.array([]),
+            "lags": np.array([]),
+            "mean_speed": 0.0,
         }
 
     steps = np.diff(traj, axis=0)
@@ -201,10 +200,10 @@ def persistence_time(trajectory, dt=1.0, max_lag=None):
     valid = lengths > 1e-10
     if valid.sum() < 3:
         return {
-            'persistence_time': 0.0,
-            'autocorrelation': np.array([]),
-            'lags': np.array([]),
-            'mean_speed': 0.0,
+            "persistence_time": 0.0,
+            "autocorrelation": np.array([]),
+            "lags": np.array([]),
+            "mean_speed": 0.0,
         }
 
     # Unit direction vectors
@@ -218,7 +217,7 @@ def persistence_time(trajectory, dt=1.0, max_lag=None):
     # Velocity direction autocorrelation: <v(t)·v(t+lag)>
     autocorr = np.zeros(max_lag)
     for lag in range(max_lag):
-        dots = np.sum(directions[:n - lag] * directions[lag:], axis=1)
+        dots = np.sum(directions[: n - lag] * directions[lag:], axis=1)
         autocorr[lag] = float(np.mean(dots))
 
     lags = np.arange(max_lag) * dt
@@ -242,10 +241,10 @@ def persistence_time(trajectory, dt=1.0, max_lag=None):
         tau = 0.0
 
     return {
-        'persistence_time': round(max(tau, 0.0), 4),
-        'autocorrelation': autocorr,
-        'lags': lags,
-        'mean_speed': round(float(lengths[valid].mean() / dt), 4),
+        "persistence_time": round(max(tau, 0.0), 4),
+        "autocorrelation": autocorr,
+        "lags": lags,
+        "mean_speed": round(float(lengths[valid].mean() / dt), 4),
     }
 
 
@@ -274,12 +273,12 @@ def chemotactic_index(trajectory, gradient_direction=0.0, degrees=True):
     traj = np.asarray(trajectory, dtype=float)
     if len(traj) < 2:
         return {
-            'chemotactic_index': 0.0,
-            'forward_migration_index': 0.0,
-            'perpendicular_index': 0.0,
-            'net_displacement_parallel': 0.0,
-            'net_displacement_perpendicular': 0.0,
-            'p_value': 1.0,
+            "chemotactic_index": 0.0,
+            "forward_migration_index": 0.0,
+            "perpendicular_index": 0.0,
+            "net_displacement_parallel": 0.0,
+            "net_displacement_perpendicular": 0.0,
+            "p_value": 1.0,
         }
 
     if degrees:
@@ -311,8 +310,7 @@ def chemotactic_index(trajectory, gradient_direction=0.0, degrees=True):
         if valid.sum() >= 3:
             angles_v = angles[valid]
             n = len(angles_v)
-            R = np.sqrt(np.sum(np.cos(angles_v))**2 +
-                        np.sum(np.sin(angles_v))**2) / n
+            R = np.sqrt(np.sum(np.cos(angles_v)) ** 2 + np.sum(np.sin(angles_v)) ** 2) / n
             # Rayleigh test: p ≈ exp(-n * R^2) for large n
             p_val = float(np.exp(-n * R**2))
             p_val = min(max(p_val, 0.0), 1.0)
@@ -322,12 +320,12 @@ def chemotactic_index(trajectory, gradient_direction=0.0, degrees=True):
         p_val = 1.0
 
     return {
-        'chemotactic_index': round(ci, 4),
-        'forward_migration_index': round(ci, 4),
-        'perpendicular_index': round(pi, 4),
-        'net_displacement_parallel': round(d_parallel, 4),
-        'net_displacement_perpendicular': round(d_perp, 4),
-        'p_value': round(p_val, 6),
+        "chemotactic_index": round(ci, 4),
+        "forward_migration_index": round(ci, 4),
+        "perpendicular_index": round(pi, 4),
+        "net_displacement_parallel": round(d_parallel, 4),
+        "net_displacement_perpendicular": round(d_perp, 4),
+        "p_value": round(p_val, 6),
     }
 
 
@@ -357,36 +355,36 @@ def analyze_migration(trajectories, dt=1.0, gradient_direction=None):
         di = directionality_index(traj)
         pt = persistence_time(traj, dt=dt)
         cell_result = {
-            'directionality': di['directionality'],
-            'net_displacement': di['net_displacement'],
-            'total_path': di['total_path'],
-            'speed': pt['mean_speed'],
-            'persistence_time': pt['persistence_time'],
+            "directionality": di["directionality"],
+            "net_displacement": di["net_displacement"],
+            "total_path": di["total_path"],
+            "speed": pt["mean_speed"],
+            "persistence_time": pt["persistence_time"],
         }
         if gradient_direction is not None:
             ci = chemotactic_index(traj, gradient_direction)
-            cell_result['chemotactic_index'] = ci['chemotactic_index']
+            cell_result["chemotactic_index"] = ci["chemotactic_index"]
         results.append(cell_result)
 
-    speeds = [r['speed'] for r in results]
-    dis = [r['directionality'] for r in results]
-    pts = [r['persistence_time'] for r in results]
+    speeds = [r["speed"] for r in results]
+    dis = [r["directionality"] for r in results]
+    pts = [r["persistence_time"] for r in results]
 
     summary = {
-        'n_cells': len(trajectories),
-        'mean_speed': round(float(np.mean(speeds)), 4) if speeds else 0.0,
-        'mean_directionality': round(float(np.mean(dis)), 4) if dis else 0.0,
-        'mean_persistence_time': round(float(np.mean(pts)), 4) if pts else 0.0,
-        'speeds': speeds,
-        'directionalities': dis,
-        'persistence_times': pts,
-        'per_cell': results,
+        "n_cells": len(trajectories),
+        "mean_speed": round(float(np.mean(speeds)), 4) if speeds else 0.0,
+        "mean_directionality": round(float(np.mean(dis)), 4) if dis else 0.0,
+        "mean_persistence_time": round(float(np.mean(pts)), 4) if pts else 0.0,
+        "speeds": speeds,
+        "directionalities": dis,
+        "persistence_times": pts,
+        "per_cell": results,
     }
 
     if gradient_direction is not None:
-        cis = [r['chemotactic_index'] for r in results]
-        summary['chemotactic_index'] = round(float(np.mean(cis)), 4) if cis else 0.0
+        cis = [r["chemotactic_index"] for r in results]
+        summary["chemotactic_index"] = round(float(np.mean(cis)), 4) if cis else 0.0
     else:
-        summary['chemotactic_index'] = None
+        summary["chemotactic_index"] = None
 
     return summary

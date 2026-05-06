@@ -1,18 +1,20 @@
+import ast
 import importlib
 import importlib.util
+import logging
 import subprocess
 import sys
+from contextlib import redirect_stderr, redirect_stdout
 from io import StringIO
-from contextlib import redirect_stdout,redirect_stderr
 
 from pymmcore_plus import CMMCorePlus
-import logging
-import ast
 
 from src.local.gatekeeper_core import GatekeeperCore
 from src.local.mda_helpers import run_mda_with_feedback
 from src.local.microscopy_utils import (
-    find_bright_centroid, center_on_cell, detect_cells,
+    center_on_cell,
+    detect_cells,
+    find_bright_centroid,
 )
 
 #  logger
@@ -20,15 +22,16 @@ logger = logging.getLogger("Execute")
 if not logger.handlers:
     logger.setLevel(logging.INFO)
     fh = logging.FileHandler("microscope_toolset.log", encoding="utf-8")
-    fh.setFormatter(logging.Formatter(
-        "%(asctime)s [%(levelname)s] %(name)s: %(message)s",
-        datefmt="%Y-%m-%d %H:%M:%S",
-    ))
+    fh.setFormatter(
+        logging.Formatter(
+            "%(asctime)s [%(levelname)s] %(name)s: %(message)s",
+            datefmt="%Y-%m-%d %H:%M:%S",
+        )
+    )
     logger.addHandler(fh)
 
 
 class Execute:
-
     # Core classes the agent must not re-instantiate
     _BLOCKED_CONSTRUCTORS = {"CMMCorePlus", "UniMMCore"}
     # Hardware-config methods the agent must not call
@@ -57,7 +60,9 @@ class Execute:
     def _populate_namespace(self, mmc) -> None:
         """Fill (or replace) all mmc-dependent namespace entries."""
         self.namespace["mmc"] = GatekeeperCore(mmc)
-        self.namespace["run_mda_with_feedback"] = lambda events, on_frame=None: run_mda_with_feedback(mmc, events, on_frame)
+        self.namespace["run_mda_with_feedback"] = (
+            lambda events, on_frame=None: run_mda_with_feedback(mmc, events, on_frame)
+        )
         self.namespace["center_on_cell"] = lambda **kw: center_on_cell(mmc, **kw)
         self.namespace["find_bright_centroid"] = find_bright_centroid
         self.namespace["detect_cells"] = detect_cells
@@ -70,8 +75,10 @@ class Execute:
         """
         try:
             import json as _json
-            from src.benchmarking.experiment_saver import MARKER_FILE
             from pathlib import Path as _Path
+
+            from src.benchmarking.experiment_saver import MARKER_FILE
+
             if MARKER_FILE.exists():
                 _marker = _json.loads(MARKER_FILE.read_text(encoding="utf-8"))
                 _ws = _marker.get("workspace_dir")
@@ -90,7 +97,6 @@ class Execute:
         self._populate_namespace(mmc)
         logger.info("Execute namespace updated with new core (%s)", type(mmc).__name__)
 
-
     def _install_library(self, module: str):
         """Install missing packages using pip with better error handling"""
         try:
@@ -102,9 +108,12 @@ class Execute:
             logger.info(f"Installing package: {module}")
 
             # Install the package
-            result = subprocess.run([
-                sys.executable, "-m", "pip", "install", module
-            ], capture_output=True, text=True, timeout=120)  # Add timeout
+            result = subprocess.run(
+                [sys.executable, "-m", "pip", "install", module],
+                capture_output=True,
+                text=True,
+                timeout=120,
+            )  # Add timeout
 
             if result.returncode == 0:
                 logger.info(f"Successfully installed {module}")
@@ -122,7 +131,7 @@ class Execute:
         except Exception as e:
             logger.error(f"Unexpected error installing {module}: {e}")
             return False
-        
+
     def _get_missing_imports(self, code: str) -> list[str]:
         """Parse AST and return top-level module names that are not currently installed."""
         missing = []
@@ -133,11 +142,11 @@ class Execute:
         for node in ast.walk(tree):
             if isinstance(node, ast.Import):
                 for alias in node.names:
-                    mod = alias.name.split('.')[0]
+                    mod = alias.name.split(".")[0]
                     if importlib.util.find_spec(mod) is None and mod not in missing:
                         missing.append(mod)
             elif isinstance(node, ast.ImportFrom) and node.module:
-                mod = node.module.split('.')[0]
+                mod = node.module.split(".")[0]
                 if importlib.util.find_spec(mod) is None and mod not in missing:
                     missing.append(mod)
         return missing
@@ -158,22 +167,20 @@ class Execute:
         for node in ast.walk(tree):
             if isinstance(node, ast.Import):
                 for alias in node.names:
-                    mod = alias.name.split('.')[0]
+                    mod = alias.name.split(".")[0]
                     if mod not in failed:
                         try:
                             importlib.import_module(mod)
                         except Exception:
                             pass
             elif isinstance(node, ast.ImportFrom) and node.module:
-                mod = node.module.split('.')[0]
+                mod = node.module.split(".")[0]
                 if mod not in failed:
                     try:
                         importlib.import_module(mod)
                     except Exception:
                         pass
         return failed
-
-    
 
     def run_code_new(self, code: str, execution_mode: str = "buffered"):
         """Execute code after pre-importing deps. Use GatekeeperCore to buffer hardware calls and commit on succession"""
@@ -204,19 +211,18 @@ class Execute:
             return f"Dependency parsing error: {e}"
         if failed:
             return f"Missing packages that could not be installed: {', '.join(failed)}. Install them manually and retry."
-        
+
         # Execute code in specif mode
         if execution_mode == "live":
-            logger.info(f"Executing code in live mode")
+            logger.info("Executing code in live mode")
             return self._run_code_live(code)
         else:
-            logger.info(f"Exeecuting code in buffer mode")
+            logger.info("Exeecuting code in buffer mode")
             return self._run_code_buffered(code)
-        
 
     def _run_code_buffered(self, code: str):
         """Execute code after pre-importing deps. Use GatekeeperCore to buffer hardware calls and commit on succession"""
-        
+
         # Static analysis of mmc usage (convervatives because LLM Agent makes mistakes!)
         mmc_obj = self.namespace["mmc"]
         # Get current state before code run
@@ -234,7 +240,7 @@ class Execute:
             teardowns = self._apply_runtime_guards(code)
             try:
                 with redirect_stdout(out_f), redirect_stderr(err_f):
-                    exec(code, self.namespace)
+                    exec(code, self.namespace)  # nosec B102
             finally:
                 self._remove_runtime_guards(teardowns)
             # reading output+errors
@@ -252,24 +258,21 @@ class Execute:
                 logger.error(f"Commit failed: {e}")
                 mmc_obj.clear_pending()
                 return f"Commit failed: {e}"
-                
-            
-            return read_output if read_output else "Code executed successfully (no output)"
-        
-        except ModuleNotFoundError as e:
 
+            return read_output if read_output else "Code executed successfully (no output)"
+
+        except ModuleNotFoundError as e:
             module_name = str(e).split("'")[1] if "'" in str(e) else str(e)
             logger.error(f"Module not found during execution (unexpected): {module_name}")
             mmc_obj.clear_pending()
             return f"Module not found during execution: {module_name}"
-        
-        except Exception as e:
 
+        except Exception as e:
             error_msg = f"Execution error: {type(e).__name__}: {str(e)}"
             logger.error(error_msg)
             mmc_obj.clear_pending()
             return error_msg
-        
+
     def _run_code_live(self, code: str):
         """Execute code after pre-importing deps. Use GatekeeperCore to buffer hardware calls and commit on succession"""
 
@@ -286,7 +289,7 @@ class Execute:
             teardowns = self._apply_runtime_guards(code)
             try:
                 with redirect_stdout(out_f), redirect_stderr(err_f):
-                    exec(code, self.namespace)
+                    exec(code, self.namespace)  # nosec B102
             finally:
                 self._remove_runtime_guards(teardowns)
             # reading output+errors
@@ -299,22 +302,19 @@ class Execute:
 
             logger.info("Code executed successfully.")
             return read_output if read_output else "Code executed successfully (no output)"
-        
-        except ModuleNotFoundError as e:
 
+        except ModuleNotFoundError as e:
             module_name = str(e).split("'")[1] if "'" in str(e) else str(e)
             logger.error(f"Module not found during execution (unexpected): {module_name}")
             return f"Module not found during execution: {module_name}"
-        
-        except Exception as e:
 
+        except Exception as e:
             error_msg = f"Execution error: {type(e).__name__}: {str(e)}"
             logger.error(error_msg)
             return error_msg
-        
+
         finally:
             self.namespace["mmc"] = shadow_mmc_obj
-
 
     def is_safe_viewer(self, code: str):
         """
@@ -329,13 +329,15 @@ class Execute:
 
         for node in ast.walk(tree):
             # Block bare 'viewer' name
-            if isinstance(node, ast.Name) and node.id == 'viewer':
+            if isinstance(node, ast.Name) and node.id == "viewer":
                 return False
             # Block napari.current_viewer() pattern
-            if (isinstance(node, ast.Attribute)
-                    and node.attr == 'current_viewer'
-                    and isinstance(node.value, ast.Name)
-                    and node.value.id == 'napari'):
+            if (
+                isinstance(node, ast.Attribute)
+                and node.attr == "current_viewer"
+                and isinstance(node.value, ast.Name)
+                and node.value.id == "napari"
+            ):
                 return False
 
         return True
@@ -367,9 +369,11 @@ class Execute:
 
             if isinstance(func, ast.Attribute):
                 # Block CMMCorePlus.instance() / UniMMCore.instance()
-                if (func.attr == "instance"
-                        and isinstance(func.value, ast.Name)
-                        and func.value.id in self._BLOCKED_CONSTRUCTORS):
+                if (
+                    func.attr == "instance"
+                    and isinstance(func.value, ast.Name)
+                    and func.value.id in self._BLOCKED_CONSTRUCTORS
+                ):
                     return False, (
                         f"Calling {func.value.id}.instance() is not allowed. "
                         "Use the pre-configured `mmc` instance instead."
@@ -446,6 +450,7 @@ class Execute:
 # Built-in library guards
 # ---------------------------------------------------------------------------
 
+
 def _cellpose_diameter_guard(tree: ast.AST) -> tuple[bool, str]:
     """Require an explicit 'diameter' kwarg in any cellpose call."""
     has_diameter = any(
@@ -486,10 +491,12 @@ def _try_numeric_literal(node: ast.expr) -> float | None:
     """Return the numeric value of a literal node (handles negatives), or None."""
     if isinstance(node, ast.Constant) and isinstance(node.value, (int, float)):
         return float(node.value)
-    if (isinstance(node, ast.UnaryOp)
-            and isinstance(node.op, ast.USub)
-            and isinstance(node.operand, ast.Constant)
-            and isinstance(node.operand.value, (int, float))):
+    if (
+        isinstance(node, ast.UnaryOp)
+        and isinstance(node.op, ast.USub)
+        and isinstance(node.operand, ast.Constant)
+        and isinstance(node.operand.value, (int, float))
+    ):
         return -float(node.operand.value)
     return None
 
@@ -549,17 +556,20 @@ def _install_cellpose_size_guard(namespace: dict):
     """
     try:
         import cellpose.models
+
         original_eval = cellpose.models.Cellpose.eval
     except (ImportError, AttributeError):
         return None
 
     def _guarded_eval(self_model, x, *args, **kwargs):
         import numpy as np
+
         img = np.asarray(x) if not isinstance(x, list) else np.asarray(x[0])
         if img.ndim >= 2:
             h, w = img.shape[0], img.shape[1]
-            if (h > _CELLPOSE_SIZE_THRESHOLD or w > _CELLPOSE_SIZE_THRESHOLD) \
-                    and not namespace.get("cellpose_allow_large_image", False):
+            if (h > _CELLPOSE_SIZE_THRESHOLD or w > _CELLPOSE_SIZE_THRESHOLD) and not namespace.get(
+                "cellpose_allow_large_image", False
+            ):
                 raise RuntimeError(
                     f"Image size {h}×{w} px exceeds the {_CELLPOSE_SIZE_THRESHOLD}×"
                     f"{_CELLPOSE_SIZE_THRESHOLD} px threshold — segmentation may take a very long time.\n"

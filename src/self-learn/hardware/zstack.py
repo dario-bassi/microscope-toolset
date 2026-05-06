@@ -42,9 +42,9 @@ def acquire_zstack(mmc, z_range=(-30, 30), z_step=3.0, exposure=None):
     return np.array(frames), z_positions
 
 
-def detect_cells_zstack(stack, z_positions, threshold_sigma=2.5,
-                        min_area_px=15, fill_holes=False,
-                        dedup_dist=15):
+def detect_cells_zstack(
+    stack, z_positions, threshold_sigma=2.5, min_area_px=15, fill_holes=False, dedup_dist=15
+):
     """Detect cells across a Z-stack and merge across planes.
 
     Uses global stats for consistent thresholding, then clusters
@@ -72,59 +72,72 @@ def detect_cells_zstack(stack, z_positions, threshold_sigma=2.5,
 
     all_detections = []
     for zi, z in enumerate(z_positions):
-        cells = detect_cells(stack[zi], threshold_sigma=threshold_sigma,
-                             min_area_px=min_area_px, fill_holes=fill_holes,
-                             global_stats=(global_mean, global_std))
+        cells = detect_cells(
+            stack[zi],
+            threshold_sigma=threshold_sigma,
+            min_area_px=min_area_px,
+            fill_holes=fill_holes,
+            global_stats=(global_mean, global_std),
+        )
         for c in cells:
-            all_detections.append({
-                'x': c['centroid_px'][0],
-                'y': c['centroid_px'][1],
-                'z': float(z),
-                'peak': c['peak'],
-                'area': c['area_px'],
-            })
+            all_detections.append(
+                {
+                    "x": c["centroid_px"][0],
+                    "y": c["centroid_px"][1],
+                    "z": float(z),
+                    "peak": c["peak"],
+                    "area": c["area_px"],
+                }
+            )
 
     if not all_detections:
         return []
 
     # Cluster XY positions across Z
-    pts = np.array([(d['x'], d['y']) for d in all_detections])
+    pts = np.array([(d["x"], d["y"]) for d in all_detections])
 
     if len(pts) < 2:
         d = all_detections[0]
-        return [{
-            'x': round(d['x']), 'y': round(d['y']),
-            'best_z': d['z'], 'peak': d['peak'],
-            'n_slices': 1, 'confidence': 'low',
-        }]
+        return [
+            {
+                "x": round(d["x"]),
+                "y": round(d["y"]),
+                "best_z": d["z"],
+                "peak": d["peak"],
+                "n_slices": 1,
+                "confidence": "low",
+            }
+        ]
 
-    Z_linkage = linkage(pts, method='average')
-    clusters = fcluster(Z_linkage, t=dedup_dist, criterion='distance')
+    Z_linkage = linkage(pts, method="average")
+    clusters = fcluster(Z_linkage, t=dedup_dist, criterion="distance")
 
     results = []
     for cid in sorted(set(clusters)):
         mask = clusters == cid
-        cluster_dets = [d for d, m in zip(all_detections, mask) if m]
+        cluster_dets = [d for d, m in zip(all_detections, mask, strict=False) if m]
 
         # Use centroid from BEST FOCUS slice only (highest peak)
         # Don't average — out-of-focus cells have shifted centroids
-        best = max(cluster_dets, key=lambda d: d['peak'])
+        best = max(cluster_dets, key=lambda d: d["peak"])
         n_slices = len(cluster_dets)
 
-        if n_slices >= 10 and best['peak'] >= 15:
-            confidence = 'high'
+        if n_slices >= 10 and best["peak"] >= 15:
+            confidence = "high"
         elif n_slices >= 5:
-            confidence = 'medium'
+            confidence = "medium"
         else:
-            confidence = 'low'
+            confidence = "low"
 
-        results.append({
-            'x': round(best['x']),
-            'y': round(best['y']),
-            'best_z': best['z'],
-            'peak': best['peak'],
-            'n_slices': n_slices,
-            'confidence': confidence,
-        })
+        results.append(
+            {
+                "x": round(best["x"]),
+                "y": round(best["y"]),
+                "best_z": best["z"],
+                "peak": best["peak"],
+                "n_slices": n_slices,
+                "confidence": confidence,
+            }
+        )
 
     return results

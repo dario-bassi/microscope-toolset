@@ -8,11 +8,14 @@ Modules:
     report         -- Experiment report generation with statistics
 """
 
-from .diagnostics import save_snapshot, save_overlay, save_composite
-from .image import to_grayscale, normalize, auto_contrast
-from .showcase import make_showcase, add_scalebar, annotate_image
+from .diagnostics import save_composite, save_overlay, save_snapshot
 from .experiment_log import ExperimentLog
+from .image import auto_contrast, normalize, to_grayscale
 from .report import (
-    generate_report, format_markdown, measurement_table,
-    phase_comparison, experiment_timeline,
+    experiment_timeline,
+    format_markdown,
+    generate_report,
+    measurement_table,
+    phase_comparison,
 )
+from .showcase import add_scalebar, annotate_image, make_showcase

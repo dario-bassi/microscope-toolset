@@ -69,12 +69,14 @@ class ExperimentLog:
     def _add_entry(self, entry_type, data):
         """Add a timestamped entry."""
         elapsed = time.time() - self.start_time
-        self.entries.append({
-            "type": entry_type,
-            "phase": self._phase,
-            "elapsed_s": round(elapsed, 3),
-            "data": data,
-        })
+        self.entries.append(
+            {
+                "type": entry_type,
+                "phase": self._phase,
+                "elapsed_s": round(elapsed, 3),
+                "data": data,
+            }
+        )
 
     def get_measurements(self, name=None):
         """Retrieve all measurements, optionally filtered by name."""

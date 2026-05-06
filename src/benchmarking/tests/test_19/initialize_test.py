@@ -3,8 +3,6 @@
 import math
 import time
 
-import numpy as np
-
 
 def create_sim_override():
     from virtual_microscope.sims.cell.sim import ScatteredCellSim
@@ -28,8 +26,10 @@ def create_sim_override():
             return super()._crop_fov(full)
 
         def get_stage_drift(self) -> tuple:
-            return (round(float(self._drift_accumulator[0]), 3),
-                    round(float(self._drift_accumulator[1]), 3))
+            return (
+                round(float(self._drift_accumulator[0]), 3),
+                round(float(self._drift_accumulator[1]), 3),
+            )
 
         def reset_stage_drift(self) -> None:
             self._drift_accumulator[:] = 0.0

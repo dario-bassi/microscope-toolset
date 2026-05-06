@@ -4,6 +4,7 @@
 def create_sim_override():
     """Particle's create_sim() doesn't forward cell_type, so we instantiate directly."""
     from virtual_microscope.sims.cell.sim import ScatteredCellSim
+
     return ScatteredCellSim(
         n_cells=TEST_CONFIG["n_cells"],
         seed=TEST_CONFIG["seed"],

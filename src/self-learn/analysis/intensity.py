@@ -6,8 +6,8 @@ grouping, estimate_background() for background estimation, and
 fold_change() for background-corrected ratio computation.
 """
 
-import numpy as np
 import cv2
+import numpy as np
 
 
 def radial_profile(image, center=None, bin_width=1.0):
@@ -64,11 +64,11 @@ def radial_profile(image, center=None, bin_width=1.0):
             counts.append(int(len(px)))
 
     return {
-        'radii': np.array(radii),
-        'mean_intensity': np.array(mean_int),
-        'std_intensity': np.array(std_int),
-        'counts': np.array(counts),
-        'max_radius': max_radius,
+        "radii": np.array(radii),
+        "mean_intensity": np.array(mean_int),
+        "std_intensity": np.array(std_int),
+        "counts": np.array(counts),
+        "max_radius": max_radius,
     }
 
 
@@ -96,10 +96,10 @@ def local_density(centroids, image_shape, radius=30):
 
     if not centroids:
         return {
-            'density_map': density_map,
-            'max_density': 0.0,
-            'max_location': (0, 0),
-            'mean_density': 0.0,
+            "density_map": density_map,
+            "max_density": 0.0,
+            "max_location": (0, 0),
+            "mean_density": 0.0,
         }
 
     # Place Gaussian-like kernels at each centroid
@@ -118,10 +118,10 @@ def local_density(centroids, image_shape, radius=30):
     max_loc = (int(max_idx[1]), int(max_idx[0]))
 
     return {
-        'density_map': density_map,
-        'max_density': float(density_map.max()),
-        'max_location': max_loc,
-        'mean_density': float(density_map.mean()),
+        "density_map": density_map,
+        "max_density": float(density_map.max()),
+        "max_location": max_loc,
+        "mean_density": float(density_map.mean()),
     }
 
 
@@ -156,14 +156,14 @@ def compute_snr(image, threshold=None, mask=None):
     bg_mask = ~signal_mask
     if not signal_mask.any() or not bg_mask.any():
         return {
-            'snr': 0.0,
-            'signal_mean': float(img[signal_mask].mean()) if signal_mask.any() else 0.0,
-            'bg_mean': float(img[bg_mask].mean()) if bg_mask.any() else 0.0,
-            'bg_std': 0.0,
-            'signal_pixels': int(signal_mask.sum()),
-            'bg_pixels': int(bg_mask.sum()),
-            'threshold_used': float(threshold) if threshold is not None else 0.0,
-            'dynamic_range': 0.0,
+            "snr": 0.0,
+            "signal_mean": float(img[signal_mask].mean()) if signal_mask.any() else 0.0,
+            "bg_mean": float(img[bg_mask].mean()) if bg_mask.any() else 0.0,
+            "bg_std": 0.0,
+            "signal_pixels": int(signal_mask.sum()),
+            "bg_pixels": int(bg_mask.sum()),
+            "threshold_used": float(threshold) if threshold is not None else 0.0,
+            "dynamic_range": 0.0,
         }
 
     signal_mean = float(img[signal_mask].mean())
@@ -173,18 +173,18 @@ def compute_snr(image, threshold=None, mask=None):
     snr = (signal_mean - bg_mean) / max(bg_std, 1e-6)
 
     return {
-        'snr': snr,
-        'signal_mean': signal_mean,
-        'bg_mean': bg_mean,
-        'bg_std': bg_std,
-        'signal_pixels': int(signal_mask.sum()),
-        'bg_pixels': int(bg_mask.sum()),
-        'threshold_used': float(threshold) if threshold is not None else 0.0,
-        'dynamic_range': signal_mean / max(bg_std, 1e-6),
+        "snr": snr,
+        "signal_mean": signal_mean,
+        "bg_mean": bg_mean,
+        "bg_std": bg_std,
+        "signal_pixels": int(signal_mask.sum()),
+        "bg_pixels": int(bg_mask.sum()),
+        "threshold_used": float(threshold) if threshold is not None else 0.0,
+        "dynamic_range": signal_mean / max(bg_std, 1e-6),
     }
 
 
-def classify_intensities(values, n_classes=3, method='auto', class_sizes=None):
+def classify_intensities(values, n_classes=3, method="auto", class_sizes=None):
     """Classify intensity values into ordered classes.
 
     Tries multiple methods and picks the best one:
@@ -211,12 +211,12 @@ def classify_intensities(values, n_classes=3, method='auto', class_sizes=None):
     n = len(vals)
     order = np.argsort(-vals)  # descending by intensity
 
-    if method == 'auto':
+    if method == "auto":
         gap_result = _classify_by_gaps(vals, order, n_classes)
         km_result = _classify_by_kmeans(vals, n_classes)
 
         if gap_result is not None:
-            if gap_result['counts'] == km_result['counts']:
+            if gap_result["counts"] == km_result["counts"]:
                 return gap_result
             return km_result
 
@@ -228,14 +228,14 @@ def classify_intensities(values, n_classes=3, method='auto', class_sizes=None):
 
         return km_result
 
-    elif method == 'gap':
+    elif method == "gap":
         result = _classify_by_gaps(vals, order, n_classes)
         return result or _classify_by_kmeans(vals, n_classes)
-    elif method == 'kmeans':
+    elif method == "kmeans":
         return _classify_by_kmeans(vals, n_classes)
-    elif method == 'rank':
+    elif method == "rank":
         return _classify_by_rank(vals, order, n_classes)
-    elif method == 'constrained':
+    elif method == "constrained":
         return _classify_constrained(vals, order, class_sizes or [n // n_classes] * n_classes)
     else:
         raise ValueError(f"Unknown method: {method}")
@@ -259,8 +259,7 @@ def _classify_by_gaps(vals, order, n_classes, min_gap_frac=0.15):
         return None
 
     needed = n_classes - 1
-    significant_gaps = [(g, idx) for g, idx in gaps[:needed]
-                        if g / val_range >= min_gap_frac]
+    significant_gaps = [(g, idx) for g, idx in gaps[:needed] if g / val_range >= min_gap_frac]
 
     if len(significant_gaps) < needed:
         return None
@@ -281,10 +280,10 @@ def _classify_by_gaps(vals, order, n_classes, min_gap_frac=0.15):
         boundaries.append(float((sorted_vals[split_idx] + sorted_vals[split_idx + 1]) / 2))
 
     return {
-        'labels': result_labels.tolist(),
-        'counts': counts,
-        'boundaries': boundaries,
-        'method_used': 'gap',
+        "labels": result_labels.tolist(),
+        "counts": counts,
+        "boundaries": boundaries,
+        "method_used": "gap",
     }
 
 
@@ -292,14 +291,13 @@ def _classify_by_kmeans(vals, n_classes):
     """Classify using k-means clustering."""
     data = vals.astype(np.float32).reshape(-1, 1)
     criteria = (cv2.TERM_CRITERIA_EPS + cv2.TERM_CRITERIA_MAX_ITER, 100, 0.1)
-    _, km_labels, centers = cv2.kmeans(data, n_classes, None, criteria, 10,
-                                       cv2.KMEANS_PP_CENTERS)
+    _, km_labels, centers = cv2.kmeans(data, n_classes, None, criteria, 10, cv2.KMEANS_PP_CENTERS)
     km_labels = km_labels.flatten()
     centers = centers.flatten()
 
     center_order = np.argsort(-centers)
     label_map = {int(old): new for new, old in enumerate(center_order)}
-    result_labels = [label_map[int(l)] for l in km_labels]
+    result_labels = [label_map[int(lbl)] for lbl in km_labels]
 
     counts = [result_labels.count(c) for c in range(n_classes)]
     boundaries = []
@@ -308,10 +306,10 @@ def _classify_by_kmeans(vals, n_classes):
         boundaries.append(float((sorted_centers[i] + sorted_centers[i + 1]) / 2))
 
     return {
-        'labels': result_labels,
-        'counts': counts,
-        'boundaries': boundaries,
-        'method_used': 'kmeans',
+        "labels": result_labels,
+        "counts": counts,
+        "boundaries": boundaries,
+        "method_used": "kmeans",
     }
 
 
@@ -339,10 +337,10 @@ def _classify_by_rank(vals, order, n_classes):
         boundaries.append(float((sorted_vals[pos - 1] + sorted_vals[pos]) / 2))
 
     return {
-        'labels': result_labels.tolist(),
-        'counts': counts,
-        'boundaries': boundaries,
-        'method_used': 'rank',
+        "labels": result_labels.tolist(),
+        "counts": counts,
+        "boundaries": boundaries,
+        "method_used": "rank",
     }
 
 
@@ -367,14 +365,14 @@ def _classify_constrained(vals, order, class_sizes):
             boundaries.append(float((sorted_vals[pos - 1] + sorted_vals[pos]) / 2))
 
     return {
-        'labels': result_labels.tolist(),
-        'counts': counts,
-        'boundaries': boundaries,
-        'method_used': 'constrained',
+        "labels": result_labels.tolist(),
+        "counts": counts,
+        "boundaries": boundaries,
+        "method_used": "constrained",
     }
 
 
-def estimate_background(image, mask=None, method='percentile', percentile=5):
+def estimate_background(image, mask=None, method="percentile", percentile=5):
     """Estimate fluorescence background intensity.
 
     For fluorescence images, background is the intensity level in regions
@@ -405,28 +403,29 @@ def estimate_background(image, mask=None, method='percentile', percentile=5):
     if len(bg_pixels) == 0:
         return 0.0
 
-    if method == 'percentile':
+    if method == "percentile":
         return float(np.percentile(bg_pixels, percentile))
-    elif method == 'mode':
+    elif method == "mode":
         hist, edges = np.histogram(bg_pixels, bins=256)
         peak_bin = np.argmax(hist)
         return float((edges[peak_bin] + edges[peak_bin + 1]) / 2)
-    elif method == 'corners':
+    elif method == "corners":
         h, w = image.shape[:2]
         ch, cw = max(1, h // 10), max(1, w // 10)
-        corners = np.concatenate([
-            image[:ch, :cw].ravel(),
-            image[:ch, -cw:].ravel(),
-            image[-ch:, :cw].ravel(),
-            image[-ch:, -cw:].ravel(),
-        ])
+        corners = np.concatenate(
+            [
+                image[:ch, :cw].ravel(),
+                image[:ch, -cw:].ravel(),
+                image[-ch:, :cw].ravel(),
+                image[-ch:, -cw:].ravel(),
+            ]
+        )
         return float(np.mean(corners))
     else:
         raise ValueError(f"Unknown method: {method!r}")
 
 
-def fold_change(hotspot, baseline, background=None, image=None,
-                bg_method='percentile'):
+def fold_change(hotspot, baseline, background=None, image=None, bg_method="percentile"):
     """Compute background-corrected fold change.
 
     In fluorescence microscopy, fold change must be computed on
@@ -469,17 +468,14 @@ def fold_change(hotspot, baseline, background=None, image=None,
     corr_fold = hot_corr / base_corr if base_corr > 0 else 0.0
 
     return {
-        'fold_change': round(corr_fold, 4),
-        'hotspot_corrected': round(hot_corr, 2),
-        'baseline_corrected': round(base_corr, 2),
-        'background': round(background, 2),
-        'raw_fold': round(raw_fold, 4),
+        "fold_change": round(corr_fold, 4),
+        "hotspot_corrected": round(hot_corr, 2),
+        "baseline_corrected": round(base_corr, 2),
+        "background": round(background, 2),
+        "raw_fold": round(raw_fold, 4),
     }
 
 
 # ---------------------------------------------------------------------------
 # Backward-compatible re-exports from split-out modules
 # ---------------------------------------------------------------------------
-
-from .calcium import extract_roi_traces, compute_dff, detect_calcium_transients
-from .orientation import circular_mean, circular_std, nematic_order_parameter

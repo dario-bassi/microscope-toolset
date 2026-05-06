@@ -3,6 +3,7 @@
 
 def create_sim_override():
     from virtual_microscope.sims.cell.sim import ScatteredCellSim
+
     return ScatteredCellSim(
         n_cells=TEST_CONFIG["n_cells"],
         seed=TEST_CONFIG["seed"],

@@ -4,6 +4,7 @@ Handles both virtual (Python #py devices → UniMMCore) and real
 (C++ Device drivers → CMMCorePlus) configurations.  All heavy imports
 are deferred to run() so the Qt main thread is never blocked.
 """
+
 import logging
 import threading
 import time
@@ -32,25 +33,26 @@ class CoreProxyWorker(QObject):
         server_error(msg)  — human-readable error if startup fails
     """
 
-    server_ready = pyqtSignal(str, str)   # (url, cfg_path)
+    server_ready = pyqtSignal(str, str)  # (url, cfg_path)
     server_error = pyqtSignal(str)
 
-    _POLL_INTERVAL = 0.2   # seconds between health-check attempts
-    _MAX_WAIT      = 15.0  # seconds before giving up
+    _POLL_INTERVAL = 0.2  # seconds between health-check attempts
+    _MAX_WAIT = 15.0  # seconds before giving up
 
     def __init__(self, cfg_path: str, host: str = "127.0.0.1", port: int = 5601):
         super().__init__()
-        self._cfg_path       = cfg_path
-        self._host           = host
-        self._port           = port
-        self._uvicorn_server = None   # set inside _server_thread before serving
-        self._server_thread  = None
+        self._cfg_path = cfg_path
+        self._host = host
+        self._port = port
+        self._uvicorn_server = None  # set inside _server_thread before serving
+        self._server_thread = None
 
     @pyqtSlot()
     def run(self):
         try:
-            import urllib.request
             import logging.handlers as _lh
+            import urllib.request
+
             import uvicorn
             from pymmcore_proxy import ProxyServer
 
@@ -79,14 +81,17 @@ class CoreProxyWorker(QObject):
             # but Qt signals connected from non-Qt threads (like uvicorn's asyncio
             # thread pool) silently fail to deliver.  psygnal has no such restriction.
             import os
+
             _old_backend = os.environ.get("PYMM_SIGNALS_BACKEND")
             os.environ["PYMM_SIGNALS_BACKEND"] = "psygnal"
             try:
                 if cfg_type == "virtual":
                     from pymmcore_plus.experimental.unicore import UniMMCore
+
                     core = UniMMCore()
                 else:
                     from pymmcore_plus import CMMCorePlus
+
                     core = CMMCorePlus()
             finally:
                 if _old_backend is None:
@@ -95,9 +100,11 @@ class CoreProxyWorker(QObject):
                     os.environ["PYMM_SIGNALS_BACKEND"] = _old_backend
 
             logger.info("[TIMING] worker:core_created          +%.3fs", time.perf_counter() - _t0)
-            logger.info(f"Starting proxy with empty {type(core).__name__} on {self._host}:{self._port}")
+            logger.info(
+                f"Starting proxy with empty {type(core).__name__} on {self._host}:{self._port}"
+            )
 
-            proxy  = ProxyServer(core, port=self._port)
+            proxy = ProxyServer(core, port=self._port)
             config = uvicorn.Config(
                 proxy.app,
                 host=self._host,
@@ -116,15 +123,18 @@ class CoreProxyWorker(QObject):
             self._server_thread.start()
             logger.info("[TIMING] worker:uvicorn_thread_started +%.3fs", time.perf_counter() - _t0)
 
-            url        = f"http://{self._host}:{self._port}"
+            url = f"http://{self._host}:{self._port}"
             health_url = f"{url}/health"
-            deadline   = time.monotonic() + self._MAX_WAIT
+            deadline = time.monotonic() + self._MAX_WAIT
 
             while time.monotonic() < deadline:
                 try:
-                    with urllib.request.urlopen(health_url, timeout=0.5) as resp:
+                    with urllib.request.urlopen(health_url, timeout=0.5) as resp:  # nosec B310
                         if resp.status == 200:
-                            logger.info("[TIMING] worker:health_200             +%.3fs", time.perf_counter() - _t0)
+                            logger.info(
+                                "[TIMING] worker:health_200             +%.3fs",
+                                time.perf_counter() - _t0,
+                            )
                             logger.info(f"Server ready at {url}")
                             self.server_ready.emit(url, self._cfg_path)
                             return
@@ -150,7 +160,7 @@ class CoreProxyWorker(QObject):
         server = self._uvicorn_server
         if server is not None:
             server.should_exit = True
-            server.force_exit  = True
+            server.force_exit = True
         if self._server_thread is not None:
             self._server_thread.join(timeout=5)
             self._server_thread = None

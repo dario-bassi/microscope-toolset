@@ -29,10 +29,10 @@ def fft_spectrum(signal, dt=1.0):
     n = len(signal)
     if n < 3:
         return {
-            'frequencies': np.array([]),
-            'power': np.array([]),
-            'dominant_freq': 0.0,
-            'dominant_period': float('inf'),
+            "frequencies": np.array([]),
+            "power": np.array([]),
+            "dominant_freq": 0.0,
+            "dominant_period": float("inf"),
         }
 
     # Detrend (remove linear trend)
@@ -49,16 +49,16 @@ def fft_spectrum(signal, dt=1.0):
     if len(power) > 1:
         dom_idx = 1 + np.argmax(power[1:])
         dominant_freq = float(freqs[dom_idx])
-        dominant_period = 1.0 / dominant_freq if dominant_freq > 0 else float('inf')
+        dominant_period = 1.0 / dominant_freq if dominant_freq > 0 else float("inf")
     else:
         dominant_freq = 0.0
-        dominant_period = float('inf')
+        dominant_period = float("inf")
 
     return {
-        'frequencies': freqs,
-        'power': power,
-        'dominant_freq': dominant_freq,
-        'dominant_period': dominant_period,
+        "frequencies": freqs,
+        "power": power,
+        "dominant_freq": dominant_freq,
+        "dominant_period": dominant_period,
     }
 
 
@@ -82,9 +82,9 @@ def autocorrelation(signal, max_lag=None):
     n = len(signal)
     if n < 4:
         return {
-            'lags': np.array([]),
-            'acf': np.array([]),
-            'first_peak_lag': 0,
+            "lags": np.array([]),
+            "acf": np.array([]),
+            "first_peak_lag": 0,
         }
 
     if max_lag is None:
@@ -93,17 +93,17 @@ def autocorrelation(signal, max_lag=None):
     # Detrend and normalize
     mean = signal.mean()
     centered = signal - mean
-    var = np.sum(centered ** 2)
+    var = np.sum(centered**2)
     if var < 1e-10:
         return {
-            'lags': np.arange(max_lag + 1),
-            'acf': np.zeros(max_lag + 1),
-            'first_peak_lag': 0,
+            "lags": np.arange(max_lag + 1),
+            "acf": np.zeros(max_lag + 1),
+            "first_peak_lag": 0,
         }
 
     acf = np.zeros(max_lag + 1)
     for lag in range(max_lag + 1):
-        acf[lag] = np.sum(centered[:n - lag] * centered[lag:]) / var
+        acf[lag] = np.sum(centered[: n - lag] * centered[lag:]) / var
 
     # Find first peak (local max after initial decay)
     first_peak_lag = 0
@@ -117,9 +117,9 @@ def autocorrelation(signal, max_lag=None):
             break
 
     return {
-        'lags': np.arange(max_lag + 1),
-        'acf': acf,
-        'first_peak_lag': int(first_peak_lag),
+        "lags": np.arange(max_lag + 1),
+        "acf": acf,
+        "first_peak_lag": int(first_peak_lag),
     }
 
 
@@ -170,14 +170,14 @@ def detect_peaks(signal, min_height=None, min_distance=1):
         mean_interval = 0.0
 
     return {
-        'peak_indices': peak_indices,
-        'peak_values': peak_values,
-        'n_peaks': len(peak_indices),
-        'mean_interval': mean_interval,
+        "peak_indices": peak_indices,
+        "peak_values": peak_values,
+        "n_peaks": len(peak_indices),
+        "mean_interval": mean_interval,
     }
 
 
-def detrend(signal, method='linear'):
+def detrend(signal, method="linear"):
     """Remove trend from a signal.
 
     Args:
@@ -188,9 +188,9 @@ def detrend(signal, method='linear'):
         Detrended signal array.
     """
     signal = np.asarray(signal, dtype=np.float64)
-    if method == 'mean':
+    if method == "mean":
         return signal - signal.mean()
-    elif method == 'linear':
+    elif method == "linear":
         t = np.arange(len(signal), dtype=np.float64)
         coeffs = np.polyfit(t, signal, 1)
         return signal - np.polyval(coeffs, t)
@@ -198,7 +198,7 @@ def detrend(signal, method='linear'):
         raise ValueError(f"Unknown detrend method: {method}")
 
 
-def measure_periodic_rate(signal, dt=1.0, min_freq=None, max_freq=None, unit='bpm'):
+def measure_periodic_rate(signal, dt=1.0, min_freq=None, max_freq=None, unit="bpm"):
     """Cross-validated periodic rate measurement using FFT + autocorrelation + peak counting.
 
     Combines three independent methods to estimate the frequency of a periodic
@@ -225,8 +225,11 @@ def measure_periodic_rate(signal, dt=1.0, min_freq=None, max_freq=None, unit='bp
 
     if n < 10:
         return {
-            'rate': 0.0, 'rate_hz': 0.0,
-            'method_agreement': {}, 'confidence': 'low', 'n_cycles': 0,
+            "rate": 0.0,
+            "rate_hz": 0.0,
+            "method_agreement": {},
+            "confidence": "low",
+            "n_cycles": 0,
         }
 
     # Detrend
@@ -234,12 +237,12 @@ def measure_periodic_rate(signal, dt=1.0, min_freq=None, max_freq=None, unit='bp
 
     # --- Method 1: FFT ---
     spectrum = fft_spectrum(detrended, dt=dt)
-    fft_hz = spectrum['dominant_freq']
+    fft_hz = spectrum["dominant_freq"]
 
     # If frequency bounds given, restrict FFT search
-    if (min_freq is not None or max_freq is not None) and len(spectrum['frequencies']) > 1:
-        freqs = spectrum['frequencies']
-        power = spectrum['power'].copy()
+    if (min_freq is not None or max_freq is not None) and len(spectrum["frequencies"]) > 1:
+        freqs = spectrum["frequencies"]
+        power = spectrum["power"].copy()
         lo = min_freq if min_freq is not None else 0
         hi = max_freq if max_freq is not None else freqs[-1]
         mask = (freqs >= lo) & (freqs <= hi) & (freqs > 0)
@@ -251,8 +254,8 @@ def measure_periodic_rate(signal, dt=1.0, min_freq=None, max_freq=None, unit='bp
     # --- Method 2: Autocorrelation ---
     acorr = autocorrelation(detrended)
     acorr_hz = 0.0
-    if acorr['first_peak_lag'] > 0:
-        acorr_hz = 1.0 / (acorr['first_peak_lag'] * dt)
+    if acorr["first_peak_lag"] > 0:
+        acorr_hz = 1.0 / (acorr["first_peak_lag"] * dt)
 
     # --- Method 3: Peak counting ---
     min_dist = 1
@@ -265,23 +268,23 @@ def measure_periodic_rate(signal, dt=1.0, min_freq=None, max_freq=None, unit='bp
 
     peaks = detect_peaks(detrended, min_distance=min_dist)
     peak_hz = 0.0
-    if peaks['n_peaks'] > 1 and peaks['mean_interval'] > 0:
-        peak_hz = 1.0 / (peaks['mean_interval'] * dt)
+    if peaks["n_peaks"] > 1 and peaks["mean_interval"] > 0:
+        peak_hz = 1.0 / (peaks["mean_interval"] * dt)
 
     # --- Cross-validation ---
     estimates = {}
     if fft_hz > 0:
-        estimates['fft'] = fft_hz
+        estimates["fft"] = fft_hz
     if acorr_hz > 0:
-        estimates['autocorrelation'] = acorr_hz
+        estimates["autocorrelation"] = acorr_hz
     if peak_hz > 0:
-        estimates['peak_counting'] = peak_hz
+        estimates["peak_counting"] = peak_hz
 
     # Best estimate: when freq bounds are given, prefer FFT (the only
     # method that respects bounds). Otherwise use median of all methods.
     has_bounds = min_freq is not None or max_freq is not None
-    if has_bounds and 'fft' in estimates:
-        best_hz = estimates['fft']
+    if has_bounds and "fft" in estimates:
+        best_hz = estimates["fft"]
     elif estimates:
         values = list(estimates.values())
         best_hz = float(np.median(values))
@@ -289,29 +292,29 @@ def measure_periodic_rate(signal, dt=1.0, min_freq=None, max_freq=None, unit='bp
         best_hz = 0.0
 
     # Confidence: all methods agree within 10%
-    confidence = 'low'
+    confidence = "low"
     if len(estimates) >= 2 and best_hz > 0:
         max_dev = max(abs(v - best_hz) / best_hz for v in estimates.values())
-        confidence = 'high' if max_dev < 0.10 else 'low'
+        confidence = "high" if max_dev < 0.10 else "low"
 
     # Convert to requested unit
-    if unit == 'bpm':
+    if unit == "bpm":
         rate = best_hz * 60
-    elif unit == 'hz':
+    elif unit == "hz":
         rate = best_hz
-    elif unit == 'period':
-        rate = 1.0 / best_hz if best_hz > 0 else float('inf')
+    elif unit == "period":
+        rate = 1.0 / best_hz if best_hz > 0 else float("inf")
     else:
         rate = best_hz * 60  # default to bpm
 
     n_cycles = best_hz * duration if best_hz > 0 else 0
 
     return {
-        'rate': round(rate, 2),
-        'rate_hz': round(best_hz, 4),
-        'method_agreement': {k: round(v, 4) for k, v in estimates.items()},
-        'confidence': confidence,
-        'n_cycles': round(n_cycles, 1),
+        "rate": round(rate, 2),
+        "rate_hz": round(best_hz, 4),
+        "method_agreement": {k: round(v, 4) for k, v in estimates.items()},
+        "confidence": confidence,
+        "n_cycles": round(n_cycles, 1),
     }
 
 
@@ -339,10 +342,10 @@ def measure_wave_speed(radial_profiles, dt=1.0, dr=1.0):
 
     if n_times < 2:
         return {
-            'wavefront_positions': [],
-            'wave_speed': 0.0,
-            'wave_speeds_per_step': [],
-            'r_squared': 0.0,
+            "wavefront_positions": [],
+            "wave_speed": 0.0,
+            "wave_speeds_per_step": [],
+            "r_squared": 0.0,
         }
 
     # Find wavefront position at each timepoint
@@ -356,7 +359,7 @@ def measure_wave_speed(radial_profiles, dt=1.0, dr=1.0):
         # Smooth gradient to avoid noise peaks
         if len(grad) > 5:
             kernel = np.ones(3) / 3
-            grad = np.convolve(grad, kernel, mode='same')
+            grad = np.convolve(grad, kernel, mode="same")
         peak_idx = int(np.argmax(grad))
         positions.append(float(peak_idx * dr))
 
@@ -383,10 +386,10 @@ def measure_wave_speed(radial_profiles, dt=1.0, dr=1.0):
         r_squared = 0.0
 
     return {
-        'wavefront_positions': positions.tolist(),
-        'wave_speed': round(wave_speed, 4),
-        'wave_speeds_per_step': [round(s, 4) for s in speeds],
-        'r_squared': round(float(r_squared), 4),
+        "wavefront_positions": positions.tolist(),
+        "wave_speed": round(wave_speed, 4),
+        "wave_speeds_per_step": [round(s, 4) for s in speeds],
+        "r_squared": round(float(r_squared), 4),
     }
 
 
@@ -418,23 +421,29 @@ def measure_response_time(signal, baseline_frames=5, threshold_pct=50, dt=1.0):
 
     if n < baseline_frames + 2:
         return {
-            'baseline_mean': 0.0, 'final_mean': 0.0,
-            'total_change': 0.0, 'response_frame': 0,
-            'response_time': 0.0, 'half_time': 0.0,
-            'direction': 'none',
+            "baseline_mean": 0.0,
+            "final_mean": 0.0,
+            "total_change": 0.0,
+            "response_frame": 0,
+            "response_time": 0.0,
+            "half_time": 0.0,
+            "direction": "none",
         }
 
     baseline_mean = float(signal[:baseline_frames].mean())
     final_mean = float(signal[-baseline_frames:].mean())
     total_change = final_mean - baseline_mean
-    direction = 'increase' if total_change > 0 else 'decrease'
+    direction = "increase" if total_change > 0 else "decrease"
 
     if abs(total_change) < 1e-10:
         return {
-            'baseline_mean': baseline_mean, 'final_mean': final_mean,
-            'total_change': 0.0, 'response_frame': 0,
-            'response_time': 0.0, 'half_time': 0.0,
-            'direction': 'none',
+            "baseline_mean": baseline_mean,
+            "final_mean": final_mean,
+            "total_change": 0.0,
+            "response_frame": 0,
+            "response_time": 0.0,
+            "half_time": 0.0,
+            "direction": "none",
         }
 
     # Find frame where signal crosses threshold_pct of total change
@@ -460,11 +469,11 @@ def measure_response_time(signal, baseline_frames=5, threshold_pct=50, dt=1.0):
             break
 
     return {
-        'baseline_mean': round(baseline_mean, 4),
-        'final_mean': round(final_mean, 4),
-        'total_change': round(total_change, 4),
-        'response_frame': response_frame,
-        'response_time': round(response_frame * dt, 4),
-        'half_time': round(half_frame * dt, 4),
-        'direction': direction,
+        "baseline_mean": round(baseline_mean, 4),
+        "final_mean": round(final_mean, 4),
+        "total_change": round(total_change, 4),
+        "response_frame": response_frame,
+        "response_time": round(response_frame * dt, 4),
+        "half_time": round(half_frame * dt, 4),
+        "direction": direction,
     }

@@ -10,16 +10,19 @@ Note: the worker does NOT validate cfg path existence — it starts an empty pro
 emits server_ready(url, cfg_path); the caller loads the cfg via RPC after the proxy is up.
 A nonexistent path is therefore not an error at the worker level.
 """
+
 import os
+
 import pytest
 
 pytest.importorskip("PyQt6", reason="PyQt6 not available")
 
 from PyQt6.QtCore import QThread
+
 from src.utils import CoreProxyWorker
 
-
 # ── error path: mixed cfg ─────────────────────────────────────────────────────
+
 
 def test_mixed_cfg_emits_server_error(qtbot, tmp_path):
     """A cfg with both #py pyDevice and Device lines must emit server_error immediately."""
@@ -46,6 +49,7 @@ def test_mixed_cfg_emits_server_error(qtbot, tmp_path):
 
 
 # ── signal wiring: worker runs in QThread ────────────────────────────────────
+
 
 def test_worker_signals_cross_thread(qtbot, tmp_path):
     """Signals emitted from the worker thread must reach slots on the main thread.
@@ -79,11 +83,13 @@ def test_worker_signals_cross_thread(qtbot, tmp_path):
 
 # ── integration: full server start with real (C++ demo) cfg ──────────────────
 
+
 def test_full_server_start_real(qtbot):
     """Full integration: loads MMConfig_demo.cfg (C++ DemoCamera), starts proxy,
     emits server_ready. No real hardware needed — DemoCamera is a software stub."""
-    pymmcore_proxy = pytest.importorskip("pymmcore_proxy", reason="pymmcore_proxy not installed")
+    pytest.importorskip("pymmcore_proxy", reason="pymmcore_proxy not installed")
     import pathlib
+
     import pymmcore_plus
 
     mm_path = pymmcore_plus.find_micromanager()
@@ -110,6 +116,7 @@ def test_full_server_start_real(qtbot):
 
 # ── integration: full server start with virtual cfg (opt-in) ─────────────────
 
+
 @pytest.mark.skipif(
     os.environ.get("VIRTUAL_MICROSCOPE_TESTS") != "1",
     reason="Set VIRTUAL_MICROSCOPE_TESTS=1 to run full proxy integration tests",
@@ -120,6 +127,7 @@ def test_full_server_start_virtual(qtbot):
     pytest.importorskip("virtual_microscope", reason="virtual_microscope not installed")
 
     import pathlib
+
     project_root = pathlib.Path(__file__).parent.parent
     cfg = project_root / "virtual-microscope/src/virtual_microscope/backends/bacteria/bacteria.cfg"
     if not cfg.exists():

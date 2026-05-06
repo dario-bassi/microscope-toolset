@@ -42,7 +42,7 @@ def register_translation(reference, moving):
     mov = mov[:h, :w]
 
     if h < 4 or w < 4:
-        return {'shift_y': 0, 'shift_x': 0, 'confidence': 0.0}
+        return {"shift_y": 0, "shift_x": 0, "confidence": 0.0}
 
     # Subtract mean to reduce DC component
     ref = ref - ref.mean()
@@ -84,9 +84,9 @@ def register_translation(reference, moving):
     confidence = peak_val / max(mean_corr, 1e-10)
 
     return {
-        'shift_y': int(dy),
-        'shift_x': int(dx),
-        'confidence': round(float(confidence), 2),
+        "shift_y": int(dy),
+        "shift_x": int(dx),
+        "confidence": round(float(confidence), 2),
     }
 
 
@@ -112,7 +112,7 @@ def register_stack(images, reference_index=0, max_shift=None):
 
     n = len(stack)
     if n == 0:
-        return {'shifts': [], 'confidences': [], 'max_drift': 0.0}
+        return {"shifts": [], "confidences": [], "max_drift": 0.0}
 
     ref = stack[reference_index]
     shifts = []
@@ -125,14 +125,14 @@ def register_stack(images, reference_index=0, max_shift=None):
             continue
 
         result = register_translation(ref, stack[i])
-        dy, dx = result['shift_y'], result['shift_x']
+        dy, dx = result["shift_y"], result["shift_x"]
 
         if max_shift is not None:
             dy = max(-max_shift, min(max_shift, dy))
             dx = max(-max_shift, min(max_shift, dx))
 
         shifts.append((dy, dx))
-        confidences.append(result['confidence'])
+        confidences.append(result["confidence"])
 
     # Max drift
     max_drift = 0.0
@@ -141,9 +141,9 @@ def register_stack(images, reference_index=0, max_shift=None):
         max_drift = max(max_drift, drift)
 
     return {
-        'shifts': shifts,
-        'confidences': confidences,
-        'max_drift': round(float(max_drift), 2),
+        "shifts": shifts,
+        "confidences": confidences,
+        "max_drift": round(float(max_drift), 2),
     }
 
 
@@ -203,16 +203,16 @@ def compute_drift(images, reference_index=0):
             total_drift: Total drift from first to last frame.
     """
     reg = register_stack(images, reference_index=reference_index)
-    shifts = reg['shifts']
+    shifts = reg["shifts"]
     n = len(shifts)
 
     if n == 0:
         return {
-            'drift_y': np.array([]),
-            'drift_x': np.array([]),
-            'drift_magnitude': np.array([]),
-            'drift_rate': 0.0,
-            'total_drift': 0.0,
+            "drift_y": np.array([]),
+            "drift_x": np.array([]),
+            "drift_magnitude": np.array([]),
+            "drift_rate": 0.0,
+            "total_drift": 0.0,
         }
 
     dy = np.array([s[0] for s in shifts], dtype=np.float64)
@@ -224,11 +224,11 @@ def compute_drift(images, reference_index=0):
     rate = total / max(n - 1, 1)
 
     return {
-        'drift_y': dy,
-        'drift_x': dx,
-        'drift_magnitude': mag,
-        'drift_rate': round(rate, 3),
-        'total_drift': round(total, 2),
+        "drift_y": dy,
+        "drift_x": dx,
+        "drift_magnitude": mag,
+        "drift_rate": round(rate, 3),
+        "total_drift": round(total, 2),
     }
 
 
@@ -253,20 +253,19 @@ def stabilize_stack(images, reference_index=0, max_shift=None, fill_value=0):
         stack = list(images)
 
     if not stack:
-        return {'stabilized': [], 'shifts': [], 'max_drift': 0.0}
+        return {"stabilized": [], "shifts": [], "max_drift": 0.0}
 
-    reg = register_stack(stack, reference_index=reference_index,
-                         max_shift=max_shift)
+    reg = register_stack(stack, reference_index=reference_index, max_shift=max_shift)
 
     stabilized = []
     for i, img in enumerate(stack):
-        dy, dx = reg['shifts'][i]
+        dy, dx = reg["shifts"][i]
         # Apply negative shift to undo drift
         corrected = apply_shift(img, (-dy, -dx), fill_value=fill_value)
         stabilized.append(corrected)
 
     return {
-        'stabilized': stabilized,
-        'shifts': reg['shifts'],
-        'max_drift': reg['max_drift'],
+        "stabilized": stabilized,
+        "shifts": reg["shifts"],
+        "max_drift": reg["max_drift"],
     }

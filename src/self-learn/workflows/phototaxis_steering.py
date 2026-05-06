@@ -37,8 +37,7 @@ from useq import MDAEvent, SLMImage
 class SteeringState:
     """Tracks phototaxis steering state."""
 
-    def __init__(self, target, lead_distance=50, light_radius=40,
-                 slm_size=512, slm_device='SLM'):
+    def __init__(self, target, lead_distance=50, light_radius=40, slm_size=512, slm_device="SLM"):
         """Initialize steering state.
 
         Parameters
@@ -68,7 +67,7 @@ class SteeringState:
     def update_position(self, x, y):
         """Update organism position and check if target reached."""
         self.positions.append((x, y))
-        dist = np.sqrt((x - self.target_x)**2 + (y - self.target_y)**2)
+        dist = np.sqrt((x - self.target_x) ** 2 + (y - self.target_y) ** 2)
         self.distances.append(dist)
         return dist
 
@@ -84,7 +83,7 @@ class SteeringState:
         """Current distance to target."""
         if self.distances:
             return self.distances[-1]
-        return float('inf')
+        return float("inf")
 
     @property
     def velocity(self):
@@ -147,8 +146,8 @@ class SteeringState:
         """
         light_x, light_y = self.compute_light_position()
         mask = np.zeros((self.slm_size, self.slm_size), dtype=np.uint8)
-        yy, xx = np.ogrid[:self.slm_size, :self.slm_size]
-        circle = (yy - light_y)**2 + (xx - light_x)**2 <= self.light_radius**2
+        yy, xx = np.ogrid[: self.slm_size, : self.slm_size]
+        circle = (yy - light_y) ** 2 + (xx - light_x) ** 2 <= self.light_radius**2
         mask[circle] = 255
         return mask
 
@@ -158,8 +157,7 @@ class SteeringState:
         return len(self.positions)
 
 
-def steering_generator(state, channel='brightfield', group='Fake',
-                       max_steps=150, threshold_px=30):
+def steering_generator(state, channel="brightfield", group="Fake", max_steps=150, threshold_px=30):
     """Generate MDA events for phototaxis steering.
 
     Yields MDAEvents with SLM masks that steer the organism toward
@@ -184,7 +182,7 @@ def steering_generator(state, channel='brightfield', group='Fake',
     MDAEvent
         Events with SLM images for phototaxis.
     """
-    for step in range(max_steps):
+    for _step in range(max_steps):
         if state.reached:
             return
 
@@ -200,8 +198,7 @@ def steering_generator(state, channel='brightfield', group='Fake',
         )
 
 
-def make_tracking_callback(state, detector_fn, log_interval=10,
-                           threshold_px=30):
+def make_tracking_callback(state, detector_fn, log_interval=10, threshold_px=30):
     """Create an on_frame callback for steering.
 
     Parameters
@@ -220,6 +217,7 @@ def make_tracking_callback(state, detector_fn, log_interval=10,
     callable
         on_frame callback for run_events.
     """
+
     def on_frame(img, event):
         cx, cy = detector_fn(img)
         dist = state.update_position(cx, cy)
@@ -227,19 +225,16 @@ def make_tracking_callback(state, detector_fn, log_interval=10,
 
         step = state.n_steps
         if step % log_interval == 0 or dist < threshold_px + 10:
-            print(f'  Step {step}: pos=({cx:.0f},{cy:.0f}), '
-                  f'dist={dist:.1f}px')
+            print(f"  Step {step}: pos=({cx:.0f},{cy:.0f}), " f"dist={dist:.1f}px")
 
         if dist < threshold_px:
             state.reached = True
-            print(f'  *** TARGET REACHED at step {step}! '
-                  f'dist={dist:.1f}px ***')
+            print(f"  *** TARGET REACHED at step {step}! " f"dist={dist:.1f}px ***")
 
     return on_frame
 
 
-def clear_slm_event(channel='brightfield', group='Fake',
-                    slm_device='SLM', size=512):
+def clear_slm_event(channel="brightfield", group="Fake", slm_device="SLM", size=512):
     """Create an event that clears the SLM.
 
     Returns

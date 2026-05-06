@@ -44,9 +44,9 @@ def bleedthrough_correct(target, source, coefficient):
     frac = bleed_sum / target_sum if target_sum > 0 else 0.0
 
     return {
-        'corrected': corrected,
-        'bleedthrough_image': bleed,
-        'correction_fraction': round(frac, 4),
+        "corrected": corrected,
+        "bleedthrough_image": bleed,
+        "correction_fraction": round(frac, 4),
     }
 
 
@@ -95,14 +95,14 @@ def linear_unmix(channels, reference_spectra):
     residual_map = residuals.reshape(h, w)
 
     # R² calculation
-    ss_res = np.sum(residuals ** 2)
+    ss_res = np.sum(residuals**2)
     ss_tot = np.sum((pixel_data - pixel_data.mean(axis=0)) ** 2)
     r2 = 1 - ss_res / ss_tot if ss_tot > 0 else 0.0
 
     return {
-        'abundances': abundances,
-        'residual': residual_map,
-        'r_squared': round(float(max(r2, 0.0)), 4),
+        "abundances": abundances,
+        "residual": residual_map,
+        "r_squared": round(float(max(r2, 0.0)), 4),
     }
 
 
@@ -140,10 +140,10 @@ def estimate_bleedthrough(source_control, target_control, mask=None):
 
     if n_px < 10:
         return {
-            'coefficient': 0.0,
-            'source_mean': 0.0,
-            'target_mean': 0.0,
-            'n_pixels': n_px,
+            "coefficient": 0.0,
+            "source_mean": 0.0,
+            "target_mean": 0.0,
+            "n_pixels": n_px,
         }
 
     src_mean = float(source[mask].mean())
@@ -151,10 +151,10 @@ def estimate_bleedthrough(source_control, target_control, mask=None):
     coeff = tgt_mean / src_mean if src_mean > 0 else 0.0
 
     return {
-        'coefficient': round(max(coeff, 0.0), 4),
-        'source_mean': round(src_mean, 4),
-        'target_mean': round(tgt_mean, 4),
-        'n_pixels': n_px,
+        "coefficient": round(max(coeff, 0.0), 4),
+        "source_mean": round(src_mean, 4),
+        "target_mean": round(tgt_mean, 4),
+        "n_pixels": n_px,
     }
 
 
@@ -196,9 +196,9 @@ def ratio_image(channel1, channel2, background1=0, background2=0, clip_range=Non
     mean_r = float(ratio[mask].mean()) if mask.sum() > 0 else 0.0
 
     return {
-        'ratio': ratio,
-        'mean_ratio': round(mean_r, 4),
-        'mask': mask,
+        "ratio": ratio,
+        "mean_ratio": round(mean_r, 4),
+        "mask": mask,
     }
 
 
@@ -229,6 +229,6 @@ def autofluorescence_subtract(image, autofluor_reference, scale=1.0):
     af_frac = af_sum / img_sum if img_sum > 0 else 0.0
 
     return {
-        'corrected': corrected,
-        'af_contribution': round(min(af_frac, 1.0), 4),
+        "corrected": corrected,
+        "af_contribution": round(min(af_frac, 1.0), 4),
     }

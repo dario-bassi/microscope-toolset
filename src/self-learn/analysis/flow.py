@@ -115,12 +115,12 @@ def compute_flow_field(frame1, frame2, block_size=16, search_radius=None):
     angle = np.arctan2(vy, vx)
 
     return {
-        'vx': vx,
-        'vy': vy,
-        'magnitude': magnitude,
-        'angle': angle,
-        'grid_y': grid_y,
-        'grid_x': grid_x,
+        "vx": vx,
+        "vy": vy,
+        "magnitude": magnitude,
+        "angle": angle,
+        "grid_y": grid_y,
+        "grid_x": grid_x,
     }
 
 
@@ -147,10 +147,10 @@ def flow_statistics(magnitude, angle=None):
     max_speed = float(np.max(flat_mag)) if flat_mag.size > 0 else 0.0
 
     result = {
-        'mean_speed': round(mean_speed, 4),
-        'max_speed': round(max_speed, 4),
-        'std_speed': round(float(np.std(flat_mag)), 4),
-        'n_points': int(flat_mag.size),
+        "mean_speed": round(mean_speed, 4),
+        "max_speed": round(max_speed, 4),
+        "std_speed": round(float(np.std(flat_mag)), 4),
+        "n_points": int(flat_mag.size),
     }
 
     if angle is not None:
@@ -159,18 +159,16 @@ def flow_statistics(magnitude, angle=None):
         weights = flat_mag / (flat_mag.sum() + 1e-10)
         sin_mean = float(np.sum(weights * np.sin(ang)))
         cos_mean = float(np.sum(weights * np.cos(ang)))
-        result['mean_direction'] = round(float(np.arctan2(sin_mean, cos_mean)), 4)
-        result['direction_coherence'] = round(
-            float(np.sqrt(sin_mean**2 + cos_mean**2)), 4
-        )
+        result["mean_direction"] = round(float(np.arctan2(sin_mean, cos_mean)), 4)
+        result["direction_coherence"] = round(float(np.sqrt(sin_mean**2 + cos_mean**2)), 4)
     else:
-        result['mean_direction'] = 0.0
-        result['direction_coherence'] = 0.0
+        result["mean_direction"] = 0.0
+        result["direction_coherence"] = 0.0
 
     return result
 
 
-def velocity_profile(magnitude, axis='x'):
+def velocity_profile(magnitude, axis="x"):
     """Compute cross-sectional velocity profile.
 
     Averages speed along one axis to create a 1D profile across
@@ -192,7 +190,7 @@ def velocity_profile(magnitude, axis='x'):
     """
     mag = np.asarray(magnitude, dtype=float)
 
-    if axis == 'x':
+    if axis == "x":
         profile = np.mean(mag, axis=1)  # average over columns → profile along rows
     else:
         profile = np.mean(mag, axis=0)  # average over rows → profile along cols
@@ -211,11 +209,11 @@ def velocity_profile(magnitude, axis='x'):
         width = 0.0
 
     return {
-        'profile': profile,
-        'positions': positions,
-        'peak_position': peak_idx,
-        'peak_velocity': round(peak_vel, 4),
-        'profile_width': width,
+        "profile": profile,
+        "positions": positions,
+        "peak_position": peak_idx,
+        "peak_velocity": round(peak_vel, 4),
+        "profile_width": width,
     }
 
 
@@ -241,10 +239,10 @@ def vorticity_map(vx, vy):
 
     if vx.shape[0] < 2 or vx.shape[1] < 2:
         return {
-            'vorticity': np.zeros_like(vx),
-            'mean_vorticity': 0.0,
-            'max_vorticity': 0.0,
-            'has_rotation': False,
+            "vorticity": np.zeros_like(vx),
+            "mean_vorticity": 0.0,
+            "max_vorticity": 0.0,
+            "has_rotation": False,
         }
 
     # Central differences
@@ -256,10 +254,10 @@ def vorticity_map(vx, vy):
     threshold = max_mag * 0.1 if max_mag > 0 else 0.1
 
     return {
-        'vorticity': vort,
-        'mean_vorticity': round(float(np.mean(np.abs(vort))), 4),
-        'max_vorticity': round(float(np.max(np.abs(vort))), 4),
-        'has_rotation': bool(np.max(np.abs(vort)) > threshold),
+        "vorticity": vort,
+        "mean_vorticity": round(float(np.mean(np.abs(vort))), 4),
+        "max_vorticity": round(float(np.max(np.abs(vort))), 4),
+        "has_rotation": bool(np.max(np.abs(vort)) > threshold),
     }
 
 
@@ -293,16 +291,17 @@ def flow_uniformity(magnitude, angle=None):
     speed_ratio = max_v / mean_v if mean_v > 0 else 1.0
 
     return {
-        'cv': round(cv, 4),
-        'uniformity_index': round(uniformity, 4),
-        'dead_zone_fraction': round(dead_fraction, 4),
-        'speed_ratio': round(speed_ratio, 4),
+        "cv": round(cv, 4),
+        "uniformity_index": round(uniformity, 4),
+        "dead_zone_fraction": round(dead_fraction, 4),
+        "speed_ratio": round(speed_ratio, 4),
     }
 
 
 # ---------------------------------------------------------------------------
 # Vessel flow: kymograph and particle tracking
 # ---------------------------------------------------------------------------
+
 
 def find_vessel_row(imgs, smooth_sigma=5):
     """Find vessel Y-row from temporal variance peak.
@@ -321,7 +320,7 @@ def find_vessel_row(imgs, smooth_sigma=5):
     """
     frames = np.asarray(imgs, dtype=float)
     if frames.ndim == 2:
-        return {'vessel_row': frames.shape[0] // 2, 'row_std': np.zeros(frames.shape[0])}
+        return {"vessel_row": frames.shape[0] // 2, "row_std": np.zeros(frames.shape[0])}
 
     # Mean temporal std across columns for each row
     row_std = frames.std(axis=0).mean(axis=1)  # shape: (H,)
@@ -329,8 +328,8 @@ def find_vessel_row(imgs, smooth_sigma=5):
     vessel_row = int(np.argmax(row_std_sm))
 
     return {
-        'vessel_row': vessel_row,
-        'row_std': row_std_sm,
+        "vessel_row": vessel_row,
+        "row_std": row_std_sm,
     }
 
 
@@ -354,9 +353,9 @@ def build_kymograph(imgs, vessel_row, half_width=5):
     r_max = min(h - 1, vessel_row + half_width)
 
     if frames.ndim == 3:
-        kymo = frames[:, r_min:r_max+1, :].mean(axis=1)
+        kymo = frames[:, r_min : r_max + 1, :].mean(axis=1)
     else:
-        kymo = frames[r_min:r_max+1, :].mean(axis=0).reshape(1, -1)
+        kymo = frames[r_min : r_max + 1, :].mean(axis=0).reshape(1, -1)
 
     return kymo
 
@@ -410,10 +409,10 @@ def kymograph_velocity(kymo, ps, dt, max_shift=50):
 
     if not shifts:
         return {
-            'velocity': 0.0,
-            'mean_shift_px': 0.0,
-            'shifts': np.array([]),
-            'direction': '+X',
+            "velocity": 0.0,
+            "mean_shift_px": 0.0,
+            "shifts": np.array([]),
+            "direction": "+X",
         }
 
     shifts_arr = np.array(shifts)
@@ -428,10 +427,10 @@ def kymograph_velocity(kymo, ps, dt, max_shift=50):
     velocity = mean_shift * ps / dt
 
     return {
-        'velocity': round(velocity, 2),
-        'mean_shift_px': round(mean_shift, 3),
-        'shifts': filtered,
-        'direction': '+X' if velocity >= 0 else '-X',
+        "velocity": round(velocity, 2),
+        "mean_shift_px": round(mean_shift, 3),
+        "shifts": filtered,
+        "direction": "+X" if velocity >= 0 else "-X",
     }
 
 
@@ -462,8 +461,8 @@ def particle_velocity(imgs, dt, ps, min_area=80, max_area=3000, max_dist=20):
             n_particles_mean: float, mean particles per frame.
     """
     from scipy.ndimage import label as nd_label
-    from skimage.measure import regionprops
     from scipy.optimize import linear_sum_assignment
+    from skimage.measure import regionprops
 
     # Detect dark particles per frame
     all_pos = []
@@ -483,12 +482,12 @@ def particle_velocity(imgs, dt, ps, min_area=80, max_area=3000, max_dist=20):
     step_dx = []
     step_dy = []
     for i in range(1, len(all_pos)):
-        p1, p2 = all_pos[i-1], all_pos[i]
+        p1, p2 = all_pos[i - 1], all_pos[i]
         if len(p1) < 2 or len(p2) < 2:
             step_dx.append(np.nan)
             step_dy.append(np.nan)
             continue
-        cost = np.sqrt(((p1[:, None, :] - p2[None, :, :])**2).sum(axis=2))
+        cost = np.sqrt(((p1[:, None, :] - p2[None, :, :]) ** 2).sum(axis=2))
         r, c = linear_sum_assignment(cost)
         valid = cost[r, c] < max_dist
         if valid.sum() < 2:
@@ -505,9 +504,14 @@ def particle_velocity(imgs, dt, ps, min_area=80, max_area=3000, max_dist=20):
 
     if valid_mask.sum() < 2:
         return {
-            'velocity_x': 0.0, 'velocity_y': 0.0, 'speed': 0.0,
-            'direction': '+X', 'mean_dx_px': 0.0, 'mean_dy_px': 0.0,
-            'step_dx': dx_arr, 'n_particles_mean': 0.0,
+            "velocity_x": 0.0,
+            "velocity_y": 0.0,
+            "speed": 0.0,
+            "direction": "+X",
+            "mean_dx_px": 0.0,
+            "mean_dy_px": 0.0,
+            "step_dx": dx_arr,
+            "n_particles_mean": 0.0,
         }
 
     mean_dx = float(np.median(dx_arr[valid_mask]))
@@ -517,19 +521,19 @@ def particle_velocity(imgs, dt, ps, min_area=80, max_area=3000, max_dist=20):
     speed = float(np.sqrt(vx**2 + vy**2))
 
     if abs(vx) >= abs(vy):
-        direction = '+X' if vx >= 0 else '-X'
+        direction = "+X" if vx >= 0 else "-X"
     else:
-        direction = '+Y' if vy >= 0 else '-Y'
+        direction = "+Y" if vy >= 0 else "-Y"
 
     n_mean = float(np.mean([len(p) for p in all_pos]))
 
     return {
-        'velocity_x': round(vx, 2),
-        'velocity_y': round(vy, 2),
-        'speed': round(speed, 2),
-        'direction': direction,
-        'mean_dx_px': round(mean_dx, 3),
-        'mean_dy_px': round(mean_dy, 3),
-        'step_dx': dx_arr,
-        'n_particles_mean': round(n_mean, 1),
+        "velocity_x": round(vx, 2),
+        "velocity_y": round(vy, 2),
+        "speed": round(speed, 2),
+        "direction": direction,
+        "mean_dx_px": round(mean_dx, 3),
+        "mean_dy_px": round(mean_dy, 3),
+        "step_dx": dx_arr,
+        "n_particles_mean": round(n_mean, 1),
     }

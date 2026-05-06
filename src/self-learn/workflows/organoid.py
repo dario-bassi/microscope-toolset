@@ -53,16 +53,22 @@ def find_equatorial_z(images_and_z, threshold_offset=20):
     best_idx = int(np.argmax(areas))
 
     return {
-        'equatorial_z': z_positions[best_idx],
-        'equatorial_idx': best_idx,
-        'areas': areas,
-        'z_positions': z_positions,
+        "equatorial_z": z_positions[best_idx],
+        "equatorial_idx": best_idx,
+        "areas": areas,
+        "z_positions": z_positions,
     }
 
 
-def measure_organoid(bf_image, membrane_image=None, nucleus_image=None,
-                     pixel_size=1.0, threshold_offset=20,
-                     nuclei_block_size=31, nuclei_min_dist=3):
+def measure_organoid(
+    bf_image,
+    membrane_image=None,
+    nucleus_image=None,
+    pixel_size=1.0,
+    threshold_offset=20,
+    nuclei_block_size=31,
+    nuclei_min_dist=3,
+):
     """Measure organoid morphometry from equatorial-plane images.
 
     Combines BF segmentation, membrane ring analysis, and nuclei counting
@@ -95,13 +101,13 @@ def measure_organoid(bf_image, membrane_image=None, nucleus_image=None,
     labeled, n = ndimage.label(filled)
     if n == 0:
         return {
-            'outer_diameter_um': 0.0,
-            'lumen_diameter_um': 0.0,
-            'wall_thickness_um': 0.0,
-            'lumen_present': False,
-            'nuclei_count': 0,
-            'eccentricity': 0.0,
-            'outer_area_px': 0,
+            "outer_diameter_um": 0.0,
+            "lumen_diameter_um": 0.0,
+            "wall_thickness_um": 0.0,
+            "lumen_present": False,
+            "nuclei_count": 0,
+            "eccentricity": 0.0,
+            "outer_area_px": 0,
         }
 
     # Largest connected component = organoid
@@ -112,13 +118,13 @@ def measure_organoid(bf_image, membrane_image=None, nucleus_image=None,
     props = regionprops(organoid_filled.astype(int))
     if not props:
         return {
-            'outer_diameter_um': 0.0,
-            'lumen_diameter_um': 0.0,
-            'wall_thickness_um': 0.0,
-            'lumen_present': False,
-            'nuclei_count': 0,
-            'eccentricity': 0.0,
-            'outer_area_px': 0,
+            "outer_diameter_um": 0.0,
+            "lumen_diameter_um": 0.0,
+            "wall_thickness_um": 0.0,
+            "lumen_present": False,
+            "nuclei_count": 0,
+            "eccentricity": 0.0,
+            "outer_area_px": 0,
         }
 
     p = props[0]
@@ -150,8 +156,9 @@ def measure_organoid(bf_image, membrane_image=None, nucleus_image=None,
     ring_data = None
     if membrane_image is not None:
         from ..analysis.ring import measure_ring
+
         ring_data = measure_ring(membrane_image, pixel_size=pixel_size)
-        wall_thickness_membrane = ring_data.get('wall_thickness_um', None)
+        wall_thickness_membrane = ring_data.get("wall_thickness_um", None)
 
     # Average BF and membrane wall measurements if both available
     if wall_thickness_membrane is not None and wall_thickness_bf > 0:
@@ -165,6 +172,7 @@ def measure_organoid(bf_image, membrane_image=None, nucleus_image=None,
     nuclei_count = 0
     if nucleus_image is not None:
         from ..detection.cells import count_nuclei_adaptive
+
         nuclei_count = count_nuclei_adaptive(
             nucleus_image,
             block_size=nuclei_block_size,
@@ -173,19 +181,19 @@ def measure_organoid(bf_image, membrane_image=None, nucleus_image=None,
         )
 
     result = {
-        'outer_diameter_um': round(outer_diam, 1),
-        'lumen_diameter_um': round(lumen_diam, 1),
-        'wall_thickness_um': round(wall_thickness, 1),
-        'lumen_present': lumen_present,
-        'nuclei_count': nuclei_count,
-        'eccentricity': round(eccentricity, 3),
-        'outer_area_px': outer_area_px,
+        "outer_diameter_um": round(outer_diam, 1),
+        "lumen_diameter_um": round(lumen_diam, 1),
+        "wall_thickness_um": round(wall_thickness, 1),
+        "lumen_present": lumen_present,
+        "nuclei_count": nuclei_count,
+        "eccentricity": round(eccentricity, 3),
+        "outer_area_px": outer_area_px,
     }
 
     if ring_data is not None:
-        result['ring_outer_um'] = ring_data.get('outer_diameter_um', None)
-        result['ring_inner_um'] = ring_data.get('inner_diameter_um', None)
-        result['ring_wall_um'] = ring_data.get('wall_thickness_um', None)
+        result["ring_outer_um"] = ring_data.get("outer_diameter_um", None)
+        result["ring_inner_um"] = ring_data.get("inner_diameter_um", None)
+        result["ring_wall_um"] = ring_data.get("wall_thickness_um", None)
 
     return result
 
@@ -207,8 +215,8 @@ def organoid_z_profile(images_and_z, pixel_size=1.0, threshold_offset=20):
             sphericity: V_measured / V_equivalent_sphere.
     """
     equatorial = find_equatorial_z(images_and_z, threshold_offset)
-    areas_px = equatorial['areas']
-    z_positions = equatorial['z_positions']
+    areas_px = equatorial["areas"]
+    z_positions = equatorial["z_positions"]
 
     areas_um2 = [a * pixel_size**2 for a in areas_px]
 
@@ -223,7 +231,9 @@ def organoid_z_profile(images_and_z, pixel_size=1.0, threshold_offset=20):
     # Z extent: range where area > 10% of max
     max_area = max(areas_um2) if areas_um2 else 0
     if max_area > 0:
-        above_10pct = [z for z, a in zip(z_positions, areas_um2) if a > 0.1 * max_area]
+        above_10pct = [
+            z for z, a in zip(z_positions, areas_um2, strict=False) if a > 0.1 * max_area
+        ]
         z_extent = max(above_10pct) - min(above_10pct) if above_10pct else 0
     else:
         z_extent = 0
@@ -237,10 +247,10 @@ def organoid_z_profile(images_and_z, pixel_size=1.0, threshold_offset=20):
         sphericity = 0
 
     return {
-        'z_positions': z_positions,
-        'areas_um2': areas_um2,
-        'volume_um3': round(volume_um3, 1),
-        'z_extent_um': round(z_extent, 1),
-        'sphericity': round(sphericity, 3),
-        'equatorial_z': equatorial['equatorial_z'],
+        "z_positions": z_positions,
+        "areas_um2": areas_um2,
+        "volume_um3": round(volume_um3, 1),
+        "z_extent_um": round(z_extent, 1),
+        "sphericity": round(sphericity, 3),
+        "equatorial_z": equatorial["equatorial_z"],
     }

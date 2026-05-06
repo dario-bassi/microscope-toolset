@@ -14,10 +14,8 @@ Functions:
 
 import numpy as np
 
-
 # Default feature keys available from measure_objects()
-DEFAULT_FEATURES = ('area_um2', 'eccentricity', 'solidity', 'diameter_um',
-                    'major_um', 'minor_um')
+DEFAULT_FEATURES = ("area_um2", "eccentricity", "solidity", "diameter_um", "major_um", "minor_um")
 
 
 def extract_features(measurements, features=None, normalize=True):
@@ -43,10 +41,10 @@ def extract_features(measurements, features=None, normalize=True):
     n = len(measurements)
     if n == 0:
         return {
-            'matrix': np.empty((0, len(features))),
-            'features': features,
-            'means': np.zeros(len(features)),
-            'stds': np.ones(len(features)),
+            "matrix": np.empty((0, len(features))),
+            "features": features,
+            "means": np.zeros(len(features)),
+            "stds": np.ones(len(features)),
         }
 
     matrix = np.zeros((n, len(features)))
@@ -64,15 +62,14 @@ def extract_features(measurements, features=None, normalize=True):
         norm_matrix = matrix.copy()
 
     return {
-        'matrix': norm_matrix,
-        'features': features,
-        'means': means,
-        'stds': stds,
+        "matrix": norm_matrix,
+        "features": features,
+        "means": means,
+        "stds": stds,
     }
 
 
-def classify_kmeans(measurements, n_classes, features=None, max_iter=100,
-                    n_init=10, seed=42):
+def classify_kmeans(measurements, n_classes, features=None, max_iter=100, n_init=10, seed=42):
     """Unsupervised k-means clustering on morphometric features.
 
     Uses Lloyd's algorithm with multiple random initializations.
@@ -98,18 +95,18 @@ def classify_kmeans(measurements, n_classes, features=None, max_iter=100,
                 (in original units).
     """
     feat = extract_features(measurements, features, normalize=True)
-    X = feat['matrix']
+    X = feat["matrix"]
     n = X.shape[0]
 
     if n == 0 or n_classes < 1:
         return {
-            'labels': np.array([], dtype=int),
-            'centers': np.empty((0, len(feat['features']))),
-            'centers_raw': np.empty((0, len(feat['features']))),
-            'inertia': 0.0,
-            'n_per_class': {},
-            'features': feat['features'],
-            'class_profiles': {},
+            "labels": np.array([], dtype=int),
+            "centers": np.empty((0, len(feat["features"]))),
+            "centers_raw": np.empty((0, len(feat["features"]))),
+            "inertia": 0.0,
+            "n_per_class": {},
+            "features": feat["features"],
+            "class_profiles": {},
         }
 
     k = min(n_classes, n)
@@ -117,7 +114,7 @@ def classify_kmeans(measurements, n_classes, features=None, max_iter=100,
 
     best_labels = None
     best_centers = None
-    best_inertia = float('inf')
+    best_inertia = float("inf")
 
     for _ in range(n_init):
         # Random initialization (k-means++)
@@ -142,10 +139,7 @@ def classify_kmeans(measurements, n_classes, features=None, max_iter=100,
                 break
             centers = new_centers
 
-        inertia = sum(
-            np.sum((X[labels == c] - centers[c]) ** 2)
-            for c in range(k)
-        )
+        inertia = sum(np.sum((X[labels == c] - centers[c]) ** 2) for c in range(k))
 
         if inertia < best_inertia:
             best_inertia = inertia
@@ -162,7 +156,7 @@ def classify_kmeans(measurements, n_classes, features=None, max_iter=100,
     best_centers = best_centers[order]
 
     # Convert centers back to original units
-    centers_raw = best_centers * feat['stds'] + feat['means']
+    centers_raw = best_centers * feat["stds"] + feat["means"]
 
     # Build class profiles
     n_per_class = {}
@@ -171,18 +165,18 @@ def classify_kmeans(measurements, n_classes, features=None, max_iter=100,
         mask = best_labels == c
         n_per_class[c] = int(mask.sum())
         profile = {}
-        for j, fname in enumerate(feat['features']):
+        for j, fname in enumerate(feat["features"]):
             profile[fname] = float(centers_raw[c, j])
         class_profiles[c] = profile
 
     return {
-        'labels': best_labels,
-        'centers': best_centers,
-        'centers_raw': centers_raw,
-        'inertia': float(best_inertia),
-        'n_per_class': n_per_class,
-        'features': feat['features'],
-        'class_profiles': class_profiles,
+        "labels": best_labels,
+        "centers": best_centers,
+        "centers_raw": centers_raw,
+        "inertia": float(best_inertia),
+        "n_per_class": n_per_class,
+        "features": feat["features"],
+        "class_profiles": class_profiles,
     }
 
 
@@ -226,10 +220,10 @@ def classify_rules(measurements, rules):
     counts = {}
 
     for i, m in enumerate(measurements):
-        assigned = 'unclassified'
+        assigned = "unclassified"
         for rule in rules:
-            if _matches(m, rule['conditions']):
-                assigned = rule['name']
+            if _matches(m, rule["conditions"]):
+                assigned = rule["name"]
                 break
         labels.append(assigned)
         if assigned not in indices:
@@ -238,7 +232,7 @@ def classify_rules(measurements, rules):
         indices[assigned].append(i)
         counts[assigned] += 1
 
-    return {'labels': labels, 'counts': counts, 'indices': indices}
+    return {"labels": labels, "counts": counts, "indices": indices}
 
 
 def _matches(measurement, conditions):
@@ -247,22 +241,22 @@ def _matches(measurement, conditions):
         v = measurement.get(feat_key, None)
         if v is None:
             return False
-        if op == '>':
+        if op == ">":
             if not (v > val):
                 return False
-        elif op == '<':
+        elif op == "<":
             if not (v < val):
                 return False
-        elif op == '>=':
+        elif op == ">=":
             if not (v >= val):
                 return False
-        elif op == '<=':
+        elif op == "<=":
             if not (v <= val):
                 return False
-        elif op == '==':
+        elif op == "==":
             if not (v == val):
                 return False
-        elif op == 'between':
+        elif op == "between":
             lo, hi = val
             if not (lo <= v <= hi):
                 return False
@@ -271,8 +265,9 @@ def _matches(measurement, conditions):
     return True
 
 
-def classify_composite(measurements, criteria, threshold=0,
-                       positive_label='positive', negative_label='negative'):
+def classify_composite(
+    measurements, criteria, threshold=0, positive_label="positive", negative_label="negative"
+):
     """Classify cells using a weighted composite score.
 
     Each criterion adds (or subtracts) a weight when a feature condition
@@ -323,15 +318,15 @@ def classify_composite(measurements, criteria, threshold=0,
             if v is None:
                 continue
             hit = False
-            if op == '>':
+            if op == ">":
                 hit = v > val
-            elif op == '<':
+            elif op == "<":
                 hit = v < val
-            elif op == '>=':
+            elif op == ">=":
                 hit = v >= val
-            elif op == '<=':
+            elif op == "<=":
                 hit = v <= val
-            elif op == 'between':
+            elif op == "between":
                 lo, hi = val
                 hit = lo <= v <= hi
             if hit:
@@ -344,16 +339,15 @@ def classify_composite(measurements, criteria, threshold=0,
         counts[label] += 1
 
     return {
-        'labels': labels,
-        'scores': scores,
-        'counts': counts,
-        'indices': indices,
-        'threshold': threshold,
+        "labels": labels,
+        "scores": scores,
+        "counts": counts,
+        "indices": indices,
+        "threshold": threshold,
     }
 
 
-def classify_size_bins(measurements, key='diameter_um', n_bins=3,
-                       bin_names=None):
+def classify_size_bins(measurements, key="diameter_um", n_bins=3, bin_names=None):
     """Simple binning by a single measurement dimension.
 
     Splits the range of values into n_bins equal-frequency bins
@@ -375,21 +369,21 @@ def classify_size_bins(measurements, key='diameter_um', n_bins=3,
     """
     if bin_names is None:
         if n_bins == 3:
-            bin_names = ['small', 'medium', 'large']
+            bin_names = ["small", "medium", "large"]
         elif n_bins == 2:
-            bin_names = ['small', 'large']
+            bin_names = ["small", "large"]
         else:
-            bin_names = [f'bin_{i}' for i in range(n_bins)]
+            bin_names = [f"bin_{i}" for i in range(n_bins)]
 
     values = np.array([m[key] for m in measurements])
     n = len(values)
 
     if n == 0:
         return {
-            'labels': [],
-            'counts': {name: 0 for name in bin_names},
-            'bin_edges': [],
-            'bin_names': bin_names,
+            "labels": [],
+            "counts": dict.fromkeys(bin_names, 0),
+            "bin_edges": [],
+            "bin_names": bin_names,
         }
 
     # Quantile-based edges
@@ -399,7 +393,7 @@ def classify_size_bins(measurements, key='diameter_um', n_bins=3,
     edges[-1] = float(values.max() + 1e-10)
 
     labels = []
-    counts = {name: 0 for name in bin_names}
+    counts = dict.fromkeys(bin_names, 0)
 
     for v in values:
         for b in range(n_bins):
@@ -413,10 +407,10 @@ def classify_size_bins(measurements, key='diameter_um', n_bins=3,
             counts[bin_names[-1]] += 1
 
     return {
-        'labels': labels,
-        'counts': counts,
-        'bin_edges': edges,
-        'bin_names': bin_names,
+        "labels": labels,
+        "counts": counts,
+        "bin_edges": edges,
+        "bin_names": bin_names,
     }
 
 
@@ -444,9 +438,9 @@ def feature_importance(measurements, labels, features=None):
     classes = np.unique(labels_arr)
 
     if len(classes) < 2 or len(measurements) < 2:
-        scores = {f: 0.0 for f in features}
+        scores = dict.fromkeys(features, 0.0)
         ranking = [(f, 0.0) for f in features]
-        return {'ranking': ranking, 'scores': scores}
+        return {"ranking": ranking, "scores": scores}
 
     scores = {}
     for fname in features:
@@ -469,7 +463,7 @@ def feature_importance(measurements, labels, features=None):
         if within > 0:
             scores[fname] = float(between / within)
         else:
-            scores[fname] = float('inf') if between > 0 else 0.0
+            scores[fname] = float("inf") if between > 0 else 0.0
 
     ranking = sorted(scores.items(), key=lambda x: -x[1])
-    return {'ranking': ranking, 'scores': scores}
+    return {"ranking": ranking, "scores": scores}

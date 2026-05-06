@@ -9,7 +9,7 @@ napari-micromanager's _mda_handler natively handles generator-based sequences
 
 import contextlib
 import logging
-from typing import Callable, Iterable, Optional
+from collections.abc import Callable, Iterable
 
 import numpy as np
 from useq import MDAEvent
@@ -20,7 +20,7 @@ logger = logging.getLogger("MDAHelpers")
 def run_mda_with_feedback(
     mmc,
     events: Iterable[MDAEvent],
-    on_frame: Optional[Callable[[np.ndarray, MDAEvent, dict], None]] = None,
+    on_frame: Callable[[np.ndarray, MDAEvent, dict], None] | None = None,
 ) -> list[tuple[np.ndarray, MDAEvent, dict]]:
     """Run MDA with per-frame callback.
 
@@ -50,9 +50,8 @@ def run_mda_with_feedback(
     # connect() for UniMMCore (pure psygnal).
     try:
         from PyQt6.QtCore import Qt
-        mmc.mda.events.frameReady.connect(
-            callback, Qt.ConnectionType.DirectConnection
-        )
+
+        mmc.mda.events.frameReady.connect(callback, Qt.ConnectionType.DirectConnection)
     except TypeError:
         mmc.mda.events.frameReady.connect(callback)
 

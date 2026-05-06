@@ -97,7 +97,7 @@ Even 1-2 cells crossing the boundary = healing_detected = True.
 
 ```python
 from src.analysis.wound_healing import (
-    segment_cells_bf, define_wound_region, 
+    segment_cells_bf, define_wound_region,
     count_cells_in_region, track_wound_repopulation
 )
 

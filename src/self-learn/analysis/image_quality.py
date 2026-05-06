@@ -56,10 +56,10 @@ def assess_quality(image, bit_depth=None):
     elif focus < 50:
         warnings.append("slightly_blurry")
 
-    if sat['fraction_saturated'] > 0.01:
+    if sat["fraction_saturated"] > 0.01:
         warnings.append(f"saturated ({sat['fraction_saturated']:.1%})")
 
-    if sat['fraction_zero'] > 0.5:
+    if sat["fraction_zero"] > 0.5:
         warnings.append(f"mostly_black ({sat['fraction_zero']:.1%})")
 
     if noise > 30:
@@ -73,24 +73,24 @@ def assess_quality(image, bit_depth=None):
 
     # Overall rating
     if len(warnings) == 0:
-        overall = 'good'
-    elif all('slightly' in w or w.startswith('low_snr') for w in warnings):
-        overall = 'acceptable'
+        overall = "good"
+    elif all("slightly" in w or w.startswith("low_snr") for w in warnings):
+        overall = "acceptable"
     else:
-        overall = 'poor'
+        overall = "poor"
 
     return {
-        'overall': overall,
-        'focus_score': round(focus, 2),
-        'noise_level': round(noise, 3),
-        'saturation_fraction': round(sat['fraction_saturated'], 4),
-        'dynamic_range_fraction': round(dr, 4),
-        'snr_estimate': round(snr, 2),
-        'warnings': warnings,
+        "overall": overall,
+        "focus_score": round(focus, 2),
+        "noise_level": round(noise, 3),
+        "saturation_fraction": round(sat["fraction_saturated"], 4),
+        "dynamic_range_fraction": round(dr, 4),
+        "snr_estimate": round(snr, 2),
+        "warnings": warnings,
     }
 
 
-def focus_score(image, method='laplacian'):
+def focus_score(image, method="laplacian"):
     """Measure image sharpness using edge-based metrics.
 
     Args:
@@ -104,26 +104,27 @@ def focus_score(image, method='laplacian'):
     """
     img = np.asarray(image, dtype=np.float64)
 
-    if method == 'laplacian':
+    if method == "laplacian":
         lap = ndimage.laplace(img)
         return float(np.var(lap))
 
-    elif method == 'gradient':
+    elif method == "gradient":
         gy = ndimage.sobel(img, axis=0)
         gx = ndimage.sobel(img, axis=1)
         return float(np.mean(np.sqrt(gy**2 + gx**2)))
 
-    elif method == 'tenengrad':
+    elif method == "tenengrad":
         gy = ndimage.sobel(img, axis=0)
         gx = ndimage.sobel(img, axis=1)
         return float(np.mean(gy**2 + gx**2))
 
     else:
-        raise ValueError(f"Unknown method: {method}. "
-                         f"Use 'laplacian', 'gradient', or 'tenengrad'.")
+        raise ValueError(
+            f"Unknown method: {method}. " f"Use 'laplacian', 'gradient', or 'tenengrad'."
+        )
 
 
-def noise_estimate(image, method='mad'):
+def noise_estimate(image, method="mad"):
     """Estimate image noise level.
 
     Args:
@@ -136,14 +137,14 @@ def noise_estimate(image, method='mad'):
     """
     img = np.asarray(image, dtype=np.float64)
 
-    if method == 'mad':
+    if method == "mad":
         # Use Laplacian to isolate high-frequency noise
         lap = ndimage.laplace(img)
         mad = float(np.median(np.abs(lap - np.median(lap))))
         # MAD to std conversion for normal distribution
         return mad * 1.4826 / np.sqrt(20)  # Laplacian has ~20x variance
 
-    elif method == 'std':
+    elif method == "std":
         # Residual after smoothing
         smoothed = ndimage.gaussian_filter(img, sigma=2)
         residual = img - smoothed
@@ -153,8 +154,7 @@ def noise_estimate(image, method='mad'):
         raise ValueError(f"Unknown method: {method}.")
 
 
-def check_saturation(image, max_value=None, low_threshold=0,
-                     high_fraction=0.995):
+def check_saturation(image, max_value=None, low_threshold=0, high_fraction=0.995):
     """Check for over/under-saturated pixels.
 
     Args:
@@ -182,10 +182,10 @@ def check_saturation(image, max_value=None, low_threshold=0,
     n_zero = int(np.sum(img <= low_threshold))
 
     return {
-        'fraction_saturated': n_saturated / max(n_total, 1),
-        'fraction_zero': n_zero / max(n_total, 1),
-        'n_saturated': n_saturated,
-        'n_zero': n_zero,
+        "fraction_saturated": n_saturated / max(n_total, 1),
+        "fraction_zero": n_zero / max(n_total, 1),
+        "n_saturated": n_saturated,
+        "n_zero": n_zero,
     }
 
 

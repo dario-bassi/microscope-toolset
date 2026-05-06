@@ -38,15 +38,15 @@ def line_profile(image, start, end, width=1):
     y0, x0 = float(start[0]), float(start[1])
     y1, x1 = float(end[0]), float(end[1])
 
-    length = np.sqrt((y1 - y0)**2 + (x1 - x0)**2)
+    length = np.sqrt((y1 - y0) ** 2 + (x1 - x0) ** 2)
     if length < 1:
         return {
-            'profile': np.array([img[int(y0), int(x0)]]),
-            'distance': np.array([0.0]),
-            'length': 0.0,
-            'mean': float(img[int(y0), int(x0)]),
-            'max': float(img[int(y0), int(x0)]),
-            'min': float(img[int(y0), int(x0)]),
+            "profile": np.array([img[int(y0), int(x0)]]),
+            "distance": np.array([0.0]),
+            "length": 0.0,
+            "mean": float(img[int(y0), int(x0)]),
+            "max": float(img[int(y0), int(x0)]),
+            "min": float(img[int(y0), int(x0)]),
         }
 
     n_points = int(np.ceil(length))
@@ -77,12 +77,12 @@ def line_profile(image, start, end, width=1):
     distance = np.linspace(0, length, n_points)
 
     return {
-        'profile': profile,
-        'distance': distance,
-        'length': round(float(length), 2),
-        'mean': round(float(profile.mean()), 3),
-        'max': round(float(profile.max()), 3),
-        'min': round(float(profile.min()), 3),
+        "profile": profile,
+        "distance": distance,
+        "length": round(float(length), 2),
+        "mean": round(float(profile.mean()), 3),
+        "max": round(float(profile.max()), 3),
+        "min": round(float(profile.min()), 3),
     }
 
 
@@ -108,12 +108,11 @@ def path_profile(image, points, width=1):
             r = max(0, min(r, img.shape[0] - 1))
             c = max(0, min(c, img.shape[1] - 1))
             return {
-                'profile': np.array([img[r, c]]),
-                'distance': np.array([0.0]),
-                'total_length': 0.0,
+                "profile": np.array([img[r, c]]),
+                "distance": np.array([0.0]),
+                "total_length": 0.0,
             }
-        return {'profile': np.array([]), 'distance': np.array([]),
-                'total_length': 0.0}
+        return {"profile": np.array([]), "distance": np.array([]), "total_length": 0.0}
 
     all_profiles = []
     all_distances = []
@@ -123,24 +122,24 @@ def path_profile(image, points, width=1):
         seg = line_profile(image, pts[i], pts[i + 1], width=width)
         if i > 0:
             # Skip first point to avoid duplication
-            all_profiles.append(seg['profile'][1:])
-            all_distances.append(seg['distance'][1:] + cum_dist)
+            all_profiles.append(seg["profile"][1:])
+            all_distances.append(seg["distance"][1:] + cum_dist)
         else:
-            all_profiles.append(seg['profile'])
-            all_distances.append(seg['distance'])
-        cum_dist += seg['length']
+            all_profiles.append(seg["profile"])
+            all_distances.append(seg["distance"])
+        cum_dist += seg["length"]
 
     profile = np.concatenate(all_profiles) if all_profiles else np.array([])
     distance = np.concatenate(all_distances) if all_distances else np.array([])
 
     return {
-        'profile': profile,
-        'distance': distance,
-        'total_length': round(cum_dist, 2),
+        "profile": profile,
+        "distance": distance,
+        "total_length": round(cum_dist, 2),
     }
 
 
-def find_edges(profile, threshold=None, method='gradient'):
+def find_edges(profile, threshold=None, method="gradient"):
     """Find edge positions in an intensity profile.
 
     Args:
@@ -157,9 +156,9 @@ def find_edges(profile, threshold=None, method='gradient'):
     """
     prof = np.asarray(profile, dtype=np.float64)
     if len(prof) < 3:
-        return {'edges': [], 'n_edges': 0, 'edge_strengths': []}
+        return {"edges": [], "n_edges": 0, "edge_strengths": []}
 
-    if method == 'gradient':
+    if method == "gradient":
         grad = np.gradient(prof)
         abs_grad = np.abs(grad)
 
@@ -174,15 +173,16 @@ def find_edges(profile, threshold=None, method='gradient'):
                     edges.append(float(i))
                     strengths.append(float(abs_grad[i]))
 
-    elif method == 'threshold':
+    elif method == "threshold":
         if threshold is None:
             threshold = (prof.min() + prof.max()) / 2
 
         edges = []
         strengths = []
         for i in range(len(prof) - 1):
-            if (prof[i] < threshold and prof[i + 1] >= threshold) or \
-               (prof[i] >= threshold and prof[i + 1] < threshold):
+            if (prof[i] < threshold and prof[i + 1] >= threshold) or (
+                prof[i] >= threshold and prof[i + 1] < threshold
+            ):
                 # Linear interpolation for sub-pixel position
                 frac = (threshold - prof[i]) / (prof[i + 1] - prof[i])
                 edges.append(i + frac)
@@ -192,9 +192,9 @@ def find_edges(profile, threshold=None, method='gradient'):
         raise ValueError(f"Unknown method: {method}.")
 
     return {
-        'edges': edges,
-        'n_edges': len(edges),
-        'edge_strengths': strengths,
+        "edges": edges,
+        "n_edges": len(edges),
+        "edge_strengths": strengths,
     }
 
 
@@ -216,9 +216,11 @@ def measure_width(profile, level=0.5):
     prof = np.asarray(profile, dtype=np.float64)
     if len(prof) < 3:
         return {
-            'width': 0.0, 'peak_position': 0,
-            'peak_value': float(prof.max()) if len(prof) > 0 else 0.0,
-            'left_edge': 0.0, 'right_edge': 0.0,
+            "width": 0.0,
+            "peak_position": 0,
+            "peak_value": float(prof.max()) if len(prof) > 0 else 0.0,
+            "left_edge": 0.0,
+            "right_edge": 0.0,
         }
 
     peak_idx = int(np.argmax(prof))
@@ -245,9 +247,9 @@ def measure_width(profile, level=0.5):
     width = right - left
 
     return {
-        'width': round(float(width), 3),
-        'peak_position': peak_idx,
-        'peak_value': round(peak_val, 3),
-        'left_edge': round(float(left), 3),
-        'right_edge': round(float(right), 3),
+        "width": round(float(width), 3),
+        "peak_position": peak_idx,
+        "peak_value": round(peak_val, 3),
+        "left_edge": round(float(left), 3),
+        "right_edge": round(float(right), 3),
     }

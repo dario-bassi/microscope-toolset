@@ -10,9 +10,10 @@ before computing speed.
 """
 
 import math
+
 import numpy as np
-from scipy.spatial.distance import cdist
 from scipy.optimize import linear_sum_assignment
+from scipy.spatial.distance import cdist
 
 
 def match_frames(cells_t0, cells_t1):
@@ -25,12 +26,12 @@ def match_frames(cells_t0, cells_t1):
     Returns:
         list of (idx_t0, idx_t1, displacement) tuples, sorted by idx_t0
     """
-    coords_t0 = np.array([[c['x'], c['y']] for c in cells_t0])
-    coords_t1 = np.array([[c['x'], c['y']] for c in cells_t1])
+    coords_t0 = np.array([[c["x"], c["y"]] for c in cells_t0])
+    coords_t1 = np.array([[c["x"], c["y"]] for c in cells_t1])
     D = cdist(coords_t0, coords_t1)
     row_ind, col_ind = linear_sum_assignment(D)
     matches = []
-    for r, c in zip(row_ind, col_ind):
+    for r, c in zip(row_ind, col_ind, strict=False):
         disp = float(D[r, c])
         matches.append((int(r), int(c), round(disp, 2)))
     return sorted(matches, key=lambda x: x[0])
@@ -56,15 +57,14 @@ def track_multiframe(frame_cells):
     trajectories = [[frame_cells[0][i]] for i in range(n_cells)]
 
     for f_idx in range(1, len(frame_cells)):
-        prev_coords = np.array([
-            [trajectories[i][-1]['x'], trajectories[i][-1]['y']]
-            for i in range(n_cells)
-        ])
+        prev_coords = np.array(
+            [[trajectories[i][-1]["x"], trajectories[i][-1]["y"]] for i in range(n_cells)]
+        )
         curr = frame_cells[f_idx]
-        curr_coords = np.array([[c['x'], c['y']] for c in curr])
+        curr_coords = np.array([[c["x"], c["y"]] for c in curr])
         D = cdist(prev_coords, curr_coords)
         row_ind, col_ind = linear_sum_assignment(D)
-        for r, c in zip(row_ind, col_ind):
+        for r, c in zip(row_ind, col_ind, strict=False):
             trajectories[r].append(curr[c])
 
     # Compute path lengths
@@ -73,9 +73,9 @@ def track_multiframe(frame_cells):
     for traj in trajectories:
         path = 0.0
         for i in range(1, len(traj)):
-            dx = traj[i]['x'] - traj[i - 1]['x']
-            dy = traj[i]['y'] - traj[i - 1]['y']
-            step = math.sqrt(dx ** 2 + dy ** 2)
+            dx = traj[i]["x"] - traj[i - 1]["x"]
+            dy = traj[i]["y"] - traj[i - 1]["y"]
+            step = math.sqrt(dx**2 + dy**2)
             path += step
             all_steps.append(step)
         path_lengths.append(path)
@@ -83,13 +83,13 @@ def track_multiframe(frame_cells):
     fastest_idx = int(np.argmax(path_lengths))
 
     return {
-        'trajectories': trajectories,
-        'path_lengths': [round(p, 2) for p in path_lengths],
-        'step_displacements': [round(s, 2) for s in all_steps],
-        'mean_path': round(float(np.mean(path_lengths)), 2),
-        'max_path': round(float(max(path_lengths)), 2),
-        'fastest_idx': fastest_idx,
-        'mean_step': round(float(np.mean(all_steps)), 2) if all_steps else 0.0,
+        "trajectories": trajectories,
+        "path_lengths": [round(p, 2) for p in path_lengths],
+        "step_displacements": [round(s, 2) for s in all_steps],
+        "mean_path": round(float(np.mean(path_lengths)), 2),
+        "max_path": round(float(max(path_lengths)), 2),
+        "fastest_idx": fastest_idx,
+        "mean_step": round(float(np.mean(all_steps)), 2) if all_steps else 0.0,
     }
 
 
@@ -111,23 +111,23 @@ def displacement_vectors(cells_t0, cells_t1):
     vectors = []
     displacements = []
     for r, c, d in matches:
-        dx = cells_t1[c]['x'] - cells_t0[r]['x']
-        dy = cells_t1[c]['y'] - cells_t0[r]['y']
+        dx = cells_t1[c]["x"] - cells_t0[r]["x"]
+        dy = cells_t1[c]["y"] - cells_t0[r]["y"]
         vectors.append((round(dx, 2), round(dy, 2)))
         displacements.append(d)
 
     fastest = int(np.argmax(displacements)) if displacements else 0
 
     return {
-        'matches': matches,
-        'vectors': vectors,
-        'mean_displacement': round(float(np.mean(displacements)), 2) if displacements else 0.0,
-        'max_displacement': round(float(max(displacements)), 2) if displacements else 0.0,
-        'fastest_idx': fastest,
+        "matches": matches,
+        "vectors": vectors,
+        "mean_displacement": round(float(np.mean(displacements)), 2) if displacements else 0.0,
+        "max_displacement": round(float(max(displacements)), 2) if displacements else 0.0,
+        "fastest_idx": fastest,
     }
 
 
-def smooth_trajectory(positions, window=5, method='rolling'):
+def smooth_trajectory(positions, window=5, method="rolling"):
     """Smooth a 2D trajectory to remove oscillation noise.
 
     Critical for organisms with sinusoidal locomotion (C. elegans, sperm)
@@ -145,29 +145,34 @@ def smooth_trajectory(positions, window=5, method='rolling'):
     if len(positions) < 3:
         return positions.copy()
 
-    if method == 'savgol':
+    if method == "savgol":
         from scipy.signal import savgol_filter
+
         w = min(window, len(positions))
         if w % 2 == 0:
             w -= 1
         w = max(w, 3)
         order = min(2, w - 1)
-        smoothed = np.column_stack([
-            savgol_filter(positions[:, 0], w, order),
-            savgol_filter(positions[:, 1], w, order),
-        ])
+        smoothed = np.column_stack(
+            [
+                savgol_filter(positions[:, 0], w, order),
+                savgol_filter(positions[:, 1], w, order),
+            ]
+        )
     else:  # rolling average
         kernel = np.ones(window) / window
         pad = window // 2
         # Pad with edge values to preserve trajectory length
-        x_padded = np.pad(positions[:, 0], pad, mode='edge')
-        y_padded = np.pad(positions[:, 1], pad, mode='edge')
-        smoothed = np.column_stack([
-            np.convolve(x_padded, kernel, mode='valid'),
-            np.convolve(y_padded, kernel, mode='valid'),
-        ])
+        x_padded = np.pad(positions[:, 0], pad, mode="edge")
+        y_padded = np.pad(positions[:, 1], pad, mode="edge")
+        smoothed = np.column_stack(
+            [
+                np.convolve(x_padded, kernel, mode="valid"),
+                np.convolve(y_padded, kernel, mode="valid"),
+            ]
+        )
         # Trim to original length if convolution produced extra
-        smoothed = smoothed[:len(positions)]
+        smoothed = smoothed[: len(positions)]
 
     return smoothed
 
@@ -191,9 +196,11 @@ def trajectory_speed(positions, dt=1.0, smooth_window=5):
     positions = np.asarray(positions, dtype=float)
     if len(positions) < 2:
         return {
-            'mean_speed': 0.0, 'total_path': 0.0,
-            'total_displacement': 0.0, 'sinuosity': 1.0,
-            'speeds': np.array([]),
+            "mean_speed": 0.0,
+            "total_path": 0.0,
+            "total_displacement": 0.0,
+            "sinuosity": 1.0,
+            "speeds": np.array([]),
         }
 
     if smooth_window > 1:
@@ -202,22 +209,23 @@ def trajectory_speed(positions, dt=1.0, smooth_window=5):
         smoothed = positions
 
     diffs = np.diff(smoothed, axis=0)
-    step_dists = np.sqrt((diffs ** 2).sum(axis=1))
+    step_dists = np.sqrt((diffs**2).sum(axis=1))
     total_path = float(step_dists.sum())
     speeds = step_dists / dt
 
-    displacement = float(np.sqrt(
-        (positions[-1, 0] - positions[0, 0]) ** 2 +
-        (positions[-1, 1] - positions[0, 1]) ** 2
-    ))
-    sinuosity = total_path / displacement if displacement > 0 else float('inf')
+    displacement = float(
+        np.sqrt(
+            (positions[-1, 0] - positions[0, 0]) ** 2 + (positions[-1, 1] - positions[0, 1]) ** 2
+        )
+    )
+    sinuosity = total_path / displacement if displacement > 0 else float("inf")
 
     return {
-        'mean_speed': round(float(speeds.mean()), 2),
-        'total_path': round(total_path, 2),
-        'total_displacement': round(displacement, 2),
-        'sinuosity': round(sinuosity, 3),
-        'speeds': speeds,
+        "mean_speed": round(float(speeds.mean()), 2),
+        "total_path": round(total_path, 2),
+        "total_displacement": round(displacement, 2),
+        "sinuosity": round(sinuosity, 3),
+        "speeds": speeds,
     }
 
 
@@ -262,9 +270,7 @@ def cell_dispersion(image, threshold=None, min_area=20, origin=None):
         threshold = float(threshold)
 
     binary = (img > threshold).astype(np.uint8)
-    n_labels, labels, stats, centroids_cv = cv2.connectedComponentsWithStats(
-        binary, connectivity=8
-    )
+    n_labels, labels, stats, centroids_cv = cv2.connectedComponentsWithStats(binary, connectivity=8)
 
     # Filter by area (skip background label 0)
     cell_centroids = []
@@ -276,29 +282,31 @@ def cell_dispersion(image, threshold=None, min_area=20, origin=None):
 
     if not cell_centroids:
         return {
-            'n_cells': 0, 'centroids': [],
-            'origin': origin or (0.0, 0.0),
-            'mean_distance': 0.0, 'std_distance': 0.0,
-            'max_distance': 0.0, 'rms_distance': 0.0,
+            "n_cells": 0,
+            "centroids": [],
+            "origin": origin or (0.0, 0.0),
+            "mean_distance": 0.0,
+            "std_distance": 0.0,
+            "max_distance": 0.0,
+            "rms_distance": 0.0,
         }
 
     centroids_arr = np.array(cell_centroids)
 
     if origin is None:
-        origin = (float(centroids_arr[:, 0].mean()),
-                  float(centroids_arr[:, 1].mean()))
+        origin = (float(centroids_arr[:, 0].mean()), float(centroids_arr[:, 1].mean()))
 
     origin_arr = np.array(origin)
     distances = np.sqrt(((centroids_arr - origin_arr) ** 2).sum(axis=1))
 
     return {
-        'n_cells': len(cell_centroids),
-        'centroids': cell_centroids,
-        'origin': origin,
-        'mean_distance': round(float(distances.mean()), 2),
-        'std_distance': round(float(distances.std()), 2),
-        'max_distance': round(float(distances.max()), 2),
-        'rms_distance': round(float(np.sqrt((distances ** 2).mean())), 2),
+        "n_cells": len(cell_centroids),
+        "centroids": cell_centroids,
+        "origin": origin,
+        "mean_distance": round(float(distances.mean()), 2),
+        "std_distance": round(float(distances.std()), 2),
+        "max_distance": round(float(distances.max()), 2),
+        "rms_distance": round(float(np.sqrt((distances**2).mean())), 2),
     }
 
 
@@ -321,10 +329,10 @@ def trajectory_curvature(positions, smooth_window=5):
     positions = np.asarray(positions, dtype=float)
     if len(positions) < 3:
         return {
-            'curvatures': np.array([]),
-            'mean_curvature': 0.0,
-            'max_curvature': 0.0,
-            'turn_angles': np.array([]),
+            "curvatures": np.array([]),
+            "mean_curvature": 0.0,
+            "max_curvature": 0.0,
+            "turn_angles": np.array([]),
         }
 
     if smooth_window > 1:
@@ -339,17 +347,17 @@ def trajectory_curvature(positions, smooth_window=5):
     dangle = (dangle + np.pi) % (2 * np.pi) - np.pi  # wrap to [-pi, pi]
 
     # Step lengths for curvature normalization
-    step_lens = np.sqrt((diffs ** 2).sum(axis=1))
+    step_lens = np.sqrt((diffs**2).sum(axis=1))
     mean_steps = (step_lens[:-1] + step_lens[1:]) / 2
     mean_steps = np.maximum(mean_steps, 1e-10)  # avoid division by zero
 
     curvatures = np.abs(dangle) / mean_steps
 
     return {
-        'curvatures': curvatures,
-        'mean_curvature': round(float(curvatures.mean()), 4),
-        'max_curvature': round(float(curvatures.max()), 4),
-        'turn_angles': np.degrees(dangle),
+        "curvatures": curvatures,
+        "mean_curvature": round(float(curvatures.mean()), 4),
+        "max_curvature": round(float(curvatures.max()), 4),
+        "turn_angles": np.degrees(dangle),
     }
 
 
@@ -378,11 +386,11 @@ def match_centroids(coords1, coords2, max_displacement=None):
 
     if len(coords1) == 0 or len(coords2) == 0:
         return {
-            'row_idx': np.array([], dtype=int),
-            'col_idx': np.array([], dtype=int),
-            'displacements': np.array([]),
-            'vectors': np.empty((0, 2)),
-            'mean_displacement': 0.0,
+            "row_idx": np.array([], dtype=int),
+            "col_idx": np.array([], dtype=int),
+            "displacements": np.array([]),
+            "vectors": np.empty((0, 2)),
+            "mean_displacement": 0.0,
         }
 
     cost = cdist(coords1, coords2)
@@ -397,16 +405,17 @@ def match_centroids(coords1, coords2, max_displacement=None):
     vectors = coords2[ci] - coords1[ri]
 
     return {
-        'row_idx': ri,
-        'col_idx': ci,
-        'displacements': displacements,
-        'vectors': vectors,
-        'mean_displacement': float(displacements.mean()) if len(displacements) > 0 else 0.0,
+        "row_idx": ri,
+        "col_idx": ci,
+        "displacements": displacements,
+        "vectors": vectors,
+        "mean_displacement": float(displacements.mean()) if len(displacements) > 0 else 0.0,
     }
 
 
-def population_speeds(centroids_per_frame, timestamps, pixel_size=1.0,
-                      max_displacement=None, time_scale=1.0):
+def population_speeds(
+    centroids_per_frame, timestamps, pixel_size=1.0, max_displacement=None, time_scale=1.0
+):
     """Compute speed distribution from multi-frame centroid data.
 
     Matches centroids between consecutive frames using Hungarian algorithm
@@ -435,10 +444,13 @@ def population_speeds(centroids_per_frame, timestamps, pixel_size=1.0,
     """
     if len(centroids_per_frame) < 2:
         return {
-            'speeds': np.array([]),
-            'mean_speed': 0.0, 'std_speed': 0.0, 'median_speed': 0.0,
-            'n_measurements': 0, 'n_frames': len(centroids_per_frame),
-            'speeds_per_pair': [],
+            "speeds": np.array([]),
+            "mean_speed": 0.0,
+            "std_speed": 0.0,
+            "median_speed": 0.0,
+            "n_measurements": 0,
+            "n_frames": len(centroids_per_frame),
+            "speeds_per_pair": [],
         }
 
     all_speeds = []
@@ -460,20 +472,20 @@ def population_speeds(centroids_per_frame, timestamps, pixel_size=1.0,
         dt_bio = dt_wall * time_scale
 
         result = match_centroids(c1, c2, max_displacement=max_displacement)
-        pair_speeds = result['displacements'] * pixel_size / dt_bio
+        pair_speeds = result["displacements"] * pixel_size / dt_bio
         speeds_per_pair.append(pair_speeds)
         all_speeds.extend(pair_speeds.tolist())
 
     speeds_arr = np.array(all_speeds) if all_speeds else np.array([])
 
     return {
-        'speeds': speeds_arr,
-        'mean_speed': float(speeds_arr.mean()) if len(speeds_arr) > 0 else 0.0,
-        'std_speed': float(speeds_arr.std()) if len(speeds_arr) > 0 else 0.0,
-        'median_speed': float(np.median(speeds_arr)) if len(speeds_arr) > 0 else 0.0,
-        'n_measurements': len(speeds_arr),
-        'n_frames': len(centroids_per_frame),
-        'speeds_per_pair': speeds_per_pair,
+        "speeds": speeds_arr,
+        "mean_speed": float(speeds_arr.mean()) if len(speeds_arr) > 0 else 0.0,
+        "std_speed": float(speeds_arr.std()) if len(speeds_arr) > 0 else 0.0,
+        "median_speed": float(np.median(speeds_arr)) if len(speeds_arr) > 0 else 0.0,
+        "n_measurements": len(speeds_arr),
+        "n_frames": len(centroids_per_frame),
+        "speeds_per_pair": speeds_per_pair,
     }
 
 
@@ -506,10 +518,12 @@ def detect_clusters(positions, neighbor_radius=30, min_neighbors=5, merge_radius
 
     if n < 2:
         return {
-            'n_clusters': 0, 'centers': [], 'sizes': [],
-            'labels': np.full(n, -1, dtype=int),
-            'cells_per_cluster': [],
-            'local_density': np.zeros(n),
+            "n_clusters": 0,
+            "centers": [],
+            "sizes": [],
+            "labels": np.full(n, -1, dtype=int),
+            "cells_per_cluster": [],
+            "local_density": np.zeros(n),
         }
 
     D = cdist(positions, positions)
@@ -521,10 +535,12 @@ def detect_clusters(positions, neighbor_radius=30, min_neighbors=5, merge_radius
 
     if len(hd_indices) == 0:
         return {
-            'n_clusters': 0, 'centers': [], 'sizes': [],
-            'labels': np.full(n, -1, dtype=int),
-            'cells_per_cluster': [],
-            'local_density': local_density,
+            "n_clusters": 0,
+            "centers": [],
+            "sizes": [],
+            "labels": np.full(n, -1, dtype=int),
+            "cells_per_cluster": [],
+            "local_density": local_density,
         }
 
     # Cluster high-density cells using connected components
@@ -532,11 +548,10 @@ def detect_clusters(positions, neighbor_radius=30, min_neighbors=5, merge_radius
     hd_D = cdist(hd_positions, hd_positions)
     adjacency = hd_D < merge_radius
 
-    from scipy.sparse.csgraph import connected_components
     from scipy.sparse import csr_matrix
-    n_clusters, component_labels = connected_components(
-        csr_matrix(adjacency), directed=False
-    )
+    from scipy.sparse.csgraph import connected_components
+
+    n_clusters, component_labels = connected_components(csr_matrix(adjacency), directed=False)
 
     # Compute cluster centers and sizes
     labels = np.full(n, -1, dtype=int)
@@ -562,10 +577,10 @@ def detect_clusters(positions, neighbor_radius=30, min_neighbors=5, merge_radius
         cells_per_cluster.append(nearby.tolist())
 
     return {
-        'n_clusters': n_clusters,
-        'centers': centers,
-        'sizes': sizes,
-        'labels': labels,
-        'cells_per_cluster': cells_per_cluster,
-        'local_density': local_density,
+        "n_clusters": n_clusters,
+        "centers": centers,
+        "sizes": sizes,
+        "labels": labels,
+        "cells_per_cluster": cells_per_cluster,
+        "local_density": local_density,
     }

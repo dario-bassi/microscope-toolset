@@ -25,12 +25,12 @@ from skimage import filters, morphology
 from skimage.filters import threshold_otsu
 from skimage.measure import regionprops
 
-
 # ===========================================================================
 # Scratch assay functions (traditional wound healing / migration)
 # ===========================================================================
 
-def detect_wound(image, orientation='horizontal', min_gap_width=10):
+
+def detect_wound(image, orientation="horizontal", min_gap_width=10):
     """Detect wound/scratch region in a monolayer image.
 
     The wound appears as a bright (cell-free) stripe in a darker
@@ -57,16 +57,14 @@ def detect_wound(image, orientation='horizontal', min_gap_width=10):
 
     smoothed = ndimage.gaussian_filter(image, sigma=3)
 
-    if orientation == 'horizontal':
+    if orientation == "horizontal":
         profile = smoothed.mean(axis=1)
-        axis = 0
     else:
         profile = smoothed.mean(axis=0)
-        axis = 1
 
     thresh = filters.threshold_otsu(smoothed)
     edge_mean = np.mean([profile[:10].mean(), profile[-10:].mean()])
-    center_mean = profile[len(profile) // 3: 2 * len(profile) // 3].mean()
+    center_mean = profile[len(profile) // 3 : 2 * len(profile) // 3].mean()
 
     if center_mean > edge_mean:
         wound_mask = smoothed > thresh
@@ -74,10 +72,9 @@ def detect_wound(image, orientation='horizontal', min_gap_width=10):
         wound_mask = smoothed < thresh
 
     wound_mask = ndimage.binary_fill_holes(wound_mask)
-    wound_mask = morphology.remove_small_objects(
-        wound_mask, max_size=min_gap_width ** 2 - 1)
+    wound_mask = morphology.remove_small_objects(wound_mask, max_size=min_gap_width**2 - 1)
 
-    if orientation == 'horizontal':
+    if orientation == "horizontal":
         gap_profile = wound_mask.sum(axis=0).astype(float)
     else:
         gap_profile = wound_mask.sum(axis=1).astype(float)
@@ -85,7 +82,7 @@ def detect_wound(image, orientation='horizontal', min_gap_width=10):
     mean_gap = float(gap_profile.mean())
     wound_fraction = wound_mask.sum() / wound_mask.size
 
-    if orientation == 'horizontal':
+    if orientation == "horizontal":
         top_edge = np.full(image.shape[1], np.nan)
         bottom_edge = np.full(image.shape[1], np.nan)
         for col in range(image.shape[1]):
@@ -105,16 +102,15 @@ def detect_wound(image, orientation='horizontal', min_gap_width=10):
         edges = (left_edge, right_edge)
 
     return {
-        'wound_mask': wound_mask,
-        'wound_fraction': round(float(wound_fraction), 4),
-        'gap_profile': gap_profile,
-        'mean_gap': round(mean_gap, 2),
-        'edges': edges,
+        "wound_mask": wound_mask,
+        "wound_fraction": round(float(wound_fraction), 4),
+        "gap_profile": gap_profile,
+        "mean_gap": round(mean_gap, 2),
+        "edges": edges,
     }
 
 
-def measure_wound_gap(image, orientation='horizontal', n_positions=10,
-                      min_gap_width=5):
+def measure_wound_gap(image, orientation="horizontal", n_positions=10, min_gap_width=5):
     """Measure wound width at multiple positions along the scratch.
 
     Args:
@@ -131,7 +127,7 @@ def measure_wound_gap(image, orientation='horizontal', n_positions=10,
             std_width: float.
     """
     result = detect_wound(image, orientation, min_gap_width)
-    gap = result['gap_profile']
+    gap = result["gap_profile"]
 
     length = len(gap)
     margin = max(1, length // 20)
@@ -139,10 +135,10 @@ def measure_wound_gap(image, orientation='horizontal', n_positions=10,
     widths = [float(gap[p]) for p in positions]
 
     return {
-        'widths': widths,
-        'positions': positions.tolist(),
-        'mean_width': round(float(np.mean(widths)), 2),
-        'std_width': round(float(np.std(widths)), 2),
+        "widths": widths,
+        "positions": positions.tolist(),
+        "mean_width": round(float(np.mean(widths)), 2),
+        "std_width": round(float(np.std(widths)), 2),
     }
 
 
@@ -175,13 +171,13 @@ def wound_closure_rate(gap_widths, timepoints, pixel_size_um=1.0):
         time_to_close = float(times[0] + initial / rate)
 
     return {
-        'initial_gap_um': round(initial, 2),
-        'final_gap_um': round(final, 2),
-        'closure_um': round(closure, 2),
-        'closure_fraction': round(frac, 4),
-        'rate_um_per_time': round(rate, 4),
-        'time_to_close': round(time_to_close, 2) if time_to_close else None,
-        'is_closed': final < 0.1 * initial,
+        "initial_gap_um": round(initial, 2),
+        "final_gap_um": round(final, 2),
+        "closure_um": round(closure, 2),
+        "closure_fraction": round(frac, 4),
+        "rate_um_per_time": round(rate, 4),
+        "time_to_close": round(time_to_close, 2) if time_to_close else None,
+        "is_closed": final < 0.1 * initial,
     }
 
 
@@ -200,7 +196,7 @@ def migration_speed(edge_positions, timepoints, pixel_size_um=1.0):
     times = np.asarray(timepoints, dtype=float)
 
     if len(pos) < 2:
-        return {'speed_um_per_time': 0.0, 'displacement_um': 0.0, 'speeds': []}
+        return {"speed_um_per_time": 0.0, "displacement_um": 0.0, "speeds": []}
 
     dp = np.diff(pos)
     dt = np.diff(times)
@@ -212,14 +208,13 @@ def migration_speed(edge_positions, timepoints, pixel_size_um=1.0):
     mean_speed = total_disp / total_time if total_time > 0 else 0
 
     return {
-        'speed_um_per_time': round(mean_speed, 4),
-        'displacement_um': round(total_disp, 2),
-        'speeds': [round(s, 4) for s in speeds.tolist()],
+        "speed_um_per_time": round(mean_speed, 4),
+        "displacement_um": round(total_disp, 2),
+        "speeds": [round(s, 4) for s in speeds.tolist()],
     }
 
 
-def analyze_scratch_assay(stack, timepoints=None, orientation='horizontal',
-                          pixel_size_um=1.0):
+def analyze_scratch_assay(stack, timepoints=None, orientation="horizontal", pixel_size_um=1.0):
     """Full pipeline for scratch assay analysis.
 
     Args:
@@ -246,13 +241,15 @@ def analyze_scratch_assay(stack, timepoints=None, orientation='horizontal',
 
     for i in range(n_frames):
         result = detect_wound(stack[i], orientation)
-        per_frame.append({
-            'mean_gap': result['mean_gap'],
-            'wound_fraction': result['wound_fraction'],
-        })
-        gap_widths.append(result['mean_gap'])
+        per_frame.append(
+            {
+                "mean_gap": result["mean_gap"],
+                "wound_fraction": result["wound_fraction"],
+            }
+        )
+        gap_widths.append(result["mean_gap"])
 
-        e1, e2 = result['edges']
+        e1, e2 = result["edges"]
         e1_valid = e1[~np.isnan(e1)]
         e2_valid = e2[~np.isnan(e2)]
         edge1_positions.append(float(np.mean(e1_valid)) if len(e1_valid) > 0 else np.nan)
@@ -265,20 +262,25 @@ def analyze_scratch_assay(stack, timepoints=None, orientation='horizontal',
     valid1 = ~np.isnan(e1)
     valid2 = ~np.isnan(e2)
 
-    mig1 = migration_speed(e1[valid1], timepoints[valid1], pixel_size_um) \
-        if valid1.sum() >= 2 else {'speed_um_per_time': 0, 'displacement_um': 0, 'speeds': []}
-    mig2 = migration_speed(e2[valid2], timepoints[valid2], pixel_size_um) \
-        if valid2.sum() >= 2 else {'speed_um_per_time': 0, 'displacement_um': 0, 'speeds': []}
+    mig1 = (
+        migration_speed(e1[valid1], timepoints[valid1], pixel_size_um)
+        if valid1.sum() >= 2
+        else {"speed_um_per_time": 0, "displacement_um": 0, "speeds": []}
+    )
+    mig2 = (
+        migration_speed(e2[valid2], timepoints[valid2], pixel_size_um)
+        if valid2.sum() >= 2
+        else {"speed_um_per_time": 0, "displacement_um": 0, "speeds": []}
+    )
 
     return {
-        'per_frame': per_frame,
-        'gap_widths': [round(g, 2) for g in gap_widths],
-        'closure': closure,
-        'migration': {
-            'edge1': mig1,
-            'edge2': mig2,
-            'mean_speed': round(
-                (mig1['speed_um_per_time'] + mig2['speed_um_per_time']) / 2, 4),
+        "per_frame": per_frame,
+        "gap_widths": [round(g, 2) for g in gap_widths],
+        "closure": closure,
+        "migration": {
+            "edge1": mig1,
+            "edge2": mig2,
+            "mean_speed": round((mig1["speed_um_per_time"] + mig2["speed_um_per_time"]) / 2, 4),
         },
     }
 
@@ -287,9 +289,10 @@ def analyze_scratch_assay(stack, timepoints=None, orientation='horizontal',
 # Laser ablation wound healing functions
 # ===========================================================================
 
+
 def segment_cells_bf(
     img,
-    channel='fluorescence',
+    channel="fluorescence",
     min_area=20,
     max_area=2000,
     threshold=None,
@@ -311,7 +314,7 @@ def segment_cells_bf(
     """
     img_f = np.asarray(img, dtype=float)
 
-    if channel == 'brightfield':
+    if channel == "brightfield":
         img_f = img_f.max() - img_f
 
     if threshold is None:
@@ -339,15 +342,15 @@ def segment_cells_bf(
         areas = []
 
     return {
-        'positions': positions,
-        'areas': areas,
-        'n_cells': len(cells),
-        'threshold': float(thr),
-        'labeled': labeled,
+        "positions": positions,
+        "areas": areas,
+        "n_cells": len(cells),
+        "threshold": float(thr),
+        "labeled": labeled,
     }
 
 
-def define_wound_region(fov_size=512, region='right_half', custom_mask=None):
+def define_wound_region(fov_size=512, region="right_half", custom_mask=None):
     """Create binary mask defining the wound region.
 
     Args:
@@ -365,17 +368,18 @@ def define_wound_region(fov_size=512, region='right_half', custom_mask=None):
     mask = np.zeros((fov_size, fov_size), dtype=bool)
     half = fov_size // 2
 
-    if region == 'right_half':
+    if region == "right_half":
         mask[:, half:] = True
-    elif region == 'left_half':
+    elif region == "left_half":
         mask[:, :half] = True
-    elif region == 'top_half':
+    elif region == "top_half":
         mask[:half, :] = True
-    elif region == 'bottom_half':
+    elif region == "bottom_half":
         mask[half:, :] = True
     else:
         raise ValueError(
-            f"Unknown region: {region}. Use right_half/left_half/top_half/bottom_half.")
+            f"Unknown region: {region}. Use right_half/left_half/top_half/bottom_half."
+        )
 
     return mask
 
@@ -403,7 +407,7 @@ def count_cells_in_region(positions, region_mask):
 def track_wound_repopulation(
     frames,
     wound_mask,
-    channel='fluorescence',
+    channel="fluorescence",
     min_area=20,
     max_area=2000,
     threshold=None,
@@ -435,15 +439,13 @@ def track_wound_repopulation(
             threshold=locked_threshold,
         )
         if locked_threshold is None and i == 0:
-            locked_threshold = result['threshold']
+            locked_threshold = result["threshold"]
 
-        n_in, n_out = count_cells_in_region(result['positions'], wound_mask)
+        n_in, n_out = count_cells_in_region(result["positions"], wound_mask)
         n_in_wound.append(n_in)
-        n_total.append(result['n_cells'])
+        n_total.append(result["n_cells"])
 
-    frac_in_wound = [
-        n_in / max(n_tot, 1) for n_in, n_tot in zip(n_in_wound, n_total)
-    ]
+    frac_in_wound = [n_in / max(n_tot, 1) for n_in, n_tot in zip(n_in_wound, n_total, strict=False)]
 
     # Healing: count in wound increases above post-ablation minimum
     healing_onset_frame = None
@@ -458,12 +460,12 @@ def track_wound_repopulation(
                 break
 
     return {
-        'n_in_wound': n_in_wound,
-        'n_total': n_total,
-        'frac_in_wound': frac_in_wound,
-        'healing_detected': healing_detected,
-        'healing_onset_frame': healing_onset_frame,
-        'threshold': locked_threshold,
+        "n_in_wound": n_in_wound,
+        "n_total": n_total,
+        "frac_in_wound": frac_in_wound,
+        "healing_detected": healing_detected,
+        "healing_onset_frame": healing_onset_frame,
+        "threshold": locked_threshold,
     }
 
 
@@ -471,8 +473,8 @@ def analyze_wound_healing(
     pre_ablation_img,
     ablation_frames,
     healing_frames,
-    wound_region='right_half',
-    channel='fluorescence',
+    wound_region="right_half",
+    channel="fluorescence",
     fov_size=512,
     min_area=20,
     max_area=2000,
@@ -513,11 +515,9 @@ def analyze_wound_healing(
         min_area=min_area,
         max_area=max_area,
     )
-    threshold = init_result['threshold']
-    n_in_wound_init, _ = count_cells_in_region(
-        init_result['positions'], wound_mask
-    )
-    n_initial = init_result['n_cells']
+    threshold = init_result["threshold"]
+    n_in_wound_init, _ = count_cells_in_region(init_result["positions"], wound_mask)
+    n_initial = init_result["n_cells"]
     n_initial_wound = n_in_wound_init
 
     # Ablation progress
@@ -529,9 +529,7 @@ def analyze_wound_healing(
             max_area=max_area,
             threshold=threshold,
         )
-        n_after_abl_wound, _ = count_cells_in_region(
-            last_abl['positions'], wound_mask
-        )
+        n_after_abl_wound, _ = count_cells_in_region(last_abl["positions"], wound_mask)
         n_ablated = max(0, n_initial_wound - n_after_abl_wound)
         clearance_efficiency = n_ablated / max(n_initial_wound, 1)
     else:
@@ -549,35 +547,37 @@ def analyze_wound_healing(
             max_area=max_area,
             threshold=threshold,
         )
-        max_healed = max(healing_result['n_in_wound']) if healing_result['n_in_wound'] else 0
+        max_healed = max(healing_result["n_in_wound"]) if healing_result["n_in_wound"] else 0
         repopulation_fraction = max_healed / max(n_initial_wound, 1)
     else:
         healing_result = {
-            'healing_detected': False,
-            'healing_onset_frame': None,
-            'n_in_wound': [], 'n_total': [], 'frac_in_wound': [],
+            "healing_detected": False,
+            "healing_onset_frame": None,
+            "n_in_wound": [],
+            "n_total": [],
+            "frac_in_wound": [],
         }
         repopulation_fraction = 0.0
 
     return {
-        'wound_mask': wound_mask,
-        'wound_area_frac': round(wound_area_frac, 4),
-        'initial': {
-            'n_initial': n_initial,
-            'n_initial_wound': n_initial_wound,
-            'frac_wound': round(n_initial_wound / max(n_initial, 1), 4),
-            'threshold': threshold,
+        "wound_mask": wound_mask,
+        "wound_area_frac": round(wound_area_frac, 4),
+        "initial": {
+            "n_initial": n_initial,
+            "n_initial_wound": n_initial_wound,
+            "frac_wound": round(n_initial_wound / max(n_initial, 1), 4),
+            "threshold": threshold,
         },
-        'ablation': {
-            'n_post_ablation_wound': n_after_abl_wound,
-            'n_ablated': n_ablated,
-            'clearance_efficiency': round(float(clearance_efficiency), 4),
+        "ablation": {
+            "n_post_ablation_wound": n_after_abl_wound,
+            "n_ablated": n_ablated,
+            "clearance_efficiency": round(float(clearance_efficiency), 4),
         },
-        'healing': {
-            'healing_detected': healing_result['healing_detected'],
-            'healing_onset_frame': healing_result.get('healing_onset_frame'),
-            'n_in_wound_series': healing_result['n_in_wound'],
-            'n_total_series': healing_result['n_total'],
-            'repopulation_fraction': round(float(repopulation_fraction), 4),
+        "healing": {
+            "healing_detected": healing_result["healing_detected"],
+            "healing_onset_frame": healing_result.get("healing_onset_frame"),
+            "n_in_wound_series": healing_result["n_in_wound"],
+            "n_total_series": healing_result["n_total"],
+            "repopulation_fraction": round(float(repopulation_fraction), 4),
         },
     }

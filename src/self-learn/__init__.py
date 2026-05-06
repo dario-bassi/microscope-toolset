@@ -7,6 +7,6 @@
 # utils/      -- Diagnostics (image saving), path configuration
 
 # Re-export commonly used functions for convenience
-from .utils.diagnostics import save_snapshot, save_overlay, save_composite
-from .detection.tissue import segment_tissue
 from .analysis.intensity import classify_intensities
+from .detection.tissue import segment_tissue
+from .utils.diagnostics import save_composite, save_overlay, save_snapshot

@@ -30,8 +30,8 @@ def create_sim_override():
         else:
             cell.n_div = int(rng.integers(8, 10))
 
-        cell.cell_cycle_state   = rng.choice(["G1", "S", "G2"], p=[0.50, 0.25, 0.25])
+        cell.cell_cycle_state = rng.choice(["G1", "S", "G2"], p=[0.50, 0.25, 0.25])
         cell.cell_mitosis_state = "Interphase"
-        cell.current_time_life  = cell._initial_random_time_life()
+        cell.current_time_life = cell._initial_random_time_life()
 
     return sim

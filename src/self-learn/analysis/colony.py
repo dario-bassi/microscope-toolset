@@ -16,8 +16,7 @@ import numpy as np
 from scipy import ndimage
 
 
-def detect_colonies(image, min_area=50, max_area=None, threshold=None,
-                    dark_colonies=True):
+def detect_colonies(image, min_area=50, max_area=None, threshold=None, dark_colonies=True):
     """Detect colonies in a plate image.
 
     Args:
@@ -92,10 +91,10 @@ def detect_colonies(image, min_area=50, max_area=None, threshold=None,
         centroids.append((round(float(cy), 1), round(float(cx), 1)))
 
     return {
-        'labeled': keep_mask,
-        'n_colonies': new_label,
-        'centroids': centroids,
-        'areas': areas,
+        "labeled": keep_mask,
+        "n_colonies": new_label,
+        "centroids": centroids,
+        "areas": areas,
     }
 
 
@@ -125,28 +124,30 @@ def measure_colonies(image, labeled, pixel_size=1.0):
     for i in range(1, n + 1):
         region = labeled == i
         area_px = float(region.sum())
-        area_um2 = area_px * pixel_size ** 2
+        area_um2 = area_px * pixel_size**2
         diameter = 2 * np.sqrt(area_px / np.pi) * pixel_size
         intensity = float(image[region].mean())
         cy, cx = ndimage.center_of_mass(region)
 
-        measurements.append({
-            'label': i,
-            'area_px': round(area_px, 1),
-            'area_um2': round(area_um2, 1),
-            'diameter_um': round(diameter, 1),
-            'mean_intensity': round(intensity, 1),
-            'centroid': (round(float(cy), 1), round(float(cx), 1)),
-        })
+        measurements.append(
+            {
+                "label": i,
+                "area_px": round(area_px, 1),
+                "area_um2": round(area_um2, 1),
+                "diameter_um": round(diameter, 1),
+                "mean_intensity": round(intensity, 1),
+                "centroid": (round(float(cy), 1), round(float(cx), 1)),
+            }
+        )
 
-    areas = [m['area_um2'] for m in measurements]
-    diameters = [m['diameter_um'] for m in measurements]
+    areas = [m["area_um2"] for m in measurements]
+    diameters = [m["diameter_um"] for m in measurements]
 
     return {
-        'measurements': measurements,
-        'mean_area': round(float(np.mean(areas)), 1) if areas else 0.0,
-        'mean_diameter': round(float(np.mean(diameters)), 1) if diameters else 0.0,
-        'total_area': round(float(np.sum(areas)), 1),
+        "measurements": measurements,
+        "mean_area": round(float(np.mean(areas)), 1) if areas else 0.0,
+        "mean_diameter": round(float(np.mean(diameters)), 1) if diameters else 0.0,
+        "total_area": round(float(np.sum(areas)), 1),
     }
 
 
@@ -167,21 +168,20 @@ def plating_efficiency(n_colonies, n_cells_plated):
     """
     if n_cells_plated <= 0:
         return {
-            'plating_efficiency': 0.0,
-            'n_colonies': n_colonies,
-            'n_cells_plated': n_cells_plated,
+            "plating_efficiency": 0.0,
+            "n_colonies": n_colonies,
+            "n_cells_plated": n_cells_plated,
         }
 
     pe = (n_colonies / n_cells_plated) * 100
     return {
-        'plating_efficiency': round(pe, 2),
-        'n_colonies': n_colonies,
-        'n_cells_plated': n_cells_plated,
+        "plating_efficiency": round(pe, 2),
+        "n_colonies": n_colonies,
+        "n_cells_plated": n_cells_plated,
     }
 
 
-def surviving_fraction(n_colonies_treated, n_cells_treated,
-                        pe_control):
+def surviving_fraction(n_colonies_treated, n_cells_treated, pe_control):
     """Compute surviving fraction relative to control.
 
     SF = (colonies_treated / cells_treated) / (PE_control / 100)
@@ -198,18 +198,18 @@ def surviving_fraction(n_colonies_treated, n_cells_treated,
     """
     if pe_control <= 0 or n_cells_treated <= 0:
         return {
-            'surviving_fraction': 0.0,
-            'log_sf': float('-inf'),
+            "surviving_fraction": 0.0,
+            "log_sf": float("-inf"),
         }
 
     sf = (n_colonies_treated / n_cells_treated) / (pe_control / 100)
     sf = min(sf, 1.0)  # Can't survive more than 100%
 
-    log_sf = float(np.log10(sf)) if sf > 0 else float('-inf')
+    log_sf = float(np.log10(sf)) if sf > 0 else float("-inf")
 
     return {
-        'surviving_fraction': round(sf, 4),
-        'log_sf': round(log_sf, 4) if np.isfinite(log_sf) else float('-inf'),
+        "surviving_fraction": round(sf, 4),
+        "log_sf": round(log_sf, 4) if np.isfinite(log_sf) else float("-inf"),
     }
 
 
@@ -239,28 +239,25 @@ def colony_size_classes(areas, thresholds=None):
     classifications = []
     for a in areas:
         if a < small_max:
-            classifications.append('small')
+            classifications.append("small")
         elif a < medium_max:
-            classifications.append('medium')
+            classifications.append("medium")
         else:
-            classifications.append('large')
+            classifications.append("large")
 
-    counts = {'small': 0, 'medium': 0, 'large': 0}
-    area_sums = {'small': [], 'medium': [], 'large': []}
-    for cls, a in zip(classifications, areas):
+    counts = {"small": 0, "medium": 0, "large": 0}
+    area_sums = {"small": [], "medium": [], "large": []}
+    for cls, a in zip(classifications, areas, strict=False):
         counts[cls] += 1
         area_sums[cls].append(a)
 
     total = max(len(areas), 1)
     fractions = {k: round(v / total, 4) for k, v in counts.items()}
-    mean_per_class = {
-        k: round(float(np.mean(v)), 1) if v else 0.0
-        for k, v in area_sums.items()
-    }
+    mean_per_class = {k: round(float(np.mean(v)), 1) if v else 0.0 for k, v in area_sums.items()}
 
     return {
-        'classifications': classifications,
-        'counts': counts,
-        'fractions': fractions,
-        'mean_per_class': mean_per_class,
+        "classifications": classifications,
+        "counts": counts,
+        "fractions": fractions,
+        "mean_per_class": mean_per_class,
     }

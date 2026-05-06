@@ -22,63 +22,106 @@ Modules:
 """
 
 from .adaptive import (
-    pixel_to_world, world_to_pixel, survey_cells,
-    find_clusters, rank_by_feature, zoom_and_measure, adaptive_survey,
+    adaptive_survey,
     adaptive_survey_mda,
+    find_clusters,
+    pixel_to_world,
+    rank_by_feature,
+    survey_cells,
+    world_to_pixel,
+    zoom_and_measure,
 )
-from .scanning import (
-    grid_positions, deduplicate_cells,
-    scan_and_detect_mda,
+from .autofocus import (
+    autofocus_mda,
+    check_and_correct_focus,
+    coarse_fine_focus,
+    drift_corrected_timelapse,
+    focus_metric,
+    make_focus_state,
+    sweep_focus,
 )
-from .stage_tracking import (
-    make_tracker, predict_position, update_velocity,
-    locate_target, center_on_target, spiral_search, track_target,
-    track_multiple,
+from .bacteria_trap import (
+    compute_enrichment,
+    count_bacteria_in_circle,
+    detect_bacteria_area_threshold,
+    detect_bacteria_gfp,
+    measure_bacteria_intensity,
+)
+from .batch import (
+    aggregate_results,
+    identify_hotspot,
+    measure_nuclear_expression,
+    multi_position_measure,
+    tile_and_analyze,
+)
+from .dose_response import (
+    auto_ec50,
+    dose_response_pipeline,
+    make_plate_layout,
+    measure_plate,
+    normalize_responses,
+)
+from .experiment import (
+    baseline_treatment,
+    extract_phase_data,
+    phase_timelapse,
+    temperature_shift,
+    wash_experiment,
 )
 from .mda import (
     adaptive_phase_events,
 )
-from .autofocus import (
-    focus_metric, sweep_focus, coarse_fine_focus,
-    make_focus_state, check_and_correct_focus, autofocus_mda,
-    drift_corrected_timelapse,
-)
-from .optogenetics import (
-    detect_somata, detect_somata_fluorescence,
-    make_soma_rois, analyze_stimulation,
-    slm_stimulation_experiment, connectivity_mapping,
-)
-from .scouting import (
-    channel_scout, sample_survey, experiment_protocol,
-)
-from .tiling import (
-    tile_positions, stitch_tiles,
-    phase_correlation, align_tile_pair, stitch_tiles_aligned,
-)
-from .dose_response import (
-    make_plate_layout, measure_plate, normalize_responses,
-    auto_ec50, dose_response_pipeline,
-)
 from .multi_scale import (
-    suggest_magnification, scale_params, overview_first,
-    multi_scale_measure, validate_object_size,
-)
-from .batch import (
-    tile_and_analyze, multi_position_measure, aggregate_results,
-    measure_nuclear_expression, identify_hotspot,
-)
-from .experiment import (
-    phase_timelapse, baseline_treatment, wash_experiment,
-    temperature_shift, extract_phase_data,
+    multi_scale_measure,
+    overview_first,
+    scale_params,
+    suggest_magnification,
+    validate_object_size,
 )
 from .optimization import (
-    optimize_exposure, optimize_gain, parameter_sweep,
-    suggest_parameters, make_sweep_events,
+    make_sweep_events,
+    optimize_exposure,
+    optimize_gain,
+    parameter_sweep,
+    suggest_parameters,
+)
+from .optogenetics import (
+    analyze_stimulation,
+    connectivity_mapping,
+    detect_somata,
+    detect_somata_fluorescence,
+    make_soma_rois,
+    slm_stimulation_experiment,
 )
 from .organoid import (
-    find_equatorial_z, measure_organoid, organoid_z_profile,
+    find_equatorial_z,
+    measure_organoid,
+    organoid_z_profile,
 )
-from .bacteria_trap import (
-    detect_bacteria_gfp, detect_bacteria_area_threshold,
-    count_bacteria_in_circle, compute_enrichment, measure_bacteria_intensity,
+from .scanning import (
+    deduplicate_cells,
+    grid_positions,
+    scan_and_detect_mda,
+)
+from .scouting import (
+    channel_scout,
+    experiment_protocol,
+    sample_survey,
+)
+from .stage_tracking import (
+    center_on_target,
+    locate_target,
+    make_tracker,
+    predict_position,
+    spiral_search,
+    track_multiple,
+    track_target,
+    update_velocity,
+)
+from .tiling import (
+    align_tile_pair,
+    phase_correlation,
+    stitch_tiles,
+    stitch_tiles_aligned,
+    tile_positions,
 )

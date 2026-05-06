@@ -12,8 +12,9 @@ Functions:
 """
 
 import os
-import numpy as np
+
 import cv2
+import numpy as np
 
 
 def get_showcase_dir():
@@ -28,11 +29,11 @@ def get_showcase_dir():
         str: Path to showcase directory (will be created if doesn't exist).
     """
     # Check environment variable first
-    if 'MICROSCOPE_SHOWCASE_DIR' in os.environ:
-        return os.environ['MICROSCOPE_SHOWCASE_DIR']
+    if "MICROSCOPE_SHOWCASE_DIR" in os.environ:
+        return os.environ["MICROSCOPE_SHOWCASE_DIR"]
 
     # Default to user's home directory
-    default_dir = os.path.expanduser('~/.microscope/showcase')
+    default_dir = os.path.expanduser("~/.microscope/showcase")
     return default_dir
 
 
@@ -58,8 +59,9 @@ def _to_bgr(img):
     return cv2.cvtColor(img, cv2.COLOR_GRAY2BGR)
 
 
-def add_scalebar(img, pixel_size_um, bar_um=None, position='bottom_right',
-                 color=(255, 255, 255), thickness=3):
+def add_scalebar(
+    img, pixel_size_um, bar_um=None, position="bottom_right", color=(255, 255, 255), thickness=3
+):
     """Add a scale bar to an image.
 
     Args:
@@ -91,28 +93,34 @@ def add_scalebar(img, pixel_size_um, bar_um=None, position='bottom_right',
     bar_px = int(bar_um / pixel_size_um)
     margin = 15
 
-    if 'right' in position:
+    if "right" in position:
         x1 = w - margin
         x0 = x1 - bar_px
     else:
         x0 = margin
         x1 = x0 + bar_px
 
-    if 'bottom' in position:
+    if "bottom" in position:
         y = h - margin
     else:
         y = margin + 10
 
     cv2.line(bgr, (x0, y), (x1, y), color, thickness)
-    label = f'{bar_um} um'
-    cv2.putText(bgr, label, (x0, y - 5),
-                cv2.FONT_HERSHEY_SIMPLEX, 0.4, color, 1)
+    label = f"{bar_um} um"
+    cv2.putText(bgr, label, (x0, y - 5), cv2.FONT_HERSHEY_SIMPLEX, 0.4, color, 1)
     return bgr
 
 
-def annotate_image(img, centroids=None, contours=None, text=None,
-                   marker_color=(0, 255, 0), marker_radius=6,
-                   contour_color=(0, 255, 255), text_color=(255, 255, 255)):
+def annotate_image(
+    img,
+    centroids=None,
+    contours=None,
+    text=None,
+    marker_color=(0, 255, 0),
+    marker_radius=6,
+    contour_color=(0, 255, 255),
+    text_color=(255, 255, 255),
+):
     """Add markers, contours, and text to an image.
 
     Args:
@@ -131,7 +139,7 @@ def annotate_image(img, centroids=None, contours=None, text=None,
     if centroids:
         for c in centroids:
             if isinstance(c, dict):
-                cx, cy = int(c.get('x', 0)), int(c.get('y', 0))
+                cx, cy = int(c.get("x", 0)), int(c.get("y", 0))
             else:
                 cx, cy = int(c[0]), int(c[1])
             cv2.circle(bgr, (cx, cy), marker_radius, marker_color, 2)
@@ -141,14 +149,22 @@ def annotate_image(img, centroids=None, contours=None, text=None,
 
     if text:
         for tx, ty, label in text:
-            cv2.putText(bgr, str(label), (int(tx), int(ty)),
-                        cv2.FONT_HERSHEY_SIMPLEX, 0.4, text_color, 1)
+            cv2.putText(
+                bgr, str(label), (int(tx), int(ty)), cv2.FONT_HERSHEY_SIMPLEX, 0.4, text_color, 1
+            )
 
     return bgr
 
 
-def make_showcase(panels, experiment_id, description='', cols=None,
-                  panel_size=(256, 256), results_text=None, output_dir=None):
+def make_showcase(
+    panels,
+    experiment_id,
+    description="",
+    cols=None,
+    panel_size=(256, 256),
+    results_text=None,
+    output_dir=None,
+):
     """Build and save a multi-panel showcase figure.
 
     Args:
@@ -198,15 +214,15 @@ def make_showcase(panels, experiment_id, description='', cols=None,
         y0 = r * (ph + title_h)
 
         # Process image
-        img = panel['image']
+        img = panel["image"]
         display = _scale_image(img)
         bgr = _to_bgr(display)
 
         # Annotate if needed
-        if panel.get('centroids'):
-            for pt in panel['centroids']:
+        if panel.get("centroids"):
+            for pt in panel["centroids"]:
                 if isinstance(pt, dict):
-                    cx, cy = int(pt.get('x', 0)), int(pt.get('y', 0))
+                    cx, cy = int(pt.get("x", 0)), int(pt.get("y", 0))
                 else:
                     cx, cy = int(pt[0]), int(pt[1])
                 # Scale coordinates to panel size
@@ -218,19 +234,20 @@ def make_showcase(panels, experiment_id, description='', cols=None,
         resized = cv2.resize(bgr, (pw, ph))
 
         # Scale bar
-        if panel.get('scalebar'):
-            pxsz = panel['scalebar']
+        if panel.get("scalebar"):
+            pxsz = panel["scalebar"]
             scale_factor = img.shape[1] / pw
             resized = add_scalebar(resized, pxsz * scale_factor)
 
         # Title bar
-        canvas[y0:y0 + title_h, x0:x0 + pw] = (50, 50, 50)
-        title = panel.get('title', f'Panel {i}')
-        cv2.putText(canvas, title, (x0 + 5, y0 + 17),
-                    cv2.FONT_HERSHEY_SIMPLEX, 0.45, (255, 255, 255), 1)
+        canvas[y0 : y0 + title_h, x0 : x0 + pw] = (50, 50, 50)
+        title = panel.get("title", f"Panel {i}")
+        cv2.putText(
+            canvas, title, (x0 + 5, y0 + 17), cv2.FONT_HERSHEY_SIMPLEX, 0.45, (255, 255, 255), 1
+        )
 
         # Image
-        canvas[y0 + title_h:y0 + title_h + ph, x0:x0 + pw] = resized
+        canvas[y0 + title_h : y0 + title_h + ph, x0 : x0 + pw] = resized
 
     # Results text at bottom
     if results_text:
@@ -238,13 +255,11 @@ def make_showcase(panels, experiment_id, description='', cols=None,
         canvas[results_y0:, :] = (30, 30, 30)
         for j, line in enumerate(results_text):
             y = results_y0 + 15 + j * 20
-            cv2.putText(canvas, line, (10, y),
-                        cv2.FONT_HERSHEY_SIMPLEX, 0.45, (200, 200, 200), 1)
+            cv2.putText(canvas, line, (10, y), cv2.FONT_HERSHEY_SIMPLEX, 0.45, (200, 200, 200), 1)
 
     # Save
-    desc = description.replace(' ', '_')[:40] if description else 'result'
-    filename = f'{experiment_id}_{desc}.png'
+    desc = description.replace(" ", "_")[:40] if description else "result"
+    filename = f"{experiment_id}_{desc}.png"
     path = os.path.join(output_dir, filename)
     cv2.imwrite(path, canvas)
     return path
-

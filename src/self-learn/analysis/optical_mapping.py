@@ -24,7 +24,6 @@ Real microscope note:
 """
 
 import numpy as np
-from scipy import ndimage
 
 
 def frequency_map(stack, dt=1.0, block_size=16, min_freq=None, max_freq=None):
@@ -62,11 +61,12 @@ def frequency_map(stack, dt=1.0, block_size=16, min_freq=None, max_freq=None):
 
     for bi in range(h_b):
         for bj in range(w_b):
-            region = stack[:, bi*block_size:(bi+1)*block_size,
-                          bj*block_size:(bj+1)*block_size]
+            region = stack[
+                :, bi * block_size : (bi + 1) * block_size, bj * block_size : (bj + 1) * block_size
+            ]
             trace = region.mean(axis=(1, 2))
             trace = trace - np.mean(trace)
-            spec = np.abs(np.fft.rfft(trace))**2
+            spec = np.abs(np.fft.rfft(trace)) ** 2
             spec[:min_bin] = 0
             if max_bin < len(spec):
                 spec[max_bin:] = 0
@@ -80,10 +80,10 @@ def frequency_map(stack, dt=1.0, block_size=16, min_freq=None, max_freq=None):
     mode_freq = float(unique[np.argmax(counts)])
 
     return {
-        'freq_map': fmap,
-        'power_map': pmap,
-        'mode_freq': mode_freq,
-        'block_size': block_size,
+        "freq_map": fmap,
+        "power_map": pmap,
+        "mode_freq": mode_freq,
+        "block_size": block_size,
     }
 
 
@@ -118,23 +118,23 @@ def phase_map(stack, target_freq, dt=1.0, block_size=16):
 
     for bi in range(h_b):
         for bj in range(w_b):
-            region = stack[:, bi*block_size:(bi+1)*block_size,
-                          bj*block_size:(bj+1)*block_size]
+            region = stack[
+                :, bi * block_size : (bi + 1) * block_size, bj * block_size : (bj + 1) * block_size
+            ]
             trace = region.mean(axis=(1, 2))
             trace = trace - np.mean(trace)
             fft_val = np.fft.rfft(trace)[target_bin]
             ph[bi, bj] = np.angle(fft_val)
-            pw[bi, bj] = np.abs(fft_val)**2
+            pw[bi, bj] = np.abs(fft_val) ** 2
 
     return {
-        'phase': ph,
-        'power': pw,
-        'block_size': block_size,
+        "phase": ph,
+        "power": pw,
+        "block_size": block_size,
     }
 
 
-def conduction_velocity(phase_data, block_size=16, power_threshold_pct=25,
-                        max_grad=0.1):
+def conduction_velocity(phase_data, block_size=16, power_threshold_pct=25, max_grad=0.1):
     """Measure wave conduction velocity from phase gradient.
 
     Uses the relationship: velocity = omega / |grad(phase)|
@@ -154,8 +154,8 @@ def conduction_velocity(phase_data, block_size=16, power_threshold_pct=25,
             direction_map: 2D map of propagation direction (radians).
             n_valid: Number of valid measurement blocks.
     """
-    ph = phase_data['phase']
-    pw = phase_data['power']
+    ph = phase_data["phase"]
+    pw = phase_data["power"]
 
     # Phase gradient
     grad_y = np.gradient(ph, block_size, axis=0)
@@ -164,8 +164,9 @@ def conduction_velocity(phase_data, block_size=16, power_threshold_pct=25,
     grad_dir = np.arctan2(grad_y, grad_x)
 
     # Valid blocks: sufficient power, reasonable gradient
-    valid = (grad_mag > 0.001) & (grad_mag < max_grad) & (
-        pw > np.percentile(pw, power_threshold_pct))
+    valid = (
+        (grad_mag > 0.001) & (grad_mag < max_grad) & (pw > np.percentile(pw, power_threshold_pct))
+    )
 
     # Velocity = omega / |grad_phase|
     # We don't know omega here, so return in units that depend on the
@@ -182,12 +183,12 @@ def conduction_velocity(phase_data, block_size=16, power_threshold_pct=25,
         mean_vel = 0.0
 
     return {
-        'velocity_median': round(med_vel, 2),
-        'velocity_mean': round(mean_vel, 2),
-        'velocity_map': velocity_map,
-        'direction_map': grad_dir,
-        'grad_magnitude': grad_mag,
-        'n_valid': int(valid.sum()),
+        "velocity_median": round(med_vel, 2),
+        "velocity_mean": round(mean_vel, 2),
+        "velocity_map": velocity_map,
+        "direction_map": grad_dir,
+        "grad_magnitude": grad_mag,
+        "n_valid": int(valid.sum()),
     }
 
 
@@ -215,10 +216,10 @@ def detect_pacemaker(stack, dt=1.0, corner_size=64, min_distance=3):
     cs = corner_size
 
     corners = {
-        'top-left': stack[:, :cs, :cs],
-        'top-right': stack[:, :cs, w-cs:],
-        'bottom-left': stack[:, h-cs:, :cs],
-        'bottom-right': stack[:, h-cs:, w-cs:],
+        "top-left": stack[:, :cs, :cs],
+        "top-right": stack[:, :cs, w - cs :],
+        "bottom-left": stack[:, h - cs :, :cs],
+        "bottom-right": stack[:, h - cs :, w - cs :],
     }
 
     peak_times = {}
@@ -243,10 +244,10 @@ def detect_pacemaker(stack, dt=1.0, corner_size=64, min_distance=3):
     beat_rate = 1.0 / (np.mean(all_intervals) * dt) if all_intervals else 0.0
 
     return {
-        'source_quadrant': earliest or 'unknown',
-        'peak_times': peak_times,
-        'mean_intervals': mean_intervals,
-        'beat_rate_hz': round(beat_rate, 3),
+        "source_quadrant": earliest or "unknown",
+        "peak_times": peak_times,
+        "mean_intervals": mean_intervals,
+        "beat_rate_hz": round(beat_rate, 3),
     }
 
 
@@ -294,9 +295,9 @@ def activation_map(stack, beat_frame, search_window=4, threshold_frac=0.3):
         earliest_idx = (0, 0)
 
     return {
-        'activation_time': act,
-        'relative_time': relative,
-        'earliest_pixel': earliest_idx,
+        "activation_time": act,
+        "relative_time": relative,
+        "earliest_pixel": earliest_idx,
     }
 
 
@@ -309,7 +310,7 @@ def _detect_peaks(signal, min_distance=3):
 
     peaks = []
     for i in range(1, n - 1):
-        if signal[i] > signal[i-1] and signal[i] > signal[i+1]:
+        if signal[i] > signal[i - 1] and signal[i] > signal[i + 1]:
             if min_distance <= 1 or not peaks or (i - peaks[-1]) >= min_distance:
                 peaks.append(i)
 

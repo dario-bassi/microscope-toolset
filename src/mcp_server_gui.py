@@ -1,26 +1,42 @@
+import logging
 import os
 import platform
 import socket
 import subprocess
 import sys
-import logging
 import threading
 import time
 from datetime import datetime
 from typing import Any
 
 import napari
-from PyQt6.QtCore import Qt, QObject, pyqtSlot, QThread, pyqtSignal, QTimer, QSettings
+from PyQt6.QtCore import QObject, QSettings, Qt, QThread, QTimer, pyqtSignal, pyqtSlot
 from PyQt6.QtGui import QIntValidator
 from PyQt6.QtWidgets import (
-    QWidget, QVBoxLayout, QHBoxLayout, QPushButton, QLabel,
-    QSizePolicy, QFrame, QLineEdit, QGroupBox, QMessageBox, QComboBox,
+    QComboBox,
+    QFrame,
+    QGroupBox,
+    QHBoxLayout,
+    QLabel,
+    QLineEdit,
+    QMessageBox,
+    QPushButton,
+    QSizePolicy,
+    QVBoxLayout,
+    QWidget,
 )
-from src.mcp_microscopetoolset import get_user_information, create_mcp_server, initialize_agents, NapariViewerMC
-from src.databases.es_server import _start_server, _stop_server, wait_for_es
-from src.microscope import MicroscopeEventCache
+
 from src.benchmarking import BenchmarkLogger
-from src.utils import classify_cfg as _classify_cfg, CoreProxyWorker
+from src.databases.es_server import _start_server, _stop_server, wait_for_es
+from src.mcp_microscopetoolset import (
+    NapariViewerMC,
+    create_mcp_server,
+    get_user_information,
+    initialize_agents,
+)
+from src.microscope import MicroscopeEventCache
+from src.utils import CoreProxyWorker
+from src.utils import classify_cfg as _classify_cfg
 
 logger = logging.getLogger("MCPServer")
 
@@ -57,42 +73,52 @@ class StartupTimer:
             lines.append(f"  {phase:<42s}  t={t:6.3f}s  (+{t - prev:.3f}s)")
             prev = t
         logger.info("\n".join(lines))
+
+
 if not logger.handlers:
     logger.setLevel(logging.INFO)
     fh = logging.FileHandler("microscope_toolset.log", encoding="utf-8")
-    fh.setFormatter(logging.Formatter(
-        "%(asctime)s [%(levelname)s] %(name)s: %(message)s",
-        datefmt="%Y-%m-%d %H:%M:%S",
-    ))
+    fh.setFormatter(
+        logging.Formatter(
+            "%(asctime)s [%(levelname)s] %(name)s: %(message)s",
+            datefmt="%Y-%m-%d %H:%M:%S",
+        )
+    )
     logger.addHandler(fh)
 
 # ── Shared style constants ──────────────────────────────────────────────────
-_DOT_STOPPED  = "background:#aaaaaa;border-radius:6px;min-width:12px;min-height:12px;max-width:12px;max-height:12px;"
-_DOT_BUSY     = "background:#FF9800;border-radius:6px;min-width:12px;min-height:12px;max-width:12px;max-height:12px;"
-_DOT_OK       = "background:#4CAF50;border-radius:6px;min-width:12px;min-height:12px;max-width:12px;max-height:12px;"
-_DOT_ERROR    = "background:#f44336;border-radius:6px;min-width:12px;min-height:12px;max-width:12px;max-height:12px;"
-_BTN_GREEN    = ("QPushButton{background:#4CAF50;color:white;border-radius:4px;"
-                 "padding:2px 8px;font-size:11px;}"
-                 "QPushButton:hover{background:#45a049;}"
-                 "QPushButton:disabled{background:#cccccc;color:#666;}")
-_BTN_RED      = ("QPushButton{background:#f44336;color:white;border-radius:4px;"
-                 "padding:2px 8px;font-size:11px;}"
-                 "QPushButton:hover{background:#da190b;}"
-                 "QPushButton:disabled{background:#cccccc;color:#666;}")
+_DOT_STOPPED = "background:#aaaaaa;border-radius:6px;min-width:12px;min-height:12px;max-width:12px;max-height:12px;"
+_DOT_BUSY = "background:#FF9800;border-radius:6px;min-width:12px;min-height:12px;max-width:12px;max-height:12px;"
+_DOT_OK = "background:#4CAF50;border-radius:6px;min-width:12px;min-height:12px;max-width:12px;max-height:12px;"
+_DOT_ERROR = "background:#f44336;border-radius:6px;min-width:12px;min-height:12px;max-width:12px;max-height:12px;"
+_BTN_GREEN = (
+    "QPushButton{background:#4CAF50;color:white;border-radius:4px;"
+    "padding:2px 8px;font-size:11px;}"
+    "QPushButton:hover{background:#45a049;}"
+    "QPushButton:disabled{background:#cccccc;color:#666;}"
+)
+_BTN_RED = (
+    "QPushButton{background:#f44336;color:white;border-radius:4px;"
+    "padding:2px 8px;font-size:11px;}"
+    "QPushButton:hover{background:#da190b;}"
+    "QPushButton:disabled{background:#cccccc;color:#666;}"
+)
 
 
 # ── Reusable status panel ───────────────────────────────────────────────────
 
+
 class ServicePanel(QFrame):
     """[dot] Name  url/msg  [Start | Stop]"""
 
-    def __init__(self, name: str, start_label: str = "Start",
-                 stop_label: str = "Stop", parent=None):
+    def __init__(
+        self, name: str, start_label: str = "Start", stop_label: str = "Stop", parent=None
+    ):
         super().__init__(parent)
         self.setFrameShape(QFrame.Shape.StyledPanel)
         self.setStyleSheet("ServicePanel{border:1px solid #ddd;border-radius:6px;}")
         self._start_label = start_label
-        self._stop_label  = stop_label
+        self._stop_label = stop_label
 
         row = QHBoxLayout(self)
         row.setContentsMargins(6, 4, 6, 4)
@@ -148,6 +174,7 @@ class ServicePanel(QFrame):
 
 # ── Thread-safe viewer proxy ────────────────────────────────────────────────
 
+
 class ThreadSafeViewerProxy(QObject):
     execute_on_main_thread = pyqtSignal(str, dict)
 
@@ -155,7 +182,7 @@ class ThreadSafeViewerProxy(QObject):
         super().__init__()
         self.viewer = viewer
         self.result = None
-        self.error  = None
+        self.error = None
         self.done_event = threading.Event()
         self.execute_on_main_thread.connect(
             self._execute_viewer_method,
@@ -166,17 +193,17 @@ class ThreadSafeViewerProxy(QObject):
     def _execute_viewer_method(self, method_name, kwargs):
         try:
             self.result = getattr(self.viewer, method_name)(**kwargs)
-            self.error  = None
+            self.error = None
         except Exception as e:
             logger.error(f"Viewer method {method_name} failed: {e}")
             self.result = None
-            self.error  = e
+            self.error = e
         finally:
             self.done_event.set()
 
     def call_on_main_thread(self, method_name, **kwargs):
         self.result = None
-        self.error  = None
+        self.error = None
         self.done_event.clear()
         self.execute_on_main_thread.emit(method_name, kwargs)
         if not self.done_event.wait(timeout=10):
@@ -188,9 +215,10 @@ class ThreadSafeViewerProxy(QObject):
 
 # ── Service workers ─────────────────────────────────────────────────────────
 
+
 class ElasticsearchWorker(QObject):
-    started = pyqtSignal(str)   # url
-    error   = pyqtSignal(str)
+    started = pyqtSignal(str)  # url
+    error = pyqtSignal(str)
     stopped = pyqtSignal()
 
     def __init__(self):
@@ -206,9 +234,11 @@ class ElasticsearchWorker(QObject):
                 self.error.emit("ELASTICSEARCH path not configured in .env")
                 return
 
-            exe = (f"{es_home}\\bin\\elasticsearch.bat"
-                   if sys.platform.startswith("win")
-                   else f"{es_home}/bin/elasticsearch")
+            exe = (
+                f"{es_home}\\bin\\elasticsearch.bat"
+                if sys.platform.startswith("win")
+                else f"{es_home}/bin/elasticsearch"
+            )
             logger.info(f"Launching Elasticsearch: {exe}")
             self._process = _start_server([exe, "-d", "-p", "pid"])
             logger.info(f"Elasticsearch PID={self._process.pid}")
@@ -241,8 +271,8 @@ class ElasticsearchWorker(QObject):
 
 
 class PostgreSQLWorker(QObject):
-    connected    = pyqtSignal(str)   # "host:port"
-    error        = pyqtSignal(str)
+    connected = pyqtSignal(str)  # "host:port"
+    error = pyqtSignal(str)
     disconnected = pyqtSignal()
 
     def __init__(self):
@@ -253,6 +283,7 @@ class PostgreSQLWorker(QObject):
     def run(self):
         try:
             from src.postqrl import DBConnection
+
             self._db_conn = DBConnection()
             host = os.getenv("DB_HOST", "localhost")
             port = os.getenv("DB_PORT", "5432")
@@ -298,20 +329,16 @@ def _log_port_listeners(port: int) -> None:
     system = platform.system()
     try:
         if system == "Windows":
-            out = subprocess.check_output(
-                ["netstat", "-ano"], text=True, stderr=subprocess.DEVNULL
-            )
-            lines = [l for l in out.splitlines() if f":{port}" in l]
+            out = subprocess.check_output(["netstat", "-ano"], text=True, stderr=subprocess.DEVNULL)
+            lines = [ln for ln in out.splitlines() if f":{port}" in ln]
         elif system == "Darwin":
             out = subprocess.check_output(
-                ["lsof", f"-iTCP:{port}", "-sTCP:LISTEN"],
-                text=True, stderr=subprocess.DEVNULL
+                ["lsof", f"-iTCP:{port}", "-sTCP:LISTEN"], text=True, stderr=subprocess.DEVNULL
             )
             lines = out.strip().splitlines()
         else:  # Linux
             out = subprocess.check_output(
-                ["ss", "-tlnp", f"sport = :{port}"],
-                text=True, stderr=subprocess.DEVNULL
+                ["ss", "-tlnp", f"sport = :{port}"], text=True, stderr=subprocess.DEVNULL
             )
             lines = out.strip().splitlines()
         if lines:
@@ -323,38 +350,47 @@ def _log_port_listeners(port: int) -> None:
 
 
 class MCPServerWorker(QObject):
-    started = pyqtSignal(str)   # "http://host:port"
-    error   = pyqtSignal(str)
+    started = pyqtSignal(str)  # "http://host:port"
+    error = pyqtSignal(str)
     stopped = pyqtSignal()
 
-    def __init__(self, mmc: Any, viewer: Any, viewer_proxy: ThreadSafeViewerProxy,
-                 host: str = "127.0.0.1", port: int = 5500):
+    def __init__(
+        self,
+        mmc: Any,
+        viewer: Any,
+        viewer_proxy: ThreadSafeViewerProxy,
+        host: str = "127.0.0.1",
+        port: int = 5500,
+    ):
         super().__init__()
-        self._mmc          = mmc
-        self._viewer       = viewer
+        self._mmc = mmc
+        self._viewer = viewer
         self._viewer_proxy = viewer_proxy
-        self._host         = host
-        self._port         = port
+        self._host = host
+        self._port = port
         self._uvicorn_server = None
         self._fastmcp_thread = None
-        self._loop           = None   # asyncio event loop owned by _fastmcp_thread
+        self._loop = None  # asyncio event loop owned by _fastmcp_thread
 
     @pyqtSlot()
     def run(self):
         self._stop_uvicorn()
 
         def _init_mcp():
-            import asyncio, uvicorn
+            import asyncio
+
+            import uvicorn
+
             try:
                 logger.info("Initializing agents…")
                 agents = initialize_agents(mmc=self._mmc)
 
                 viewer_instance = NapariViewerMC(self._viewer)
-                event_cache     = MicroscopeEventCache(self._mmc)
+                event_cache = MicroscopeEventCache(self._mmc)
 
-                ts       = datetime.now().strftime("%Y%m%d_%H%M%S")
-                ui       = get_user_information()
-                is_trained   = ui.get("benchmark_agent_enable", "") == "true"
+                ts = datetime.now().strftime("%Y%m%d_%H%M%S")
+                ui = get_user_information()
+                is_trained = ui.get("benchmark_agent_enable", "") == "true"
                 bench_logger = BenchmarkLogger(
                     agent_type="trained" if is_trained else "untrained",
                     run_id=f"benchmark_{ts}",
@@ -372,7 +408,7 @@ class MCPServerWorker(QObject):
                     port=self._port,
                 )
 
-                app    = mcp_server.streamable_http_app()
+                app = mcp_server.streamable_http_app()
                 config = uvicorn.Config(
                     app,
                     host=self._host,
@@ -407,12 +443,12 @@ class MCPServerWorker(QObject):
 
     def _stop_uvicorn(self):
         server = self._uvicorn_server
-        loop   = self._loop
+        loop = self._loop
         if server is not None:
             # force_exit=True makes uvicorn cancel open connections immediately
             # instead of waiting for them to drain — essential for fast port release.
             server.should_exit = True
-            server.force_exit  = True
+            server.force_exit = True
             if loop is not None and not loop.is_closed():
                 try:
                     # Wake the sleeping asyncio event loop so it checks should_exit
@@ -426,10 +462,12 @@ class MCPServerWorker(QObject):
             # closes its listen socket early in shutdown — before the lifespan completes.
             # Use the port probe as the authoritative check, not thread liveness.
             if self._fastmcp_thread.is_alive():
-                logger.debug("MCP thread still running lifespan teardown (port may already be free)")
+                logger.debug(
+                    "MCP thread still running lifespan teardown (port may already be free)"
+                )
             self._fastmcp_thread = None
             self._uvicorn_server = None
-            self._loop           = None
+            self._loop = None
             if _port_in_use(self._port):
                 # Port is still bound — lifespan hasn't released it yet.
                 # Log listeners so the user can identify the holding process.
@@ -446,36 +484,42 @@ class MCPServerWorker(QObject):
 
 # ── Benchmark worker ────────────────────────────────────────────────────────
 
+
 class BenchmarkWorker(QObject):
     """Start a test_server.py subprocess and wait until /health responds."""
 
-    ready = pyqtSignal(str)   # base URL once server is up
+    ready = pyqtSignal(str)  # base URL once server is up
     error = pyqtSignal(str)
 
     def __init__(self, test_name: str, host: str, port: int):
         super().__init__()
         self._test_name = test_name
-        self._host      = host
-        self._port      = port
-        self._process   = None
+        self._host = host
+        self._port = port
+        self._process = None
 
     @pyqtSlot()
     def run(self):
         import urllib.request as _req
+
         try:
             cmd = [
-                sys.executable, "-m", "src.benchmarking.test_server",
+                sys.executable,
+                "-m",
+                "src.benchmarking.test_server",
                 self._test_name,
-                "--host", self._host,
-                "--port", str(self._port),
+                "--host",
+                self._host,
+                "--port",
+                str(self._port),
             ]
             self._process = subprocess.Popen(cmd)
 
-            url      = f"http://{self._host}:{self._port}"
+            url = f"http://{self._host}:{self._port}"
             deadline = time.monotonic() + 30.0
             while time.monotonic() < deadline:
                 try:
-                    with _req.urlopen(f"{url}/health", timeout=1.0) as r:
+                    with _req.urlopen(f"{url}/health", timeout=1.0) as r:  # nosec B310
                         if r.status == 200:
                             self.ready.emit(url)
                             return
@@ -504,45 +548,53 @@ class BenchmarkWorker(QObject):
 
 # ── Main widget ─────────────────────────────────────────────────────────────
 
-class MCPServer(QWidget):
 
+class MCPServer(QWidget):
     def __init__(self, auto_config: str | None = None):
         super().__init__()
         self._startup_timer = StartupTimer()
         self._auto_config = auto_config
-        self.viewer       = napari.current_viewer()
-        self._mmc         = None
+        self.viewer = napari.current_viewer()
+        self._mmc = None
 
         self.setObjectName("MCPServer")
         self.setWindowTitle("MCP Server")
         self.setMaximumWidth(450)
 
-        viewer_mc          = NapariViewerMC(self.viewer)
+        viewer_mc = NapariViewerMC(self.viewer)
         self._viewer_proxy = ThreadSafeViewerProxy(viewer_mc)
 
         # Persistent settings
         self._settings = QSettings("MicroscopeToolset", "MCPServer")
 
         # napari-micromanager state
-        self._mmwin         = None
+        self._mmwin = None
         self._last_cfg_path = None
-        self._in_user_load  = False
-        self._proxy_thread  = None
-        self._proxy_worker  = None
-        self._remote_connected    = False
-        self._remote_url          = ""     # stored on connect; used for locality check
+        self._in_user_load = False
+        self._proxy_thread = None
+        self._proxy_worker = None
+        self._remote_connected = False
+        self._remote_url = ""  # stored on connect; used for locality check
         self._cfg_pending_restart = False  # auto-restart MCP after cfg reload
 
         # service worker/thread pairs
-        self._es_worker    = None;  self._es_thread    = None;  self._es_running    = False
-        self._pg_worker    = None;  self._pg_thread    = None;  self._pg_running    = False
-        self._mcp_worker   = None;  self._mcp_thread   = None;  self._mcp_running   = False
-        self._bench_worker = None;  self._bench_thread = None;  self._bench_running = False
+        self._es_worker = None
+        self._es_thread = None
+        self._es_running = False
+        self._pg_worker = None
+        self._pg_thread = None
+        self._pg_running = False
+        self._mcp_worker = None
+        self._mcp_thread = None
+        self._mcp_running = False
+        self._bench_worker = None
+        self._bench_thread = None
+        self._bench_running = False
 
         # experiment tracking
-        self._tracking_active    = False
-        self._tracking_name      = ""
-        self._tracking_workspace = None   # Path to active workspace folder
+        self._tracking_active = False
+        self._tracking_name = ""
+        self._tracking_workspace = None  # Path to active workspace folder
 
         # ── build UI ──────────────────────────────────────────────────────
         main = QVBoxLayout(self)
@@ -608,10 +660,10 @@ class MCPServer(QWidget):
         main.addWidget(core_grp)
 
         # ── Service panels ────────────────────────────────────────────────
-        self._es_panel  = ServicePanel("Elasticsearch", "Start",   "Stop")
-        self._pg_panel  = ServicePanel("PostgreSQL",    "Connect", "Disconnect")
-        self._mcp_panel = ServicePanel("MCP Server",    "Start",   "Stop")
-        self._mcp_panel.btn.setEnabled(False)   # enabled once core is ready
+        self._es_panel = ServicePanel("Elasticsearch", "Start", "Stop")
+        self._pg_panel = ServicePanel("PostgreSQL", "Connect", "Disconnect")
+        self._mcp_panel = ServicePanel("MCP Server", "Start", "Stop")
+        self._mcp_panel.btn.setEnabled(False)  # enabled once core is ready
         main.addWidget(self._es_panel)
         main.addWidget(self._pg_panel)
 
@@ -698,8 +750,7 @@ class MCPServer(QWidget):
 
         self._bench_info_lbl = QLabel("")
         self._bench_info_lbl.setStyleSheet(
-            "font-size:10px;color:#555;padding:2px 4px;"
-            "background:#f5f5f5;border-radius:3px;"
+            "font-size:10px;color:#555;padding:2px 4px;" "background:#f5f5f5;border-radius:3px;"
         )
         self._bench_info_lbl.setWordWrap(True)
         self._bench_info_lbl.setVisible(False)
@@ -727,7 +778,7 @@ class MCPServer(QWidget):
         self._track_name_edit.setStyleSheet("font-size:10px;")
         self._track_start_btn = QPushButton("Start Tracking")
         self._track_start_btn.setStyleSheet(_BTN_GREEN)
-        self._track_stop_btn  = QPushButton("Stop & Save")
+        self._track_stop_btn = QPushButton("Stop & Save")
         self._track_stop_btn.setStyleSheet(_BTN_RED)
         self._track_stop_btn.setEnabled(False)
         track_row.addWidget(self._track_dot)
@@ -741,11 +792,12 @@ class MCPServer(QWidget):
         info_row.setSpacing(4)
         self._track_info_lbl = QLabel("")
         self._track_info_lbl.setStyleSheet(
-            "font-size:10px;color:#555;padding:2px 4px;"
-            "background:#f5f5f5;border-radius:3px;"
+            "font-size:10px;color:#555;padding:2px 4px;" "background:#f5f5f5;border-radius:3px;"
         )
         self._track_info_lbl.setWordWrap(True)
-        self._track_info_lbl.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Preferred)
+        self._track_info_lbl.setSizePolicy(
+            QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Preferred
+        )
         self._track_open_btn = QPushButton("Open")
         self._track_open_btn.setFixedWidth(44)
         self._track_open_btn.setStyleSheet(
@@ -791,12 +843,8 @@ class MCPServer(QWidget):
             _env_host, _env_port = "127.0.0.1", "5601"
         _env_url = f"http://{_env_host}:{_env_port}"
 
-        self._remote_url_edit.setText(
-            self._settings.value("remote_url") or _env_url
-        )
-        self._proxy_port_edit.setText(
-            self._settings.value("proxy_port") or _env_port
-        )
+        self._remote_url_edit.setText(self._settings.value("remote_url") or _env_url)
+        self._proxy_port_edit.setText(self._settings.value("proxy_port") or _env_port)
         self._mcp_host_edit.setText(self._settings.value("mcp_host", "127.0.0.1"))
         self._mcp_port_edit.setText(self._settings.value("mcp_port", "5500"))
         self._bench_port_edit.setText(self._settings.value("bench_port", "5602"))
@@ -928,7 +976,9 @@ class MCPServer(QWidget):
         port = int(port_text)
         if _port_in_use(port):
             self._mcp_panel.set_error(f"Port {port} still in use — wait a moment and retry")
-            self._set_status(f"Port {port} is still bound — previous server may still be shutting down")
+            self._set_status(
+                f"Port {port} is still bound — previous server may still be shutting down"
+            )
             _log_port_listeners(port)
             return
         self._settings.setValue("mcp_host", host)
@@ -999,6 +1049,7 @@ class MCPServer(QWidget):
         """Populate the test combo from src/benchmarking/test_*/."""
         try:
             from src.benchmarking import list_tests
+
             tests = list_tests()
         except Exception:
             tests = []
@@ -1010,9 +1061,9 @@ class MCPServer(QWidget):
         else:
             _MAX = 45
             for t in tests:
-                label = f"{t['name']}  —  {t['title']}" if t['title'] else t['name']
-                display = label if len(label) <= _MAX else label[:_MAX - 1] + "…"
-                self._bench_combo.addItem(display, userData=t['name'])
+                label = f"{t['name']}  —  {t['title']}" if t["title"] else t["name"]
+                display = label if len(label) <= _MAX else label[: _MAX - 1] + "…"
+                self._bench_combo.addItem(display, userData=t["name"])
                 self._bench_combo.setItemData(
                     self._bench_combo.count() - 1, label, Qt.ItemDataRole.ToolTipRole
                 )
@@ -1059,13 +1110,15 @@ class MCPServer(QWidget):
         self._set_status(f"Test server ready — agent connected to {url}")
 
     def _fetch_bench_info(self, url: str):
-        import urllib.request, json as _json
+        import json as _json
+        import urllib.request
+
         try:
-            with urllib.request.urlopen(f"{url}/test/info", timeout=3) as r:
+            with urllib.request.urlopen(f"{url}/test/info", timeout=3) as r:  # nosec B310
                 info = _json.loads(r.read())
-            title    = info.get("title", "")
+            title = info.get("title", "")
             channels = ", ".join(info.get("channels", []))
-            desc     = (info.get("description", "") or "").strip().split("\n")[0]
+            desc = (info.get("description", "") or "").strip().split("\n")[0]
             text = title
             if channels:
                 text += f"  |  Channels: {channels}"
@@ -1106,17 +1159,20 @@ class MCPServer(QWidget):
 
     def _start_tracking(self):
         from src.benchmarking import start_experiment
+
         name = self._track_name_edit.text().strip() or None
         try:
             exp_name, workspace = start_experiment(name)
-            self._tracking_active    = True
-            self._tracking_name      = exp_name
+            self._tracking_active = True
+            self._tracking_name = exp_name
             self._tracking_workspace = workspace
             self._track_dot.setStyleSheet(_DOT_OK)
             self._track_name_edit.setEnabled(False)
             self._track_start_btn.setEnabled(False)
             self._track_stop_btn.setEnabled(True)
-            self._track_info_lbl.setText(f"Tracking: {exp_name}  |  workspace: …/{workspace.parent.name}/{workspace.name}")
+            self._track_info_lbl.setText(
+                f"Tracking: {exp_name}  |  workspace: …/{workspace.parent.name}/{workspace.name}"
+            )
             self._track_info_lbl.setVisible(True)
             self._track_open_btn.setEnabled(True)
             self._set_status(f"Experiment tracking started: {exp_name}")
@@ -1128,12 +1184,13 @@ class MCPServer(QWidget):
 
     def _stop_tracking(self):
         from src.benchmarking import end_experiment
+
         self._track_dot.setStyleSheet(_DOT_BUSY)
         self._track_stop_btn.setEnabled(False)
         try:
             exp_dir = end_experiment()
-            self._tracking_active    = False
-            self._tracking_name      = ""
+            self._tracking_active = False
+            self._tracking_name = ""
             self._tracking_workspace = exp_dir / "workspace"
             self._track_dot.setStyleSheet(_DOT_STOPPED)
             self._track_name_edit.setEnabled(True)
@@ -1141,7 +1198,7 @@ class MCPServer(QWidget):
             self._track_start_btn.setEnabled(True)
             self._track_info_lbl.setText(f"Saved: {exp_dir.name}")
             self._track_info_lbl.setVisible(True)
-            self._track_open_btn.setEnabled(True)   # keep open enabled to browse saved experiment
+            self._track_open_btn.setEnabled(True)  # keep open enabled to browse saved experiment
             self._set_status(f"Experiment saved: {exp_dir.name}")
             logger.info(f"Experiment saved to: {exp_dir}")
         except FileNotFoundError as e:
@@ -1162,6 +1219,7 @@ class MCPServer(QWidget):
             self._set_status("Workspace folder not found")
             return
         import subprocess as _sp
+
         if sys.platform == "win32":
             _sp.Popen(["explorer", str(target)])
         elif sys.platform == "darwin":
@@ -1180,9 +1238,11 @@ class MCPServer(QWidget):
     @staticmethod
     def _query_core_type(url: str) -> str:
         """GET /info from the proxy server; returns the core class name or 'RemoteCore'."""
-        import urllib.request, json as _json
+        import json as _json
+        import urllib.request
+
         try:
-            with urllib.request.urlopen(f"{url}/info", timeout=3) as resp:
+            with urllib.request.urlopen(f"{url}/info", timeout=3) as resp:  # nosec B310
                 return _json.loads(resp.read()).get("core_type", "RemoteCore")
         except Exception:
             return "RemoteCore"
@@ -1193,6 +1253,7 @@ class MCPServer(QWidget):
         self._set_status(f"Connecting to {url}…")
         try:
             from pymmcore_proxy import connect
+
             remote_core = connect(url)
             self._in_user_load = True
             try:
@@ -1213,6 +1274,7 @@ class MCPServer(QWidget):
             self._remote_url = url
             core_type = self._query_core_type(url)
             from urllib.parse import urlparse
+
             p = urlparse(url)
             host_port = f"{p.hostname}:{p.port}"
             self._core_dot.setStyleSheet(_DOT_OK)
@@ -1251,6 +1313,7 @@ class MCPServer(QWidget):
 
     def _add_napari_micromanager(self):
         import traceback
+
         try:
             if self._mmwin is not None:
                 logger.info("napari-micromanager already present — skipping")
@@ -1261,9 +1324,12 @@ class MCPServer(QWidget):
             self.viewer.window.add_plugin_dock_widget(plugin_name="napari-micromanager")
 
             from napari_micromanager.main_window import get_main_window
+
             self._mmwin = get_main_window()
-            logger.info(f"[NMM] MainWindow found: {type(self._mmwin).__name__}, "
-                        f"initial core: {type(self._mmwin.core).__name__}")
+            logger.info(
+                f"[NMM] MainWindow found: {type(self._mmwin).__name__}, "
+                f"initial core: {type(self._mmwin.core).__name__}"
+            )
 
             # _install_load_hook works only for local cores (CMMCorePlus / UniMMCore).
             # RemoteMMCore.__getattribute__ checks _RPC_FORWARD_METHODS before the
@@ -1279,8 +1345,10 @@ class MCPServer(QWidget):
             def _patched_set_core(core):
                 logger.info(f"[NMM] set_core called with {type(core).__name__}")
                 _orig_set_core(core)
-                logger.info(f"[NMM] set_core complete — reinstalling hooks on "
-                            f"{type(self._mmwin.core).__name__}")
+                logger.info(
+                    f"[NMM] set_core complete — reinstalling hooks on "
+                    f"{type(self._mmwin.core).__name__}"
+                )
                 self._install_load_hook(self._mmwin.core)
                 self._patch_config_widget_load()
 
@@ -1305,9 +1373,12 @@ class MCPServer(QWidget):
         This hook covers _auto_load_config, which calls core.loadSystemConfiguration
         directly on the initial local CMMCorePlus before any proxy is running.
         """
+
         def _capturing_load(path):
-            logger.info(f"[InstallHook] _capturing_load entered: path={path!r}, "
-                        f"_in_user_load={self._in_user_load}")
+            logger.info(
+                f"[InstallHook] _capturing_load entered: path={path!r}, "
+                f"_in_user_load={self._in_user_load}"
+            )
             if self._in_user_load:
                 logger.debug("[InstallHook] re-entry guard — skipping")
                 return
@@ -1382,8 +1453,9 @@ class MCPServer(QWidget):
                         "and start a new local proxy.<br><br>"
                         "Disconnect the remote core first if you want to load a local configuration.",
                     )
-                    logger.warning("[LoadHook] Blocked — truly-remote core active (%s)",
-                                   self._remote_url)
+                    logger.warning(
+                        "[LoadHook] Blocked — truly-remote core active (%s)", self._remote_url
+                    )
                     return
 
                 new_type = _classify_cfg(path)
@@ -1398,8 +1470,10 @@ class MCPServer(QWidget):
                     if self._proxy_worker is not None and self._last_cfg_path
                     else None
                 )
-                logger.info(f"[LoadHook] current_type={current_type!r}  new_type={new_type!r}  "
-                            f"proxy_running={self._proxy_worker is not None}")
+                logger.info(
+                    f"[LoadHook] current_type={current_type!r}  new_type={new_type!r}  "
+                    f"proxy_running={self._proxy_worker is not None}"
+                )
                 self._last_cfg_path = path
 
                 if current_type is not None and current_type == new_type:
@@ -1407,8 +1481,10 @@ class MCPServer(QWidget):
                     _orig()
                     return
 
-                logger.info(f"[LoadHook] Type change ({current_type!r} → {new_type!r}) "
-                            f"— starting new proxy")
+                logger.info(
+                    f"[LoadHook] Type change ({current_type!r} → {new_type!r}) "
+                    f"— starting new proxy"
+                )
                 self._start_proxy_worker(path)
 
             try:
@@ -1416,8 +1492,10 @@ class MCPServer(QWidget):
             except Exception as e:
                 logger.warning(f"[LoadHook] Could not disconnect original handler: {e}")
             widget.load_cfg_Button.clicked.connect(_intercepted)
-            logger.info(f"[LoadHook] Reconnected load_cfg_Button on "
-                        f"ConfigurationWidget (id={id(widget):#x})")
+            logger.info(
+                f"[LoadHook] Reconnected load_cfg_Button on "
+                f"ConfigurationWidget (id={id(widget):#x})"
+            )
 
     def _start_proxy_worker(self, cfg_path: str):
         # Start a fresh proxy with the core class required by cfg_path.
@@ -1426,7 +1504,7 @@ class MCPServer(QWidget):
             self._core_dot.setStyleSheet(_DOT_BUSY)
             self._clear_core_badge("Switching core…")
             self._set_status("Switching core — stopping previous proxy…")
-            self._proxy_worker.stop()           # fast: force_exit=True
+            self._proxy_worker.stop()  # fast: force_exit=True
             if self._proxy_thread is not None:
                 self._proxy_thread.quit()
                 self._proxy_thread.wait(2000)
@@ -1434,7 +1512,9 @@ class MCPServer(QWidget):
             self._proxy_thread = None
 
         port_text = self._proxy_port_edit.text().strip()
-        proxy_port = int(port_text) if port_text.isdigit() and 1 <= int(port_text) <= 65535 else 5601
+        proxy_port = (
+            int(port_text) if port_text.isdigit() and 1 <= int(port_text) <= 65535 else 5601
+        )
         self._settings.setValue("proxy_port", str(proxy_port))
 
         # Wait for the OS to release the port before binding again.
@@ -1442,6 +1522,7 @@ class MCPServer(QWidget):
         # after the socket is closed; polling here prevents WinError 10048.
         if _port_in_use(proxy_port):
             import time as _time
+
             deadline = _time.monotonic() + 5.0
             self._set_status(f"Waiting for port {proxy_port} to be released…")
             while _time.monotonic() < deadline:
@@ -1475,6 +1556,7 @@ class MCPServer(QWidget):
     @pyqtSlot(str, str)
     def _on_proxy_ready(self, url: str, cfg_path: str):
         from pymmcore_proxy import connect
+
         logger.info(f"[ProxyReady] Server up at {url}")
         self._startup_timer.mark("health_passed_signal_received")
         self._set_status("Proxy ready — connecting core…")
@@ -1539,6 +1621,7 @@ class MCPServer(QWidget):
 
         core_type = self._query_core_type(url)
         from urllib.parse import urlparse
+
         p = urlparse(url)
         self._core_dot.setStyleSheet(_DOT_OK)
         self._set_core_badge(core_type, f"{p.hostname}:{p.port}")
@@ -1572,10 +1655,19 @@ class MCPServer(QWidget):
     # ── Core badge helpers ──────────────────────────────────────────────────
 
     _BADGE_STYLES = {
-        "CMMCorePlus": ("CMM+", "background:#1565C0;color:white;border-radius:7px;padding:1px 5px;font-size:10px;font-weight:bold;"),
-        "UniMMCore":   ("Uni",  "background:#6A1B9A;color:white;border-radius:7px;padding:1px 5px;font-size:10px;font-weight:bold;"),
+        "CMMCorePlus": (
+            "CMM+",
+            "background:#1565C0;color:white;border-radius:7px;padding:1px 5px;font-size:10px;font-weight:bold;",
+        ),
+        "UniMMCore": (
+            "Uni",
+            "background:#6A1B9A;color:white;border-radius:7px;padding:1px 5px;font-size:10px;font-weight:bold;",
+        ),
     }
-    _BADGE_FALLBACK = ("RMC",  "background:#E65100;color:white;border-radius:7px;padding:1px 5px;font-size:10px;font-weight:bold;")
+    _BADGE_FALLBACK = (
+        "RMC",
+        "background:#E65100;color:white;border-radius:7px;padding:1px 5px;font-size:10px;font-weight:bold;",
+    )
 
     def _set_core_badge(self, core_type: str, host_port: str) -> None:
         text, style = self._BADGE_STYLES.get(core_type, self._BADGE_FALLBACK)
@@ -1598,6 +1690,7 @@ class MCPServer(QWidget):
     def _is_truly_remote(url: str) -> bool:
         """Return True when *url* points to a host other than localhost."""
         from urllib.parse import urlparse
+
         host = urlparse(url).hostname or ""
         return host not in ("localhost", "127.0.0.1", "::1", "")
 
@@ -1606,7 +1699,7 @@ class MCPServer(QWidget):
     def _set_status(self, message: str):
         self._status_lbl.setText(message)
         base = "font-size:10px;padding:2px;"
-        msg  = message.lower()
+        msg = message.lower()
         if any(w in msg for w in ("ready", "connected")):
             self._status_lbl.setStyleSheet(f"{base}color:#4CAF50;font-weight:bold;")
         elif any(w in msg for w in ("error", "failed", "not supported")):

@@ -16,11 +16,9 @@ Functions:
 """
 
 import numpy as np
-from scipy import ndimage
 
 
-def detect_aggregation_centers(positions, displacements, min_convergence=3,
-                                radius_fraction=0.15):
+def detect_aggregation_centers(positions, displacements, min_convergence=3, radius_fraction=0.15):
     """Find points where cells are converging (aggregation centers/mounds).
 
     Traces displacement vectors backward to find convergence points where
@@ -45,10 +43,10 @@ def detect_aggregation_centers(positions, displacements, min_convergence=3,
 
     if len(positions) < min_convergence:
         return {
-            'centers': np.zeros((0, 2)),
-            'n_centers': 0,
-            'convergence_counts': [],
-            'convergence_map': np.zeros((1, 1)),
+            "centers": np.zeros((0, 2)),
+            "n_centers": 0,
+            "convergence_counts": [],
+            "convergence_map": np.zeros((1, 1)),
         }
 
     # Project each cell forward along its displacement vector
@@ -107,15 +105,16 @@ def detect_aggregation_centers(positions, displacements, min_convergence=3,
     centers = np.array(centers).reshape(-1, 2) if centers else np.zeros((0, 2))
 
     return {
-        'centers': centers,
-        'n_centers': len(centers),
-        'convergence_counts': counts,
-        'convergence_map': conv_map,
+        "centers": centers,
+        "n_centers": len(centers),
+        "convergence_counts": counts,
+        "convergence_map": conv_map,
     }
 
 
-def detect_streaming(positions, displacements, angle_threshold=30,
-                      min_stream_size=3, neighborhood_radius=None):
+def detect_streaming(
+    positions, displacements, angle_threshold=30, min_stream_size=3, neighborhood_radius=None
+):
     """Identify coherent cell streams (coordinated directional movement).
 
     A stream is a group of nearby cells moving in a similar direction.
@@ -144,11 +143,11 @@ def detect_streaming(positions, displacements, angle_threshold=30,
 
     if n < min_stream_size:
         return {
-            'stream_labels': np.zeros(n, dtype=int),
-            'n_streams': 0,
-            'stream_sizes': [],
-            'mean_stream_direction': [],
-            'streaming_fraction': 0.0,
+            "stream_labels": np.zeros(n, dtype=int),
+            "n_streams": 0,
+            "stream_sizes": [],
+            "mean_stream_direction": [],
+            "streaming_fraction": 0.0,
         }
 
     # Compute displacement angles
@@ -159,6 +158,7 @@ def detect_streaming(positions, displacements, angle_threshold=30,
     if neighborhood_radius is None:
         # Mean nearest-neighbor distance * 3
         from scipy.spatial import distance_matrix
+
         dmat = distance_matrix(positions, positions)
         np.fill_diagonal(dmat, np.inf)
         nn_dists = dmat.min(axis=1)
@@ -188,10 +188,7 @@ def detect_streaming(positions, displacements, angle_threshold=30,
         while queue:
             cell = queue.pop(0)
             dists = np.sqrt(np.sum((positions - positions[cell]) ** 2, axis=1))
-            neighbors = np.where(
-                (dists < neighborhood_radius) & (dists > 0)
-                & moving & ~visited
-            )[0]
+            neighbors = np.where((dists < neighborhood_radius) & (dists > 0) & moving & ~visited)[0]
 
             for nb in neighbors:
                 angle_diff = abs(angles[nb] - angles[cell])
@@ -221,11 +218,11 @@ def detect_streaming(positions, displacements, angle_threshold=30,
     streaming_frac = float(np.sum(labels > 0)) / n if n > 0 else 0.0
 
     return {
-        'stream_labels': labels,
-        'n_streams': n_streams,
-        'stream_sizes': stream_sizes,
-        'mean_stream_direction': stream_dirs,
-        'streaming_fraction': round(streaming_frac, 4),
+        "stream_labels": labels,
+        "n_streams": n_streams,
+        "stream_sizes": stream_sizes,
+        "mean_stream_direction": stream_dirs,
+        "streaming_fraction": round(streaming_frac, 4),
     }
 
 
@@ -258,10 +255,10 @@ def aggregation_fraction(positions, displacements, centers):
 
     if n == 0 or len(centers) == 0:
         return {
-            'fraction': 0.0,
-            'per_center': [],
-            'n_aggregating': 0,
-            'radial_speeds': np.zeros(0),
+            "fraction": 0.0,
+            "per_center": [],
+            "n_aggregating": 0,
+            "radial_speeds": np.zeros(0),
         }
 
     # For each cell, find nearest center
@@ -275,7 +272,7 @@ def aggregation_fraction(positions, displacements, centers):
 
         # Radial component of displacement toward center
         to_center = centers[nc] - positions[i]
-        dist = np.sqrt(np.sum(to_center ** 2))
+        dist = np.sqrt(np.sum(to_center**2))
         if dist > 0:
             unit = to_center / dist
             radial_speeds[i] = float(np.dot(displacements[i], unit))
@@ -297,15 +294,14 @@ def aggregation_fraction(positions, displacements, centers):
             per_center.append(0.0)
 
     return {
-        'fraction': round(fraction, 4),
-        'per_center': per_center,
-        'n_aggregating': n_agg,
-        'radial_speeds': radial_speeds,
+        "fraction": round(fraction, 4),
+        "per_center": per_center,
+        "n_aggregating": n_agg,
+        "radial_speeds": radial_speeds,
     }
 
 
-def classify_migration_state(positions, displacements, centers=None,
-                              mound_radius=None):
+def classify_migration_state(positions, displacements, centers=None, mound_radius=None):
     """Classify each cell as streaming, in-mound, or isolated.
 
     Args:
@@ -327,29 +323,28 @@ def classify_migration_state(positions, displacements, centers=None,
     displacements = np.asarray(displacements, dtype=float)
     n = len(positions)
 
-    states = np.array(['isolated'] * n, dtype='U12')
+    states = np.array(["isolated"] * n, dtype="U12")
 
     if n < 3:
         return {
-            'states': states,
-            'n_streaming': 0,
-            'n_mound': 0,
-            'n_isolated': n,
-            'centers_used': np.zeros((0, 2)),
+            "states": states,
+            "n_streaming": 0,
+            "n_mound": 0,
+            "n_isolated": n,
+            "centers_used": np.zeros((0, 2)),
         }
 
     # Detect centers if not provided
     if centers is None:
         result = detect_aggregation_centers(positions, displacements)
-        centers = result['centers']
+        centers = result["centers"]
     else:
         centers = np.asarray(centers, dtype=float).reshape(-1, 2)
 
     # Auto mound radius
     if mound_radius is None:
         if len(centers) > 0:
-            field_size = max(float(np.ptp(positions[:, 0])),
-                           float(np.ptp(positions[:, 1])), 1)
+            field_size = max(float(np.ptp(positions[:, 0])), float(np.ptp(positions[:, 1])), 1)
             mound_radius = field_size * 0.1
         else:
             mound_radius = 10.0
@@ -359,24 +354,24 @@ def classify_migration_state(positions, displacements, centers=None,
         if len(centers) > 0:
             dists = np.sqrt(np.sum((centers - positions[i]) ** 2, axis=1))
             if np.min(dists) < mound_radius:
-                states[i] = 'mound'
+                states[i] = "mound"
 
     # Detect streaming cells
     streaming = detect_streaming(positions, displacements)
     for i in range(n):
-        if streaming['stream_labels'][i] > 0 and states[i] != 'mound':
-            states[i] = 'streaming'
+        if streaming["stream_labels"][i] > 0 and states[i] != "mound":
+            states[i] = "streaming"
 
-    n_str = int(np.sum(states == 'streaming'))
-    n_mnd = int(np.sum(states == 'mound'))
-    n_iso = int(np.sum(states == 'isolated'))
+    n_str = int(np.sum(states == "streaming"))
+    n_mnd = int(np.sum(states == "mound"))
+    n_iso = int(np.sum(states == "isolated"))
 
     return {
-        'states': states,
-        'n_streaming': n_str,
-        'n_mound': n_mnd,
-        'n_isolated': n_iso,
-        'centers_used': centers,
+        "states": states,
+        "n_streaming": n_str,
+        "n_mound": n_mnd,
+        "n_isolated": n_iso,
+        "centers_used": centers,
     }
 
 
@@ -401,10 +396,10 @@ def collective_order(displacements):
 
     if n < 2:
         return {
-            'order_parameter': 1.0,
-            'mean_direction': 0.0,
-            'angular_spread': 0.0,
-            'speed_cv': 0.0,
+            "order_parameter": 1.0,
+            "mean_direction": 0.0,
+            "angular_spread": 0.0,
+            "speed_cv": 0.0,
         }
 
     speeds = np.sqrt(displacements[:, 0] ** 2 + displacements[:, 1] ** 2)
@@ -413,10 +408,10 @@ def collective_order(displacements):
     moving = speeds > np.median(speeds) * 0.1
     if moving.sum() < 2:
         return {
-            'order_parameter': 0.0,
-            'mean_direction': 0.0,
-            'angular_spread': 360.0,
-            'speed_cv': 0.0,
+            "order_parameter": 0.0,
+            "mean_direction": 0.0,
+            "angular_spread": 360.0,
+            "speed_cv": 0.0,
         }
 
     active = displacements[moving]
@@ -438,7 +433,7 @@ def collective_order(displacements):
     angles = np.arctan2(unit_vecs[:, 0], unit_vecs[:, 1])
     sin_mean = float(np.mean(np.sin(angles)))
     cos_mean = float(np.mean(np.cos(angles)))
-    R = np.sqrt(sin_mean ** 2 + cos_mean ** 2)
+    R = np.sqrt(sin_mean**2 + cos_mean**2)
     if R > 0 and R < 1:
         circ_std = float(np.degrees(np.sqrt(-2 * np.log(R))))
     elif R >= 1:
@@ -447,18 +442,26 @@ def collective_order(displacements):
         circ_std = 360.0
 
     # Speed CV
-    speed_cv = float(np.std(active_speeds) / np.mean(active_speeds)) if np.mean(active_speeds) > 0 else 0
+    speed_cv = (
+        float(np.std(active_speeds) / np.mean(active_speeds)) if np.mean(active_speeds) > 0 else 0
+    )
 
     return {
-        'order_parameter': round(order, 4),
-        'mean_direction': round(mean_dir, 1),
-        'angular_spread': round(circ_std, 1),
-        'speed_cv': round(speed_cv, 4),
+        "order_parameter": round(order, 4),
+        "mean_direction": round(mean_dir, 1),
+        "angular_spread": round(circ_std, 1),
+        "speed_cv": round(speed_cv, 4),
     }
 
 
-def detect_mounds(positions_early, positions_late, field_size=512,
-                   sigma=20, min_distance=50, min_accumulation=None):
+def detect_mounds(
+    positions_early,
+    positions_late,
+    field_size=512,
+    sigma=20,
+    min_distance=50,
+    min_accumulation=None,
+):
     """Detect mounds by comparing spatial density between early and late frames.
 
     Mounds are regions where cell density increased significantly over time.
@@ -489,7 +492,7 @@ def detect_mounds(positions_early, positions_late, field_size=512,
     early = density_map(positions_early, field_size=field_size, sigma=sigma)
     late = density_map(positions_late, field_size=field_size, sigma=sigma)
 
-    change = late['map'] - early['map']
+    change = late["map"] - early["map"]
 
     # Find peaks in density increase
     if min_accumulation is None:
@@ -501,8 +504,7 @@ def detect_mounds(positions_early, positions_late, field_size=512,
             min_accumulation = 0.0
 
     peaks_result = detect_density_peaks(
-        change, min_distance=min_distance,
-        min_peak_value=min_accumulation
+        change, min_distance=min_distance, min_peak_value=min_accumulation
     )
 
     # Scale peak coordinates back to original field size
@@ -515,25 +517,24 @@ def detect_mounds(positions_early, positions_late, field_size=512,
     scale_y = fh / map_h if map_h > 0 else 1
     scale_x = fw / map_w if map_w > 0 else 1
 
-    if peaks_result['n_peaks'] > 0:
-        mounds = peaks_result['peaks'].astype(float).copy()
+    if peaks_result["n_peaks"] > 0:
+        mounds = peaks_result["peaks"].astype(float).copy()
         mounds[:, 0] *= scale_y
         mounds[:, 1] *= scale_x
     else:
         mounds = np.zeros((0, 2))
 
     return {
-        'mounds': mounds,
-        'n_mounds': peaks_result['n_peaks'],
-        'accumulation_values': peaks_result['peak_values'],
-        'density_change': change,
-        'density_early': early['map'],
-        'density_late': late['map'],
+        "mounds": mounds,
+        "n_mounds": peaks_result["n_peaks"],
+        "accumulation_values": peaks_result["peak_values"],
+        "density_change": change,
+        "density_early": early["map"],
+        "density_late": late["map"],
     }
 
 
-def detect_onset(metric_series, baseline_frames=5, threshold_sigma=2.0,
-                  direction='decrease'):
+def detect_onset(metric_series, baseline_frames=5, threshold_sigma=2.0, direction="decrease"):
     """Detect when a temporal metric starts changing significantly.
 
     Compares each value to a baseline established from the first N frames.
@@ -563,11 +564,11 @@ def detect_onset(metric_series, baseline_frames=5, threshold_sigma=2.0,
 
     if n < baseline_frames + 1:
         return {
-            'onset_index': None,
-            'baseline_mean': float(np.mean(values)) if n > 0 else 0.0,
-            'baseline_std': 0.0,
-            'threshold': 0.0,
-            'z_scores': np.zeros(n),
+            "onset_index": None,
+            "baseline_mean": float(np.mean(values)) if n > 0 else 0.0,
+            "baseline_std": 0.0,
+            "threshold": 0.0,
+            "z_scores": np.zeros(n),
         }
 
     bl_mean = float(np.mean(values[:baseline_frames]))
@@ -578,14 +579,14 @@ def detect_onset(metric_series, baseline_frames=5, threshold_sigma=2.0,
 
     z_scores = (values - bl_mean) / bl_std
 
-    if direction == 'decrease':
+    if direction == "decrease":
         threshold = -threshold_sigma
         onset_idx = None
         for i in range(baseline_frames, n):
             if z_scores[i] < threshold:
                 onset_idx = i
                 break
-    elif direction == 'increase':
+    elif direction == "increase":
         threshold = threshold_sigma
         onset_idx = None
         for i in range(baseline_frames, n):
@@ -601,9 +602,9 @@ def detect_onset(metric_series, baseline_frames=5, threshold_sigma=2.0,
                 break
 
     return {
-        'onset_index': onset_idx,
-        'baseline_mean': bl_mean,
-        'baseline_std': bl_std,
-        'threshold': float(threshold),
-        'z_scores': z_scores,
+        "onset_index": onset_idx,
+        "baseline_mean": bl_mean,
+        "baseline_std": bl_std,
+        "threshold": float(threshold),
+        "z_scores": z_scores,
     }

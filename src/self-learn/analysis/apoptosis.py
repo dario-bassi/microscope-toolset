@@ -12,11 +12,11 @@ Functions:
 """
 
 import numpy as np
-from scipy import ndimage
 
 
-def detect_apoptotic(areas, circularities, intensities=None,
-                     eccentricities=None, area_threshold=None):
+def detect_apoptotic(
+    areas, circularities, intensities=None, eccentricities=None, area_threshold=None
+):
     """Classify cells by apoptotic morphology.
 
     Uses nuclear/cell morphology features to classify each cell:
@@ -44,10 +44,9 @@ def detect_apoptotic(areas, circularities, intensities=None,
 
     if n == 0:
         return {
-            'classifications': [],
-            'counts': {'healthy': 0, 'early_apoptotic': 0,
-                       'late_apoptotic': 0, 'necrotic': 0},
-            'apoptotic_fraction': 0.0,
+            "classifications": [],
+            "counts": {"healthy": 0, "early_apoptotic": 0, "late_apoptotic": 0, "necrotic": 0},
+            "apoptotic_fraction": 0.0,
         }
 
     if intensities is not None:
@@ -65,32 +64,34 @@ def detect_apoptotic(areas, circularities, intensities=None,
 
         # Late apoptotic: very small fragments
         if area < median_area * 0.3:
-            classifications.append('late_apoptotic')
+            classifications.append("late_apoptotic")
         # Necrotic: swollen cells, low circularity
         elif area > median_area * 2.0 and circ < median_circ * 0.7:
-            classifications.append('necrotic')
+            classifications.append("necrotic")
         # Early apoptotic: small, condensed (bright if intensity available)
         elif area < median_area * 0.6:
             if intensities is not None and intensities[i] > np.median(intensities) * 1.3:
-                classifications.append('early_apoptotic')
+                classifications.append("early_apoptotic")
             elif circ > 0.8:  # very round = condensed
-                classifications.append('early_apoptotic')
+                classifications.append("early_apoptotic")
             else:
-                classifications.append('healthy')
+                classifications.append("healthy")
         # Necrotic: irregular shape
         elif circ < 0.4:
-            classifications.append('necrotic')
+            classifications.append("necrotic")
         else:
-            classifications.append('healthy')
+            classifications.append("healthy")
 
-    counts = {c: classifications.count(c) for c in
-              ['healthy', 'early_apoptotic', 'late_apoptotic', 'necrotic']}
-    apop = counts['early_apoptotic'] + counts['late_apoptotic']
+    counts = {
+        c: classifications.count(c)
+        for c in ["healthy", "early_apoptotic", "late_apoptotic", "necrotic"]
+    }
+    apop = counts["early_apoptotic"] + counts["late_apoptotic"]
 
     return {
-        'classifications': classifications,
-        'counts': counts,
-        'apoptotic_fraction': round(apop / n, 4) if n > 0 else 0.0,
+        "classifications": classifications,
+        "counts": counts,
+        "apoptotic_fraction": round(apop / n, 4) if n > 0 else 0.0,
     }
 
 
@@ -110,8 +111,7 @@ def apoptotic_index(classifications=None, n_apoptotic=None, n_total=None):
             percentage: float.
     """
     if classifications is not None:
-        n_a = sum(1 for c in classifications
-                  if c in ('early_apoptotic', 'late_apoptotic'))
+        n_a = sum(1 for c in classifications if c in ("early_apoptotic", "late_apoptotic"))
         n_t = len(classifications)
     elif n_apoptotic is not None and n_total is not None:
         n_a = n_apoptotic
@@ -122,15 +122,14 @@ def apoptotic_index(classifications=None, n_apoptotic=None, n_total=None):
     ai = n_a / n_t if n_t > 0 else 0.0
 
     return {
-        'apoptotic_index': round(ai, 4),
-        'n_apoptotic': n_a,
-        'n_total': n_t,
-        'percentage': round(ai * 100, 2),
+        "apoptotic_index": round(ai, 4),
+        "n_apoptotic": n_a,
+        "n_total": n_t,
+        "percentage": round(ai * 100, 2),
     }
 
 
-def morphology_score(area, circularity, intensity=None,
-                     ref_area=None, ref_circularity=0.85):
+def morphology_score(area, circularity, intensity=None, ref_area=None, ref_circularity=0.85):
     """Score individual cell health from morphology (0=dead, 1=healthy).
 
     Args:
@@ -167,8 +166,7 @@ def morphology_score(area, circularity, intensity=None,
     return round(max(min(score, 1.0), 0.0), 4)
 
 
-def temporal_death_progression(timepoints, alive_counts, dead_counts=None,
-                               total_counts=None):
+def temporal_death_progression(timepoints, alive_counts, dead_counts=None, total_counts=None):
     """Track cell death progression over time.
 
     Args:
@@ -224,22 +222,22 @@ def temporal_death_progression(timepoints, alive_counts, dead_counts=None,
 
     # Classify pattern
     if n < 3:
-        pattern = 'unknown'
+        pattern = "unknown"
     elif abs(slope) < 0.01:
-        pattern = 'stable'
+        pattern = "stable"
     elif slope < -0.1:
-        pattern = 'rapid_decline'
+        pattern = "rapid_decline"
     elif slope < 0:
-        pattern = 'gradual_decline'
+        pattern = "gradual_decline"
     elif slope > 0.01:
-        pattern = 'recovery'
+        pattern = "recovery"
     else:
-        pattern = 'stable'
+        pattern = "stable"
 
     return {
-        'timepoints': timepoints,
-        'viability': viability,
-        'death_rate': round(float(death_rate), 6),
-        'half_death_time': round(float(half_death_time), 4),
-        'pattern': pattern,
+        "timepoints": timepoints,
+        "viability": viability,
+        "death_rate": round(float(death_rate), 6),
+        "half_death_time": round(float(half_death_time), 4),
+        "pattern": pattern,
     }

@@ -1,10 +1,11 @@
-import subprocess
+import logging
 import os
 import signal
+import subprocess
 import sys
-from .elasticsearch_db import ElasticSearchDB
-import logging
 import time
+
+from .elasticsearch_db import ElasticSearchDB
 
 logger = logging.getLogger("NapariLauncher")
 if not logger.handlers:
@@ -13,12 +14,14 @@ if not logger.handlers:
     logger.addHandler(handler)
     logger.setLevel(logging.INFO)
 
-def _start_server(cmd):
 
+def _start_server(cmd):
     if sys.platform.startswith("win"):
         return subprocess.Popen(cmd, text=True, creationflags=subprocess.CREATE_NEW_PROCESS_GROUP)
     else:
-        return subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, preexec_fn=os.setsid)
+        return subprocess.Popen(
+            cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, preexec_fn=os.setsid
+        )
 
 
 def _stop_server(proc):
@@ -34,6 +37,7 @@ def _stop_server(proc):
             proc.wait(timeout=5)
         except (ProcessLookupError, subprocess.TimeoutExpired):
             pass
+
 
 def wait_for_es(max_wait=60, interval=1):
     es = ElasticSearchDB()

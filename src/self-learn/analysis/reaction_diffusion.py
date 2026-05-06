@@ -68,11 +68,11 @@ def classify_rd_pattern(stack, threshold=None):
     confidence = round(max(0.0, min(1.0, confidence)), 3)
 
     return {
-        'pattern': best,
-        'confidence': confidence,
-        'static': sf,
-        'temporal': tf,
-        'scores': {k: round(v, 3) for k, v in scores.items()},
+        "pattern": best,
+        "confidence": confidence,
+        "static": sf,
+        "temporal": tf,
+        "scores": {k: round(v, 3) for k, v in scores.items()},
     }
 
 
@@ -105,14 +105,14 @@ def static_features(image, threshold=None):
 
     if n_cc == 0:
         return {
-            'coverage': coverage,
-            'n_components': 0,
-            'mean_area': 0.0,
-            'mean_eccentricity': 0.0,
-            'elongation_ratio': 1.0,
-            'branching_score': 0.0,
-            'compactness': 0.0,
-            'euler_number': 0,
+            "coverage": coverage,
+            "n_components": 0,
+            "mean_area": 0.0,
+            "mean_eccentricity": 0.0,
+            "elongation_ratio": 1.0,
+            "branching_score": 0.0,
+            "compactness": 0.0,
+            "euler_number": 0,
         }
 
     # Component properties
@@ -162,21 +162,21 @@ def static_features(image, threshold=None):
         eroded = ndimage.binary_erosion(mask)
         perimeter = float((mask & ~eroded).sum())
         perimeters.append(max(perimeter, 1))
-    compactness_vals = [4 * np.pi * a / (p * p) for a, p in zip(areas, perimeters)]
+    compactness_vals = [4 * np.pi * a / (p * p) for a, p in zip(areas, perimeters, strict=False)]
     mean_compact = float(np.mean(compactness_vals))
 
     # Euler number (topology)
     euler = _euler_number_2d(binary)
 
     return {
-        'coverage': round(coverage, 4),
-        'n_components': int(n_cc),
-        'mean_area': round(float(np.mean(areas)), 2),
-        'mean_eccentricity': round(mean_ecc, 4),
-        'elongation_ratio': round(elongation, 2),
-        'branching_score': round(branching, 4),
-        'compactness': round(mean_compact, 4),
-        'euler_number': int(euler),
+        "coverage": round(coverage, 4),
+        "n_components": int(n_cc),
+        "mean_area": round(float(np.mean(areas)), 2),
+        "mean_eccentricity": round(mean_ecc, 4),
+        "elongation_ratio": round(elongation, 2),
+        "branching_score": round(branching, 4),
+        "compactness": round(mean_compact, 4),
+        "euler_number": int(euler),
     }
 
 
@@ -205,7 +205,7 @@ def temporal_features(stack, threshold=None):
 
     # Component counts
     cd = component_dynamics(stack, threshold)
-    counts = cd['counts']
+    counts = cd["counts"]
 
     # Count trend
     if len(counts) >= 3:
@@ -213,14 +213,14 @@ def temporal_features(stack, threshold=None):
         slope = np.polyfit(x, counts, 1)[0]
         mean_count = np.mean(counts)
         if abs(slope) < max(0.5, mean_count * 0.05):
-            count_trend = 'stable'
+            count_trend = "stable"
         elif slope > 0:
-            count_trend = 'increasing'
+            count_trend = "increasing"
         else:
-            count_trend = 'decreasing'
+            count_trend = "decreasing"
         count_rate = float(slope)
     else:
-        count_trend = 'stable'
+        count_trend = "stable"
         count_rate = 0.0
 
     # Mean displacement (optical flow approximation)
@@ -237,7 +237,7 @@ def temporal_features(stack, threshold=None):
     has_rot = False
     if n_frames >= 3:
         spiral_result = detect_spiral_arms(stack, threshold)
-        has_rot = spiral_result['has_rotation']
+        has_rot = spiral_result["has_rotation"]
 
     # Coverage trend
     coverages = []
@@ -250,22 +250,22 @@ def temporal_features(stack, threshold=None):
         cov_slope = np.polyfit(x, coverages, 1)[0]
         mean_cov = np.mean(coverages)
         if abs(cov_slope) < max(0.01, mean_cov * 0.05):
-            cov_trend = 'stable'
+            cov_trend = "stable"
         elif cov_slope > 0:
-            cov_trend = 'increasing'
+            cov_trend = "increasing"
         else:
-            cov_trend = 'decreasing'
+            cov_trend = "decreasing"
     else:
-        cov_trend = 'stable'
+        cov_trend = "stable"
 
     return {
-        'component_counts': counts,
-        'count_trend': count_trend,
-        'count_change_rate': round(count_rate, 3),
-        'mean_displacement': round(mean_disp, 3),
-        'has_traveling_front': has_front,
-        'has_rotation': has_rot,
-        'coverage_trend': cov_trend,
+        "component_counts": counts,
+        "count_trend": count_trend,
+        "count_change_rate": round(count_rate, 3),
+        "mean_displacement": round(mean_disp, 3),
+        "has_traveling_front": has_front,
+        "has_rotation": has_rot,
+        "coverage_trend": cov_trend,
     }
 
 
@@ -309,11 +309,11 @@ def component_dynamics(stack, threshold=None):
     mono = dominant >= 0.7 * len(diffs) if len(diffs) > 0 else True
 
     return {
-        'counts': counts,
-        'mean_count': round(float(np.mean(counts_arr)), 2),
-        'std_count': round(float(np.std(counts_arr)), 2),
-        'total_change': int(counts_arr[-1] - counts_arr[0]) if len(counts_arr) > 1 else 0,
-        'monotonic': bool(mono),
+        "counts": counts,
+        "mean_count": round(float(np.mean(counts_arr)), 2),
+        "std_count": round(float(np.std(counts_arr)), 2),
+        "total_change": int(counts_arr[-1] - counts_arr[0]) if len(counts_arr) > 1 else 0,
+        "monotonic": bool(mono),
     }
 
 
@@ -361,7 +361,7 @@ def detect_spiral_arms(stack, threshold=None):
         profiles.append(profile)
 
     if n_frames < 2:
-        return {'has_rotation': False, 'rotation_rate': 0.0, 'n_arms': 0}
+        return {"has_rotation": False, "rotation_rate": 0.0, "n_arms": 0}
 
     # Check if frames actually differ (identical frames = no rotation)
     frame_diffs = []
@@ -373,17 +373,13 @@ def detect_spiral_arms(stack, threshold=None):
     # If profiles are essentially identical, no rotation
     profile_range = float(np.ptp(profiles[n_frames // 2]))
     if mean_diff < profile_range * 0.05 or profile_range < 1e-6:
-        return {'has_rotation': False, 'rotation_rate': 0.0, 'n_arms': 0}
+        return {"has_rotation": False, "rotation_rate": 0.0, "n_arms": 0}
 
     # Cross-correlate consecutive angular profiles
     shifts = []
     peak_qualities = []
     for i in range(1, n_frames):
-        cc = np.correlate(
-            np.tile(profiles[i], 3),
-            profiles[i - 1],
-            mode='valid'
-        )
+        cc = np.correlate(np.tile(profiles[i], 3), profiles[i - 1], mode="valid")
         # cc length = 2*n_angles+1, peak at n_angles = zero shift
         peak = int(np.argmax(cc))
         shift = peak - n_angles  # in bins
@@ -401,9 +397,9 @@ def detect_spiral_arms(stack, threshold=None):
 
     # Require: consistent non-zero shift, low variance, and good correlation quality
     # Random spots produce poor cross-correlation quality and inconsistent shifts
-    has_rot = (abs(mean_shift) > 0.5
-               and std_shift < max(abs(mean_shift) * 0.5, 1.5)
-               and mean_quality > 0.4)
+    has_rot = (
+        abs(mean_shift) > 0.5 and std_shift < max(abs(mean_shift) * 0.5, 1.5) and mean_quality > 0.4
+    )
 
     # Count arms from angular profile peaks
     mid_profile = profiles[n_frames // 2]
@@ -418,13 +414,14 @@ def detect_spiral_arms(stack, threshold=None):
     n_arms = len(peaks)
 
     return {
-        'has_rotation': bool(has_rot),
-        'rotation_rate': round(mean_shift * 360.0 / n_angles, 2),
-        'n_arms': int(n_arms),
+        "has_rotation": bool(has_rot),
+        "rotation_rate": round(mean_shift * 360.0 / n_angles, 2),
+        "n_arms": int(n_arms),
     }
 
 
 # ── Private helpers ──────────────────────────────────────────────────
+
 
 def _otsu_threshold(image):
     """Simple Otsu threshold for binarization."""
@@ -466,6 +463,7 @@ def _otsu_threshold(image):
 def _branching_score(binary):
     """Compute branch points / skeleton length."""
     from skimage.morphology import skeletonize
+
     skel = skeletonize(binary)
     skel_length = int(skel.sum())
     if skel_length < 5:
@@ -495,7 +493,7 @@ def _detect_traveling_front(stack, threshold):
     if n_frames < 3:
         return False
 
-    h, w = stack.shape[1], stack.shape[2]
+    _h, _w = stack.shape[1], stack.shape[2]
 
     # Track center of mass of active region
     coms = []
@@ -523,7 +521,7 @@ def _detect_traveling_front(stack, threshold):
 
     mean_dy = np.mean([d[0] for d in displacements])
     mean_dx = np.mean([d[1] for d in displacements])
-    speed = np.sqrt(mean_dy ** 2 + mean_dx ** 2)
+    speed = np.sqrt(mean_dy**2 + mean_dx**2)
 
     # Directional consistency
     if speed < 1.0:
@@ -538,101 +536,101 @@ def _detect_traveling_front(stack, threshold):
 def _compute_scores(sf, tf):
     """Score each pattern type from features."""
     scores = {
-        'waves': 0.0,
-        'spirals': 0.0,
-        'spots': 0.0,
-        'stripes': 0.0,
-        'mitosis': 0.0,
-        'coral': 0.0,
+        "waves": 0.0,
+        "spirals": 0.0,
+        "spots": 0.0,
+        "stripes": 0.0,
+        "mitosis": 0.0,
+        "coral": 0.0,
     }
 
-    coverage = sf['coverage']
-    n_cc = sf['n_components']
-    ecc = sf['mean_eccentricity']
-    elong = sf['elongation_ratio']
-    branch = sf['branching_score']
-    compact = sf['compactness']
+    coverage = sf["coverage"]
+    n_cc = sf["n_components"]
+    ecc = sf["mean_eccentricity"]
+    elong = sf["elongation_ratio"]
+    branch = sf["branching_score"]
+    compact = sf["compactness"]
 
     # ── Spots: sparse, round, isolated ──
     if coverage < 0.2:
-        scores['spots'] += 2.0
+        scores["spots"] += 2.0
     elif coverage < 0.35:
-        scores['spots'] += 1.0
+        scores["spots"] += 1.0
     if compact > 0.3:
-        scores['spots'] += 1.0
+        scores["spots"] += 1.0
     if n_cc > 5 and ecc < 0.5:
-        scores['spots'] += 1.0
+        scores["spots"] += 1.0
 
     # ── Stripes: elongated, parallel, LOW branching ──
     if ecc > 0.7 and branch < 0.05:
-        scores['stripes'] += 2.0
+        scores["stripes"] += 2.0
     elif ecc > 0.7:
-        scores['stripes'] += 0.5  # branching reduces stripe likelihood
+        scores["stripes"] += 0.5  # branching reduces stripe likelihood
     if elong > 3 and branch < 0.05:
-        scores['stripes'] += 1.5
+        scores["stripes"] += 1.5
     if 0.3 < coverage < 0.6 and branch < 0.05:
-        scores['stripes'] += 0.5
+        scores["stripes"] += 0.5
 
     # ── Waves: traveling front, moderate coverage ──
     if 0.05 < coverage < 0.4:
-        scores['waves'] += 0.5
+        scores["waves"] += 0.5
     if n_cc < 5 and elong > 2:
-        scores['waves'] += 0.5
+        scores["waves"] += 0.5
 
     # ── Spirals: rotating arms ──
     if branch > 0.01:
-        scores['spirals'] += 0.3
+        scores["spirals"] += 0.3
 
     # ── Mitosis: moderate coverage, many components ──
     if 0.2 < coverage < 0.6:
-        scores['mitosis'] += 0.5
+        scores["mitosis"] += 0.5
     if n_cc > 10:
-        scores['mitosis'] += 0.5
+        scores["mitosis"] += 0.5
     if branch > 0.02:
-        scores['mitosis'] += 0.3
+        scores["mitosis"] += 0.3
 
     # ── Coral: high coverage, branching, many components ──
     if coverage > 0.3:
-        scores['coral'] += 1.0
+        scores["coral"] += 1.0
     if branch > 0.02:
-        scores['coral'] += 1.5
+        scores["coral"] += 1.5
     if branch > 0.05:
-        scores['coral'] += 1.0  # strong branching is very coral-like
+        scores["coral"] += 1.0  # strong branching is very coral-like
     if coverage > 0.3 and branch > 0.02:
-        scores['coral'] += 1.0  # combo bonus
+        scores["coral"] += 1.0  # combo bonus
 
     # ── Temporal features (high weight — critical for disambiguation) ──
     if tf is not None:
         # Traveling front → waves
-        if tf['has_traveling_front']:
-            scores['waves'] += 3.0
+        if tf["has_traveling_front"]:
+            scores["waves"] += 3.0
 
         # Rotation → spirals
-        if tf['has_rotation']:
-            scores['spirals'] += 4.0
+        if tf["has_rotation"]:
+            scores["spirals"] += 4.0
 
         # Component count increasing → mitosis (spots splitting)
-        if tf['count_trend'] == 'increasing' and tf['count_change_rate'] > 0.5:
-            scores['mitosis'] += 4.0
-            scores['coral'] -= 1.0
-            scores['spots'] -= 1.0  # static spots don't increase in count
+        if tf["count_trend"] == "increasing" and tf["count_change_rate"] > 0.5:
+            scores["mitosis"] += 4.0
+            scores["coral"] -= 1.0
+            scores["spots"] -= 1.0  # static spots don't increase in count
 
         # Stable component count + high coverage → coral
-        if tf['count_trend'] == 'stable' and coverage > 0.35:
-            scores['coral'] += 2.0
-            scores['mitosis'] -= 1.0
+        if tf["count_trend"] == "stable" and coverage > 0.35:
+            scores["coral"] += 2.0
+            scores["mitosis"] -= 1.0
 
         # Stable + low coverage → static spots
-        if tf['count_trend'] == 'stable' and coverage < 0.2:
-            scores['spots'] += 2.0
+        if tf["count_trend"] == "stable" and coverage < 0.2:
+            scores["spots"] += 2.0
 
         # High displacement → dynamic pattern (waves/spirals)
-        if tf['mean_displacement'] > 5:
-            scores['waves'] += 0.5
-            scores['spirals'] += 0.5
-        elif tf['mean_displacement'] < 1:
-            scores['spots'] += 1.0
-            scores['stripes'] += 0.5
+        if tf["mean_displacement"] > 5:
+            scores["waves"] += 0.5
+            scores["spirals"] += 0.5
+        elif tf["mean_displacement"] < 1:
+            scores["spots"] += 1.0
+            scores["stripes"] += 0.5
 
     # Ensure no negative scores
     for k in scores:

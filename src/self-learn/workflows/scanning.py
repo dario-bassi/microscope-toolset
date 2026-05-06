@@ -11,7 +11,8 @@ For standard multi-position scans without callbacks, use
 pymmcore-plus MDASequence directly.
 """
 
-from typing import Any, Generator, Optional, Sequence
+from collections.abc import Sequence
+from typing import Any
 
 import numpy as np
 from scipy.cluster.hierarchy import fcluster, linkage
@@ -61,9 +62,9 @@ def scan_and_detect_mda(
     threshold_sigma: float = 2.5,
     min_area_px: int = 20,
     fill_holes: bool = False,
-    channels: Optional[Sequence[str]] = None,
+    channels: Sequence[str] | None = None,
     exposure: float = 50.0,
-    metadata: Optional[dict[str, Any]] = None,
+    metadata: dict[str, Any] | None = None,
 ):
     """Create an MDA-native grid scan with cell detection.
 
@@ -92,8 +93,8 @@ def scan_and_detect_mda(
         shared_state contains 'world_positions' (list of (wx, wy)).
     """
     state: dict[str, Any] = {
-        'world_positions': [],
-        'per_tile_counts': [],
+        "world_positions": [],
+        "per_tile_counts": [],
     }
 
     def event_generator():
@@ -122,16 +123,18 @@ def scan_and_detect_mda(
         sy = event.y_pos if event.y_pos is not None else 0.0
 
         cells = detect_cells(
-            image, threshold_sigma=threshold_sigma,
-            min_area_px=min_area_px, fill_holes=fill_holes,
+            image,
+            threshold_sigma=threshold_sigma,
+            min_area_px=min_area_px,
+            fill_holes=fill_holes,
         )
-        state['per_tile_counts'].append(len(cells))
+        state["per_tile_counts"].append(len(cells))
 
         for c in cells:
-            col, row = c['centroid_px']
+            col, row = c["centroid_px"]
             wx = sx + (col - W / 2) * pixel_size
             wy = sy + (row - H / 2) * pixel_size
-            state['world_positions'].append((wx, wy))
+            state["world_positions"].append((wx, wy))
 
     return event_generator, on_frame, state
 
@@ -159,13 +162,12 @@ def deduplicate_cells(world_positions, min_dist=5):
         return list(world_positions)
 
     pts = np.array(world_positions, dtype=float)
-    Z = linkage(pts, method='complete')
-    clusters = fcluster(Z, t=min_dist, criterion='distance')
+    Z = linkage(pts, method="complete")
+    clusters = fcluster(Z, t=min_dist, criterion="distance")
 
     unique = []
     for cid in sorted(set(clusters)):
         mask = clusters == cid
         cluster_pts = pts[mask]
-        unique.append((float(cluster_pts[:, 0].mean()),
-                        float(cluster_pts[:, 1].mean())))
+        unique.append((float(cluster_pts[:, 0].mean()), float(cluster_pts[:, 1].mean())))
     return unique

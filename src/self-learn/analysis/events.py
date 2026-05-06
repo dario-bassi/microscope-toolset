@@ -76,24 +76,26 @@ def detect_division(areas_per_frame, labels_per_frame=None, parent_threshold=0.6
                         if curr[i] < parent_area * 0.85 and curr[j] < parent_area * 0.85:
                             # Plausible division
                             ratio = min(daughter_sum, parent_area) / max(daughter_sum, parent_area)
-                            events.append({
-                                'frame': t,
-                                'parent_area': float(parent_area),
-                                'daughter_areas': [float(curr[i]), float(curr[j])],
-                                'confidence': float(ratio),
-                            })
+                            events.append(
+                                {
+                                    "frame": t,
+                                    "parent_area": float(parent_area),
+                                    "daughter_areas": [float(curr[i]), float(curr[j])],
+                                    "confidence": float(ratio),
+                                }
+                            )
                             used_curr[i] = True
                             used_curr[j] = True
                             break  # move to next parent
                 if used_curr[i]:
                     break  # pair found for a parent
 
-    division_frames = sorted(set(e['frame'] for e in events))
+    division_frames = sorted({e["frame"] for e in events})
 
     return {
-        'events': events,
-        'n_divisions': len(events),
-        'division_frames': division_frames,
+        "events": events,
+        "n_divisions": len(events),
+        "division_frames": division_frames,
     }
 
 
@@ -125,19 +127,27 @@ def detect_arrival(centroids_per_frame, fov_size, margin=10, max_match_dist=30):
         """Return which edge a point is near, or None."""
         edges = []
         if y < margin:
-            edges.append('top')
+            edges.append("top")
         if y > h - margin:
-            edges.append('bottom')
+            edges.append("bottom")
         if x < margin:
-            edges.append('left')
+            edges.append("left")
         if x > w - margin:
-            edges.append('right')
+            edges.append("right")
         return edges
 
     n_frames = len(centroids_per_frame)
     for t in range(1, n_frames):
-        prev = np.atleast_2d(centroids_per_frame[t - 1]) if len(centroids_per_frame[t - 1]) > 0 else np.empty((0, 2))
-        curr = np.atleast_2d(centroids_per_frame[t]) if len(centroids_per_frame[t]) > 0 else np.empty((0, 2))
+        prev = (
+            np.atleast_2d(centroids_per_frame[t - 1])
+            if len(centroids_per_frame[t - 1]) > 0
+            else np.empty((0, 2))
+        )
+        curr = (
+            np.atleast_2d(centroids_per_frame[t])
+            if len(centroids_per_frame[t]) > 0
+            else np.empty((0, 2))
+        )
 
         # Match current to previous by nearest-neighbor
         matched_curr = set()
@@ -145,6 +155,7 @@ def detect_arrival(centroids_per_frame, fov_size, margin=10, max_match_dist=30):
 
         if len(prev) > 0 and len(curr) > 0:
             from scipy.spatial.distance import cdist
+
             dists = cdist(curr, prev)
             for ci in range(len(curr)):
                 pi = int(np.argmin(dists[ci]))
@@ -158,11 +169,13 @@ def detect_arrival(centroids_per_frame, fov_size, margin=10, max_match_dist=30):
                 y, x = float(curr[ci, 0]), float(curr[ci, 1])
                 edges = near_edge(y, x)
                 if edges:
-                    arrivals.append({
-                        'frame': t,
-                        'position': (y, x),
-                        'edge': edges[0],
-                    })
+                    arrivals.append(
+                        {
+                            "frame": t,
+                            "position": (y, x),
+                            "edge": edges[0],
+                        }
+                    )
 
         # Unmatched in previous frame near edge = departure
         for pi in range(len(prev)):
@@ -170,23 +183,26 @@ def detect_arrival(centroids_per_frame, fov_size, margin=10, max_match_dist=30):
                 y, x = float(prev[pi, 0]), float(prev[pi, 1])
                 edges = near_edge(y, x)
                 if edges:
-                    departures.append({
-                        'frame': t,
-                        'position': (y, x),
-                        'edge': edges[0],
-                    })
+                    departures.append(
+                        {
+                            "frame": t,
+                            "position": (y, x),
+                            "edge": edges[0],
+                        }
+                    )
 
     return {
-        'arrivals': arrivals,
-        'departures': departures,
-        'n_arrivals': len(arrivals),
-        'n_departures': len(departures),
-        'net_flux': len(arrivals) - len(departures),
+        "arrivals": arrivals,
+        "departures": departures,
+        "n_arrivals": len(arrivals),
+        "n_departures": len(departures),
+        "net_flux": len(arrivals) - len(departures),
     }
 
 
-def detect_morphology_change(measurements_per_frame, feature='eccentricity',
-                             threshold=0.3, min_duration=2):
+def detect_morphology_change(
+    measurements_per_frame, feature="eccentricity", threshold=0.3, min_duration=2
+):
     """Detect morphology transitions in tracked cells.
 
     Monitors a shape feature over time and flags frames where the feature
@@ -221,9 +237,9 @@ def detect_morphology_change(measurements_per_frame, feature='eccentricity',
 
     if n < min_duration + 1:
         return {
-            'transitions': [],
-            'n_transitions': 0,
-            'time_series': values.tolist(),
+            "transitions": [],
+            "n_transitions": 0,
+            "time_series": values.tolist(),
         }
 
     # Use rolling window comparison: mean of [i-w:i] vs mean of [i:i+w]
@@ -232,29 +248,31 @@ def detect_morphology_change(measurements_per_frame, feature='eccentricity',
 
     i = w
     while i <= n - w:
-        before = values[max(0, i - w):i].mean()
-        after = values[i:min(n, i + w)].mean()
+        before = values[max(0, i - w) : i].mean()
+        after = values[i : min(n, i + w)].mean()
         delta = after - before
 
         if abs(delta) >= threshold:
-            transitions.append({
-                'frame': i,
-                'from_value': float(before),
-                'to_value': float(after),
-                'direction': 'increase' if delta > 0 else 'decrease',
-            })
+            transitions.append(
+                {
+                    "frame": i,
+                    "from_value": float(before),
+                    "to_value": float(after),
+                    "direction": "increase" if delta > 0 else "decrease",
+                }
+            )
             i += w  # skip past this transition
             continue
         i += 1
 
     return {
-        'transitions': transitions,
-        'n_transitions': len(transitions),
-        'time_series': values.tolist(),
+        "transitions": transitions,
+        "n_transitions": len(transitions),
+        "time_series": values.tolist(),
     }
 
 
-def detect_changepoint(signal, method='cusum', threshold=None, min_segment=5):
+def detect_changepoint(signal, method="cusum", threshold=None, min_segment=5):
     """Detect statistical change-points in a 1D time series.
 
     Finds frames where the statistical properties of the signal change
@@ -279,15 +297,15 @@ def detect_changepoint(signal, method='cusum', threshold=None, min_segment=5):
 
     if n < 2 * min_segment:
         return {
-            'changepoints': [],
-            'n_changepoints': 0,
-            'segments': [(0, n)],
-            'segment_means': [float(signal.mean())] if n > 0 else [],
+            "changepoints": [],
+            "n_changepoints": 0,
+            "segments": [(0, n)],
+            "segment_means": [float(signal.mean())] if n > 0 else [],
         }
 
-    if method == 'cusum':
+    if method == "cusum":
         changepoints = _cusum_changepoints(signal, threshold, min_segment)
-    elif method == 'variance':
+    elif method == "variance":
         changepoints = _variance_changepoints(signal, threshold, min_segment)
     else:
         raise ValueError(f"method must be 'cusum' or 'variance', got '{method}'")
@@ -298,10 +316,10 @@ def detect_changepoint(signal, method='cusum', threshold=None, min_segment=5):
     segment_means = [float(signal[s:e].mean()) for s, e in segments]
 
     return {
-        'changepoints': changepoints,
-        'n_changepoints': len(changepoints),
-        'segments': segments,
-        'segment_means': segment_means,
+        "changepoints": changepoints,
+        "n_changepoints": len(changepoints),
+        "segments": segments,
+        "segment_means": segment_means,
     }
 
 
@@ -326,7 +344,7 @@ def _cusum_changepoints(signal, threshold, min_segment):
             return -1
 
         seg = signal[start:end]
-        seg_mean = seg.mean()
+        seg.mean()
         best_score = 0
         best_idx = -1
 
@@ -373,8 +391,9 @@ def _variance_changepoints(signal, threshold, min_segment):
     return changepoints
 
 
-def _recursive_variance_split(signal, start, end, threshold, min_segment,
-                               changepoints, max_depth=5):
+def _recursive_variance_split(
+    signal, start, end, threshold, min_segment, changepoints, max_depth=5
+):
     """Recursively split at maximum variance-ratio points."""
     length = end - start
     if length < 2 * min_segment or max_depth <= 0:
@@ -409,14 +428,15 @@ def _recursive_variance_split(signal, start, end, threshold, min_segment,
         cp = start + best_idx
         changepoints.append(cp)
         # Recurse on both sides
-        _recursive_variance_split(signal, start, cp, threshold, min_segment,
-                                   changepoints, max_depth - 1)
-        _recursive_variance_split(signal, cp, end, threshold, min_segment,
-                                   changepoints, max_depth - 1)
+        _recursive_variance_split(
+            signal, start, cp, threshold, min_segment, changepoints, max_depth - 1
+        )
+        _recursive_variance_split(
+            signal, cp, end, threshold, min_segment, changepoints, max_depth - 1
+        )
 
 
-def classify_trajectory(positions, dt=1.0, speed_threshold=None,
-                        turn_threshold=45.0):
+def classify_trajectory(positions, dt=1.0, speed_threshold=None, turn_threshold=45.0):
     """Classify motion states along a trajectory.
 
     Labels each point as 'stopped', 'moving', or 'turning' based on
@@ -446,19 +466,19 @@ def classify_trajectory(positions, dt=1.0, speed_threshold=None,
 
     if n < 2:
         return {
-            'states': ['stopped'] * n,
-            'speeds': np.zeros(n),
-            'angles': np.zeros(n),
-            'angle_changes': np.zeros(n),
-            'fraction_stopped': 1.0,
-            'fraction_moving': 0.0,
-            'fraction_turning': 0.0,
-            'n_stops': 0,
+            "states": ["stopped"] * n,
+            "speeds": np.zeros(n),
+            "angles": np.zeros(n),
+            "angle_changes": np.zeros(n),
+            "fraction_stopped": 1.0,
+            "fraction_moving": 0.0,
+            "fraction_turning": 0.0,
+            "n_stops": 0,
         }
 
     # Compute displacements and speeds
     displacements = np.diff(positions, axis=0)
-    speeds = np.sqrt(np.sum(displacements ** 2, axis=1)) / dt
+    speeds = np.sqrt(np.sum(displacements**2, axis=1)) / dt
     # Pad to match length
     speeds_full = np.zeros(n)
     speeds_full[1:] = speeds
@@ -485,29 +505,29 @@ def classify_trajectory(positions, dt=1.0, speed_threshold=None,
     states = []
     for i in range(n):
         if speeds_full[i] < speed_threshold:
-            states.append('stopped')
+            states.append("stopped")
         elif angle_changes[i] > turn_threshold:
-            states.append('turning')
+            states.append("turning")
         else:
-            states.append('moving')
+            states.append("moving")
 
     # First frame is always 'stopped' (no velocity info)
-    states[0] = 'stopped'
+    states[0] = "stopped"
 
     # Count stop events (transitions to stopped)
     n_stops = 0
     for i in range(1, n):
-        if states[i] == 'stopped' and states[i - 1] != 'stopped':
+        if states[i] == "stopped" and states[i - 1] != "stopped":
             n_stops += 1
 
     total = max(n, 1)
     return {
-        'states': states,
-        'speeds': speeds_full,
-        'angles': angles_full,
-        'angle_changes': angle_changes,
-        'fraction_stopped': states.count('stopped') / total,
-        'fraction_moving': states.count('moving') / total,
-        'fraction_turning': states.count('turning') / total,
-        'n_stops': n_stops,
+        "states": states,
+        "speeds": speeds_full,
+        "angles": angles_full,
+        "angle_changes": angle_changes,
+        "fraction_stopped": states.count("stopped") / total,
+        "fraction_moving": states.count("moving") / total,
+        "fraction_turning": states.count("turning") / total,
+        "n_stops": n_stops,
     }

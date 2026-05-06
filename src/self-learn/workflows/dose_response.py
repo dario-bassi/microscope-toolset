@@ -10,6 +10,7 @@ Works with both microscopy (cell-based) and plate reader data.
 """
 
 import numpy as np
+
 from ..analysis.kinetics import fit_hill
 
 
@@ -59,14 +60,14 @@ def make_plate_layout(doses, n_replicates=3, control_wells=2, n_rows=8, n_cols=1
         col += 1
 
     return {
-        'layout': layout,
-        'dose_columns': dose_columns,
-        'control_positions': control_positions,
-        'doses': sorted_doses,
+        "layout": layout,
+        "dose_columns": dose_columns,
+        "control_positions": control_positions,
+        "doses": sorted_doses,
     }
 
 
-def measure_plate(measurements, layout, metric='mean_intensity'):
+def measure_plate(measurements, layout, metric="mean_intensity"):
     """Extract per-well measurements from a plate layout.
 
     Args:
@@ -86,7 +87,7 @@ def measure_plate(measurements, layout, metric='mean_intensity'):
             control_mean: Mean of control wells.
             control_std: Std of control wells.
     """
-    plate = layout['layout']
+    layout["layout"]
 
     def _get_value(r, c):
         if isinstance(measurements, np.ndarray):
@@ -102,7 +103,7 @@ def measure_plate(measurements, layout, metric='mean_intensity'):
 
     # Collect values per dose
     raw = {}
-    for dose, positions in layout['dose_columns'].items():
+    for dose, positions in layout["dose_columns"].items():
         values = []
         for r, c in positions:
             v = _get_value(r, c)
@@ -112,14 +113,14 @@ def measure_plate(measurements, layout, metric='mean_intensity'):
 
     # Control values
     ctrl_values = []
-    for r, c in layout['control_positions']:
+    for r, c in layout["control_positions"]:
         v = _get_value(r, c)
         if v is not None:
             ctrl_values.append(v)
     raw[0.0] = ctrl_values
 
     # Compute stats
-    all_doses = sorted(set([0.0] + list(layout['doses'])))
+    all_doses = sorted(set([0.0] + list(layout["doses"])))
     means = []
     stds = []
     for d in all_doses:
@@ -135,16 +136,16 @@ def measure_plate(measurements, layout, metric='mean_intensity'):
     ctrl_std = float(np.std(ctrl_values)) if ctrl_values else 0.0
 
     return {
-        'doses': np.array(all_doses),
-        'means': np.array(means),
-        'stds': np.array(stds),
-        'raw': raw,
-        'control_mean': ctrl_mean,
-        'control_std': ctrl_std,
+        "doses": np.array(all_doses),
+        "means": np.array(means),
+        "stds": np.array(stds),
+        "raw": raw,
+        "control_mean": ctrl_mean,
+        "control_std": ctrl_std,
     }
 
 
-def normalize_responses(plate_data, method='control', background=None):
+def normalize_responses(plate_data, method="control", background=None):
     """Normalize dose-response data for Hill fitting.
 
     Args:
@@ -159,24 +160,24 @@ def normalize_responses(plate_data, method='control', background=None):
             stds: Normalized standard deviations.
             control_response: Normalized control value (should be ~1.0).
     """
-    doses = plate_data['doses']
-    means = plate_data['means'].copy()
-    stds = plate_data['stds'].copy()
-    ctrl_mean = plate_data['control_mean']
+    doses = plate_data["doses"]
+    means = plate_data["means"].copy()
+    stds = plate_data["stds"].copy()
+    ctrl_mean = plate_data["control_mean"]
 
     # Background subtraction
     if background is not None:
         means = means - background
         ctrl_mean = ctrl_mean - background
 
-    if method == 'control':
+    if method == "control":
         if ctrl_mean > 0:
             norm_means = means / ctrl_mean
             norm_stds = stds / ctrl_mean
         else:
             norm_means = means
             norm_stds = stds
-    elif method == 'range':
+    elif method == "range":
         vmin = float(np.nanmin(means))
         vmax = float(np.nanmax(means))
         rng = vmax - vmin
@@ -192,10 +193,10 @@ def normalize_responses(plate_data, method='control', background=None):
     # Exclude dose=0 (control) from fitting data
     mask = doses > 0
     return {
-        'doses': doses[mask],
-        'responses': norm_means[mask],
-        'stds': norm_stds[mask],
-        'control_response': float(norm_means[0]) if len(norm_means) > 0 else 1.0,
+        "doses": doses[mask],
+        "responses": norm_means[mask],
+        "stds": norm_stds[mask],
+        "control_response": float(norm_means[0]) if len(norm_means) > 0 else 1.0,
     }
 
 
@@ -231,34 +232,35 @@ def auto_ec50(doses, responses, top=None, bottom=None):
     high_dose_resp = float(np.mean(responses[doses >= np.percentile(doses, 70)]))
 
     if high_dose_resp < low_dose_resp:
-        effect_type = 'inhibition'
+        effect_type = "inhibition"
         if top is None:
             top = max(1.0, float(np.max(responses) * 1.05))
         if bottom is None:
             bottom = max(0.0, float(np.min(responses) * 0.95))
     else:
-        effect_type = 'stimulation'
+        effect_type = "stimulation"
         if top is None:
             top = float(np.max(responses) * 1.05)
         if bottom is None:
             bottom = max(0.0, float(np.min(responses) * 0.95))
 
     result = fit_hill(doses, responses, top=top, bottom=bottom)
-    result['effect_type'] = effect_type
+    result["effect_type"] = effect_type
 
-    r2 = result.get('r_squared', 0)
+    r2 = result.get("r_squared", 0)
     if r2 >= 0.9:
-        result['quality'] = 'good'
+        result["quality"] = "good"
     elif r2 >= 0.7:
-        result['quality'] = 'acceptable'
+        result["quality"] = "acceptable"
     else:
-        result['quality'] = 'poor'
+        result["quality"] = "poor"
 
     return result
 
 
-def dose_response_pipeline(measurements, doses, n_replicates=3,
-                           background=None, top=None, bottom=None):
+def dose_response_pipeline(
+    measurements, doses, n_replicates=3, background=None, top=None, bottom=None
+):
     """End-to-end dose-response analysis from raw measurements.
 
     Combines plate layout, measurement extraction, normalization,
@@ -290,16 +292,16 @@ def dose_response_pipeline(measurements, doses, n_replicates=3,
         if measurements.ndim == 1:
             # Flat list: reshape to (n_replicates, n_doses + control_cols)
             n_doses = len(doses)
-            n_wells = n_doses * n_replicates + n_replicates  # drug + control
-            plate = np.full((layout['layout'].shape), np.nan)
+            n_doses * n_replicates + n_replicates  # drug + control
+            plate = np.full((layout["layout"].shape), np.nan)
             idx = 0
-            for ci, dose in enumerate(sorted(doses)):
+            for ci, _dose in enumerate(sorted(doses)):
                 for r in range(n_replicates):
                     if idx < len(measurements):
                         plate[r, ci] = measurements[idx]
                         idx += 1
             # Controls
-            ctrl_col = layout['layout'].shape[1] - 1
+            ctrl_col = layout["layout"].shape[1] - 1
             for r in range(n_replicates):
                 if idx < len(measurements):
                     plate[r, ctrl_col] = measurements[idx]
@@ -313,15 +315,15 @@ def dose_response_pipeline(measurements, doses, n_replicates=3,
     norm = normalize_responses(plate_data, background=background)
 
     # Fit
-    if len(norm['doses']) >= 3:
-        fit = auto_ec50(norm['doses'], norm['responses'], top=top, bottom=bottom)
+    if len(norm["doses"]) >= 3:
+        fit = auto_ec50(norm["doses"], norm["responses"], top=top, bottom=bottom)
     else:
-        fit = {'IC50': np.nan, 'hill_n': np.nan, 'quality': 'insufficient_data'}
+        fit = {"IC50": np.nan, "hill_n": np.nan, "quality": "insufficient_data"}
 
     # Summary
-    ic50 = fit.get('IC50', np.nan)
-    quality = fit.get('quality', 'unknown')
-    effect = fit.get('effect_type', 'unknown')
+    ic50 = fit.get("IC50", np.nan)
+    quality = fit.get("quality", "unknown")
+    effect = fit.get("effect_type", "unknown")
     summary = (
         f"Dose-response analysis: {effect}, "
         f"IC50={ic50:.4g}, "
@@ -330,9 +332,9 @@ def dose_response_pipeline(measurements, doses, n_replicates=3,
     )
 
     return {
-        'layout': layout,
-        'raw': plate_data,
-        'normalized': norm,
-        'fit': fit,
-        'summary': summary,
+        "layout": layout,
+        "raw": plate_data,
+        "normalized": norm,
+        "fit": fit,
+        "summary": summary,
     }

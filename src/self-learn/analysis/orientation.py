@@ -49,7 +49,7 @@ def circular_std(angles_deg, axial=True):
     angles = np.asarray(angles_deg, dtype=np.float64)
     factor = 2.0 if axial else 1.0
     rad = np.radians(angles * factor)
-    R = np.sqrt(np.mean(np.cos(rad))**2 + np.mean(np.sin(rad))**2)
+    R = np.sqrt(np.mean(np.cos(rad)) ** 2 + np.mean(np.sin(rad)) ** 2)
     R = min(R, 1.0)
     # Circular variance = 1 - R; circular std = sqrt(-2 * ln(R))
     if R > 1e-10:

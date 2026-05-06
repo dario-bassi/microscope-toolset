@@ -17,24 +17,24 @@ Key functions:
     adaptive_survey_mda -- MDA-native: generator + on_frame + shared_state
 """
 
-from typing import Any, Generator, Optional, Sequence
+from collections.abc import Sequence
+from typing import Any
 
 import numpy as np
-import cv2
-from useq import MDAEvent, CustomAction
+from useq import CustomAction, MDAEvent
 
+from ..detection.cells import detect_cells
+from ..detection.tissue import segment_tissue
 from ..hardware import core as hw
 from ..hardware.config import get_config
-from ..detection.cells import detect_cells, find_bright_centroid
-from ..detection.tissue import segment_tissue
 from .scanning import deduplicate_cells
-
 
 # ---------------------------------------------------------------------------
 # Coordinate conversion — re-exports of canonical implementations in
 # hardware/core.py. These wrappers accept mag= instead of core= for
 # convenience in workflows that don't hold a core reference.
 # ---------------------------------------------------------------------------
+
 
 def pixel_to_world(px, py, stage_x, stage_y, mag=10):
     """Convert pixel coordinates to world coordinates.
@@ -73,9 +73,15 @@ def world_to_pixel(wx, wy, stage_x, stage_y, mag=10):
 # Survey
 # ---------------------------------------------------------------------------
 
-def survey_cells(core, world_size=(512, 512), channels=('brightfield',),
-                 detect_method='threshold', detect_kwargs=None,
-                 dedup_dist=35):
+
+def survey_cells(
+    core,
+    world_size=(512, 512),
+    channels=("brightfield",),
+    detect_method="threshold",
+    detect_kwargs=None,
+    dedup_dist=35,
+):
     """Multi-tile survey: scan world, detect cells, return world-coord list.
 
     Works at current objective. Automatically tiles based on world size and FOV.
@@ -134,33 +140,42 @@ def survey_cells(core, world_size=(512, 512), channels=('brightfield',),
         images[(sx, sy)] = tile_images
 
         # Detect cells
-        if detect_method == 'membrane':
-            seg = segment_tissue(detect_img, use_otsu=True,
-                                 tissue_mode=dk.get('tissue_mode', True),
-                                 min_area=dk.get('min_area', 50))
-            for c in seg['cells']:
-                wx, wy = pixel_to_world(c['px'], c['py'], sx, sy, mag)
+        if detect_method == "membrane":
+            seg = segment_tissue(
+                detect_img,
+                use_otsu=True,
+                tissue_mode=dk.get("tissue_mode", True),
+                min_area=dk.get("min_area", 50),
+            )
+            for c in seg["cells"]:
+                wx, wy = pixel_to_world(c["px"], c["py"], sx, sy, mag)
                 cell = {
-                    'world_x': wx, 'world_y': wy,
-                    'area': c['area'], 'label': c['label'],
-                    'touches_edge': c['touches_edge'],
-                    'tile': (sx, sy),
+                    "world_x": wx,
+                    "world_y": wy,
+                    "area": c["area"],
+                    "label": c["label"],
+                    "touches_edge": c["touches_edge"],
+                    "tile": (sx, sy),
                 }
                 all_cells.append(cell)
         else:
-            cells = detect_cells(detect_img,
-                                 threshold_sigma=dk.get('threshold_sigma', 2.5),
-                                 min_area_px=dk.get('min_area_px', 20),
-                                 fill_holes=dk.get('fill_holes', True))
+            cells = detect_cells(
+                detect_img,
+                threshold_sigma=dk.get("threshold_sigma", 2.5),
+                min_area_px=dk.get("min_area_px", 20),
+                fill_holes=dk.get("fill_holes", True),
+            )
             for c in cells:
-                cx_px, cy_px = c['centroid_px']  # (col, row)
+                cx_px, cy_px = c["centroid_px"]  # (col, row)
                 wx, wy = pixel_to_world(cx_px, cy_px, sx, sy, mag)
                 cell = {
-                    'world_x': wx, 'world_y': wy,
-                    'area_px': c['area_px'], 'peak': c['peak'],
-                    'mean_intensity': c['mean_intensity'],
-                    'circularity': c.get('circularity', 0),
-                    'tile': (sx, sy),
+                    "world_x": wx,
+                    "world_y": wy,
+                    "area_px": c["area_px"],
+                    "peak": c["peak"],
+                    "mean_intensity": c["mean_intensity"],
+                    "circularity": c.get("circularity", 0),
+                    "tile": (sx, sy),
                 }
                 all_cells.append(cell)
 
@@ -168,11 +183,10 @@ def survey_cells(core, world_size=(512, 512), channels=('brightfield',),
         for ch in channels[1:]:
             ch_img = tile_images[ch]
             for cell in all_cells:
-                if cell['tile'] != (sx, sy):
+                if cell["tile"] != (sx, sy):
                     continue
                 # Get pixel coords in this tile
-                px, py = world_to_pixel(cell['world_x'], cell['world_y'],
-                                        sx, sy, mag)
+                px, py = world_to_pixel(cell["world_x"], cell["world_y"], sx, sy, mag)
                 px, py = int(round(px)), int(round(py))
                 r = 15
                 y0 = max(0, py - r)
@@ -181,22 +195,22 @@ def survey_cells(core, world_size=(512, 512), channels=('brightfield',),
                 x1 = min(img_w, px + r)
                 if y1 > y0 and x1 > x0:
                     region = ch_img[y0:y1, x0:x1]
-                    key = ch.replace('-', '_') + '_mean'
+                    key = ch.replace("-", "_") + "_mean"
                     cell[key] = float(region.mean())
 
     # Deduplicate
     if dedup_dist > 0 and len(all_cells) > 1:
-        coords = [(c['world_x'], c['world_y']) for c in all_cells]
+        coords = [(c["world_x"], c["world_y"]) for c in all_cells]
         unique = deduplicate_cells(coords, min_dist=dedup_dist)
         # Match back
         deduped = []
         used = set()
         for ux, uy in unique:
-            best_i, best_d = -1, float('inf')
+            best_i, best_d = -1, float("inf")
             for i, c in enumerate(all_cells):
                 if i in used:
                     continue
-                d = ((c['world_x'] - ux)**2 + (c['world_y'] - uy)**2)**0.5
+                d = ((c["world_x"] - ux) ** 2 + (c["world_y"] - uy) ** 2) ** 0.5
                 if d < best_d:
                     best_d = d
                     best_i = i
@@ -206,10 +220,10 @@ def survey_cells(core, world_size=(512, 512), channels=('brightfield',),
         all_cells = deduped
 
     return {
-        'cells': all_cells,
-        'images': images,
-        'positions': positions,
-        'n_tiles': len(positions),
+        "cells": all_cells,
+        "images": images,
+        "positions": positions,
+        "n_tiles": len(positions),
     }
 
 
@@ -217,8 +231,8 @@ def survey_cells(core, world_size=(512, 512), channels=('brightfield',),
 # Clustering and ranking
 # ---------------------------------------------------------------------------
 
-def find_clusters(cells, radius=300, min_size=2, feature_key=None,
-                  feature_threshold=None):
+
+def find_clusters(cells, radius=300, min_size=2, feature_key=None, feature_threshold=None):
     """Find spatial clusters of cells using neighbor counting.
 
     For each cell, counts neighbors within `radius`. Cells with the most
@@ -247,8 +261,9 @@ def find_clusters(cells, radius=300, min_size=2, feature_key=None,
         return []
 
     # Build adjacency via distance
-    coords = np.array([[c['world_x'], c['world_y']] for c in candidates])
+    coords = np.array([[c["world_x"], c["world_y"]] for c in candidates])
     from scipy.spatial.distance import cdist
+
     D = cdist(coords, coords)
 
     # Simple connected-component clustering within radius
@@ -273,17 +288,19 @@ def find_clusters(cells, radius=300, min_size=2, feature_key=None,
 
         if len(cluster_idx) >= min_size:
             cluster_cells = [candidates[i] for i in cluster_idx]
-            cx = float(np.mean([c['world_x'] for c in cluster_cells]))
-            cy = float(np.mean([c['world_y'] for c in cluster_cells]))
-            clusters.append({
-                'cells': cluster_cells,
-                'center_x': round(cx, 1),
-                'center_y': round(cy, 1),
-                'n_cells': len(cluster_cells),
-            })
+            cx = float(np.mean([c["world_x"] for c in cluster_cells]))
+            cy = float(np.mean([c["world_y"] for c in cluster_cells]))
+            clusters.append(
+                {
+                    "cells": cluster_cells,
+                    "center_x": round(cx, 1),
+                    "center_y": round(cy, 1),
+                    "n_cells": len(cluster_cells),
+                }
+            )
 
     # Sort by size descending
-    clusters.sort(key=lambda cl: cl['n_cells'], reverse=True)
+    clusters.sort(key=lambda cl: cl["n_cells"], reverse=True)
     return clusters
 
 
@@ -299,8 +316,7 @@ def rank_by_feature(cells, feature_key, descending=True, top_n=None):
     Returns:
         List of cell dicts, sorted by feature.
     """
-    ranked = sorted(cells, key=lambda c: c.get(feature_key, 0),
-                    reverse=descending)
+    ranked = sorted(cells, key=lambda c: c.get(feature_key, 0), reverse=descending)
     if top_n:
         ranked = ranked[:top_n]
     return ranked
@@ -310,10 +326,17 @@ def rank_by_feature(cells, feature_key, descending=True, top_n=None):
 # Zoom and measure
 # ---------------------------------------------------------------------------
 
-def zoom_and_measure(core, target_x, target_y, mag=40,
-                     channels=('brightfield',),
-                     detect_method='threshold', detect_kwargs=None,
-                     filter_edge=True):
+
+def zoom_and_measure(
+    core,
+    target_x,
+    target_y,
+    mag=40,
+    channels=("brightfield",),
+    detect_method="threshold",
+    detect_kwargs=None,
+    filter_edge=True,
+):
     """Move to target, switch to high mag, detect and measure cells.
 
     Args:
@@ -352,32 +375,41 @@ def zoom_and_measure(core, target_x, target_y, mag=40,
 
     # Detect
     cells = []
-    if detect_method == 'membrane':
-        seg = segment_tissue(detect_img, use_otsu=True,
-                             tissue_mode=dk.get('tissue_mode', True),
-                             min_area=dk.get('min_area', 100))
-        for c in seg['cells']:
-            wx, wy = pixel_to_world(c['px'], c['py'], sx, sy, mag)
+    if detect_method == "membrane":
+        seg = segment_tissue(
+            detect_img,
+            use_otsu=True,
+            tissue_mode=dk.get("tissue_mode", True),
+            min_area=dk.get("min_area", 100),
+        )
+        for c in seg["cells"]:
+            wx, wy = pixel_to_world(c["px"], c["py"], sx, sy, mag)
             cell = {
-                'world_x': wx, 'world_y': wy,
-                'area': c['area'], 'touches_edge': c['touches_edge'],
+                "world_x": wx,
+                "world_y": wy,
+                "area": c["area"],
+                "touches_edge": c["touches_edge"],
             }
             cells.append(cell)
     else:
-        dets = detect_cells(detect_img,
-                            threshold_sigma=dk.get('threshold_sigma', 2.5),
-                            min_area_px=dk.get('min_area_px', 200),
-                            fill_holes=dk.get('fill_holes', True))
+        dets = detect_cells(
+            detect_img,
+            threshold_sigma=dk.get("threshold_sigma", 2.5),
+            min_area_px=dk.get("min_area_px", 200),
+            fill_holes=dk.get("fill_holes", True),
+        )
         for c in dets:
-            cx_px, cy_px = c['centroid_px']  # (col, row)
+            cx_px, cy_px = c["centroid_px"]  # (col, row)
             wx, wy = pixel_to_world(cx_px, cy_px, sx, sy, mag)
             # Edge check: centroid > 50px from boundary
-            edge = (cx_px < 50 or cx_px > img_w - 50 or cy_px < 50 or cy_px > img_h - 50)
+            edge = cx_px < 50 or cx_px > img_w - 50 or cy_px < 50 or cy_px > img_h - 50
             cell = {
-                'world_x': wx, 'world_y': wy,
-                'area_px': c['area_px'], 'peak': c['peak'],
-                'mean_intensity': c['mean_intensity'],
-                'touches_edge': edge,
+                "world_x": wx,
+                "world_y": wy,
+                "area_px": c["area_px"],
+                "peak": c["peak"],
+                "mean_intensity": c["mean_intensity"],
+                "touches_edge": edge,
             }
             cells.append(cell)
 
@@ -385,8 +417,7 @@ def zoom_and_measure(core, target_x, target_y, mag=40,
     for ch in channels[1:]:
         ch_img = tile_images[ch]
         for cell in cells:
-            px, py = world_to_pixel(cell['world_x'], cell['world_y'],
-                                    sx, sy, mag)
+            px, py = world_to_pixel(cell["world_x"], cell["world_y"], sx, sy, mag)
             px, py = int(round(px)), int(round(py))
             r = int(30 * (mag / 10))  # scale measurement window with mag
             y0 = max(0, py - r)
@@ -395,19 +426,19 @@ def zoom_and_measure(core, target_x, target_y, mag=40,
             x1 = min(img_w, px + r)
             if y1 > y0 and x1 > x0:
                 region = ch_img[y0:y1, x0:x1]
-                key = ch.replace('-', '_') + '_mean'
+                key = ch.replace("-", "_") + "_mean"
                 cell[key] = float(region.mean())
 
     # Filter edge cells
     if filter_edge:
-        cells = [c for c in cells if not c.get('touches_edge', False)]
+        cells = [c for c in cells if not c.get("touches_edge", False)]
 
     return {
-        'cells': cells,
-        'images': tile_images,
-        'n_cells': len(cells),
-        'mag': mag,
-        'stage': (sx, sy),
+        "cells": cells,
+        "images": tile_images,
+        "n_cells": len(cells),
+        "mag": mag,
+        "stage": (sx, sy),
     }
 
 
@@ -415,13 +446,20 @@ def zoom_and_measure(core, target_x, target_y, mag=40,
 # Full adaptive pipeline
 # ---------------------------------------------------------------------------
 
-def adaptive_survey(core, world_size=(1024, 1024),
-                    survey_channels=('nucleus-channel',),
-                    feature_key='mean_intensity',
-                    zoom_mag=40, zoom_channels=('brightfield',),
-                    zoom_detect='threshold', zoom_detect_kwargs=None,
-                    cluster_radius=300, min_cluster_size=2,
-                    survey_detect_kwargs=None):
+
+def adaptive_survey(
+    core,
+    world_size=(1024, 1024),
+    survey_channels=("nucleus-channel",),
+    feature_key="mean_intensity",
+    zoom_mag=40,
+    zoom_channels=("brightfield",),
+    zoom_detect="threshold",
+    zoom_detect_kwargs=None,
+    cluster_radius=300,
+    min_cluster_size=2,
+    survey_detect_kwargs=None,
+):
     """Full adaptive pipeline: survey at current mag -> find bright ROI -> zoom -> measure.
 
     1. Survey at current magnification across all tiles
@@ -450,13 +488,13 @@ def adaptive_survey(core, world_size=(1024, 1024),
             zoom: zoom_and_measure result (or None)
     """
     # Step 1: Survey
-    survey = survey_cells(core, world_size=world_size,
-                          channels=survey_channels,
-                          detect_kwargs=survey_detect_kwargs)
+    survey = survey_cells(
+        core, world_size=world_size, channels=survey_channels, detect_kwargs=survey_detect_kwargs
+    )
 
-    cells = survey['cells']
+    cells = survey["cells"]
     if not cells:
-        return {'survey': survey, 'clusters': [], 'best_cluster': None, 'zoom': None}
+        return {"survey": survey, "clusters": [], "best_cluster": None, "zoom": None}
 
     # Step 2: Find intensity threshold via gap detection
     values = np.array([c.get(feature_key, 0) for c in cells])
@@ -469,21 +507,26 @@ def adaptive_survey(core, world_size=(1024, 1024),
         threshold = float(sorted_vals[0]) - 1
 
     # Step 3: Cluster bright cells
-    clusters = find_clusters(cells, radius=cluster_radius,
-                             min_size=min_cluster_size,
-                             feature_key=feature_key,
-                             feature_threshold=threshold)
+    clusters = find_clusters(
+        cells,
+        radius=cluster_radius,
+        min_size=min_cluster_size,
+        feature_key=feature_key,
+        feature_threshold=threshold,
+    )
 
     # If no cluster, fall back to single brightest cell
     if not clusters:
         best = rank_by_feature(cells, feature_key, top_n=1)
         if best:
-            clusters = [{
-                'cells': best,
-                'center_x': best[0]['world_x'],
-                'center_y': best[0]['world_y'],
-                'n_cells': 1,
-            }]
+            clusters = [
+                {
+                    "cells": best,
+                    "center_x": best[0]["world_x"],
+                    "center_y": best[0]["world_y"],
+                    "n_cells": 1,
+                }
+            ]
 
     best_cluster = clusters[0] if clusters else None
 
@@ -491,19 +534,23 @@ def adaptive_survey(core, world_size=(1024, 1024),
     zoom_result = None
     if best_cluster:
         zoom_result = zoom_and_measure(
-            core, best_cluster['center_x'], best_cluster['center_y'],
-            mag=zoom_mag, channels=zoom_channels,
-            detect_method=zoom_detect, detect_kwargs=zoom_detect_kwargs,
+            core,
+            best_cluster["center_x"],
+            best_cluster["center_y"],
+            mag=zoom_mag,
+            channels=zoom_channels,
+            detect_method=zoom_detect,
+            detect_kwargs=zoom_detect_kwargs,
         )
 
     # Restore 10x
     hw.set_objective(core, 10)
 
     return {
-        'survey': survey,
-        'clusters': clusters,
-        'best_cluster': best_cluster,
-        'zoom': zoom_result,
+        "survey": survey,
+        "clusters": clusters,
+        "best_cluster": best_cluster,
+        "zoom": zoom_result,
     }
 
 
@@ -511,15 +558,16 @@ def adaptive_survey(core, world_size=(1024, 1024),
 # MDA-native adaptive survey
 # ---------------------------------------------------------------------------
 
+
 def adaptive_survey_mda(
     survey_positions: Sequence[tuple[float, float]],
     survey_mag: int = 10,
     zoom_mag: int = 40,
     survey_exposure: float = 50.0,
     zoom_exposure: float = 50.0,
-    survey_channels: Optional[Sequence[str]] = None,
-    zoom_channels: Optional[Sequence[str]] = None,
-    feature_key: str = 'mean_intensity',
+    survey_channels: Sequence[str] | None = None,
+    zoom_channels: Sequence[str] | None = None,
+    feature_key: str = "mean_intensity",
     cluster_radius: float = 300.0,
     min_cluster_size: int = 2,
     threshold_sigma: float = 2.5,
@@ -527,7 +575,7 @@ def adaptive_survey_mda(
     fill_holes: bool = True,
     dedup_dist: float = 35.0,
     filter_edge: bool = True,
-    metadata: Optional[dict[str, Any]] = None,
+    metadata: dict[str, Any] | None = None,
 ):
     """Create an MDA-native adaptive survey workflow.
 
@@ -576,13 +624,13 @@ def adaptive_survey_mda(
     extra_meta = metadata or {}
 
     state: dict[str, Any] = {
-        'phase': 'survey',
-        'survey_cells': [],
-        'survey_images_count': 0,
-        'clusters': [],
-        'best_cluster': None,
-        'zoom_cells': [],
-        'zoom_images_count': 0,
+        "phase": "survey",
+        "survey_cells": [],
+        "survey_images_count": 0,
+        "clusters": [],
+        "best_cluster": None,
+        "zoom_cells": [],
+        "zoom_images_count": 0,
     }
 
     pixel_size_survey = 10.0 / survey_mag  # fallback; overridden by image shape in on_frame
@@ -590,32 +638,35 @@ def adaptive_survey_mda(
     def event_generator():
         # Phase 1: Survey tiles
         for p_idx, (x, y) in enumerate(survey_positions):
-            for c_idx, ch in enumerate(survey_channels):
+            for c_idx, _ch in enumerate(survey_channels):
                 idx = {"p": p_idx, "phase": 0}
                 if len(survey_channels) > 1:
                     idx["c"] = c_idx
                 meta = {"phase": "survey", "mag": survey_mag, **extra_meta}
                 kwargs = {
-                    "index": idx, "exposure": survey_exposure,
-                    "x_pos": x, "y_pos": y, "metadata": meta,
+                    "index": idx,
+                    "exposure": survey_exposure,
+                    "x_pos": x,
+                    "y_pos": y,
+                    "metadata": meta,
                 }
                 yield MDAEvent(**kwargs)
 
         # Between phases: analyze survey results
-        cells = state['survey_cells']
+        cells = state["survey_cells"]
 
         # Deduplicate
         if dedup_dist > 0 and len(cells) > 1:
-            coords = [(c['world_x'], c['world_y']) for c in cells]
+            coords = [(c["world_x"], c["world_y"]) for c in cells]
             unique = deduplicate_cells(coords, min_dist=dedup_dist)
             deduped = []
             used = set()
             for ux, uy in unique:
-                best_i, best_d = -1, float('inf')
+                best_i, best_d = -1, float("inf")
                 for i, c in enumerate(cells):
                     if i in used:
                         continue
-                    d = ((c['world_x'] - ux)**2 + (c['world_y'] - uy)**2)**0.5
+                    d = ((c["world_x"] - ux) ** 2 + (c["world_y"] - uy) ** 2) ** 0.5
                     if d < best_d:
                         best_d = d
                         best_i = i
@@ -623,7 +674,7 @@ def adaptive_survey_mda(
                     used.add(best_i)
                     deduped.append(cells[best_i])
             cells = deduped
-            state['survey_cells'] = cells
+            state["survey_cells"] = cells
 
         if not cells:
             return
@@ -639,7 +690,8 @@ def adaptive_survey_mda(
             threshold = float(sorted_vals[0]) - 1
 
         clusters = find_clusters(
-            cells, radius=cluster_radius,
+            cells,
+            radius=cluster_radius,
             min_size=min_cluster_size,
             feature_key=feature_key,
             feature_threshold=threshold,
@@ -648,99 +700,105 @@ def adaptive_survey_mda(
         if not clusters:
             ranked = rank_by_feature(cells, feature_key, top_n=1)
             if ranked:
-                clusters = [{
-                    'cells': ranked,
-                    'center_x': ranked[0]['world_x'],
-                    'center_y': ranked[0]['world_y'],
-                    'n_cells': 1,
-                }]
+                clusters = [
+                    {
+                        "cells": ranked,
+                        "center_x": ranked[0]["world_x"],
+                        "center_y": ranked[0]["world_y"],
+                        "n_cells": 1,
+                    }
+                ]
 
-        state['clusters'] = clusters
+        state["clusters"] = clusters
         best = clusters[0] if clusters else None
-        state['best_cluster'] = best
+        state["best_cluster"] = best
 
         if not best:
             return
 
         # Phase 2: Switch objective + zoom
-        state['phase'] = 'zoom'
+        state["phase"] = "zoom"
 
         # Emit objective switch action
         yield MDAEvent(
             action=CustomAction(
-                name='switch_objective',
-                data={'mag': zoom_mag},
+                name="switch_objective",
+                data={"mag": zoom_mag},
             ),
-            metadata={'action': 'switch_objective', 'mag': zoom_mag},
+            metadata={"action": "switch_objective", "mag": zoom_mag},
         )
 
         # Emit zoom acquisition events
-        for c_idx, ch in enumerate(zoom_channels):
+        for c_idx, _ch in enumerate(zoom_channels):
             idx = {"p": 0, "phase": 1}
             if len(zoom_channels) > 1:
                 idx["c"] = c_idx
             meta = {"phase": "zoom", "mag": zoom_mag, **extra_meta}
             yield MDAEvent(
-                index=idx, exposure=zoom_exposure,
-                x_pos=best['center_x'], y_pos=best['center_y'],
+                index=idx,
+                exposure=zoom_exposure,
+                x_pos=best["center_x"],
+                y_pos=best["center_y"],
                 metadata=meta,
             )
 
     pixel_size_zoom = 10.0 / zoom_mag  # fallback; overridden by image shape in on_frame
 
     def on_frame(image, event, meta=None):
-        if state['phase'] == 'survey':
+        if state["phase"] == "survey":
             H, W = image.shape[:2]
             sx = event.x_pos if event.x_pos is not None else 0.0
             sy = event.y_pos if event.y_pos is not None else 0.0
 
             cells = detect_cells(
-                image, threshold_sigma=threshold_sigma,
-                min_area_px=min_area_px, fill_holes=fill_holes,
+                image,
+                threshold_sigma=threshold_sigma,
+                min_area_px=min_area_px,
+                fill_holes=fill_holes,
             )
-            state['survey_images_count'] += 1
+            state["survey_images_count"] += 1
 
             for c in cells:
-                cx_px, cy_px = c['centroid_px']
+                cx_px, cy_px = c["centroid_px"]
                 wx = sx + (cx_px - W / 2) * pixel_size_survey
                 wy = sy + (cy_px - H / 2) * pixel_size_survey
                 cell = {
-                    'world_x': round(wx, 1),
-                    'world_y': round(wy, 1),
-                    'area_px': c['area_px'],
-                    'peak': c['peak'],
-                    'mean_intensity': c['mean_intensity'],
+                    "world_x": round(wx, 1),
+                    "world_y": round(wy, 1),
+                    "area_px": c["area_px"],
+                    "peak": c["peak"],
+                    "mean_intensity": c["mean_intensity"],
                 }
-                state['survey_cells'].append(cell)
+                state["survey_cells"].append(cell)
 
-        elif state['phase'] == 'zoom':
+        elif state["phase"] == "zoom":
             H, W = image.shape[:2]
             sx = event.x_pos if event.x_pos is not None else 0.0
             sy = event.y_pos if event.y_pos is not None else 0.0
 
             cells = detect_cells(
-                image, threshold_sigma=threshold_sigma,
+                image,
+                threshold_sigma=threshold_sigma,
                 min_area_px=max(min_area_px, 200),
                 fill_holes=fill_holes,
             )
-            state['zoom_images_count'] += 1
+            state["zoom_images_count"] += 1
 
             for c in cells:
-                cx_px, cy_px = c['centroid_px']
+                cx_px, cy_px = c["centroid_px"]
                 wx = sx + (cx_px - W / 2) * pixel_size_zoom
                 wy = sy + (cy_px - H / 2) * pixel_size_zoom
-                edge = (cx_px < 50 or cx_px > W - 50
-                        or cy_px < 50 or cy_px > H - 50)
+                edge = cx_px < 50 or cx_px > W - 50 or cy_px < 50 or cy_px > H - 50
                 if filter_edge and edge:
                     continue
                 cell = {
-                    'world_x': round(wx, 1),
-                    'world_y': round(wy, 1),
-                    'area_px': c['area_px'],
-                    'peak': c['peak'],
-                    'mean_intensity': c['mean_intensity'],
-                    'touches_edge': edge,
+                    "world_x": round(wx, 1),
+                    "world_y": round(wy, 1),
+                    "area_px": c["area_px"],
+                    "peak": c["peak"],
+                    "mean_intensity": c["mean_intensity"],
+                    "touches_edge": edge,
                 }
-                state['zoom_cells'].append(cell)
+                state["zoom_cells"].append(cell)
 
     return event_generator, on_frame, state

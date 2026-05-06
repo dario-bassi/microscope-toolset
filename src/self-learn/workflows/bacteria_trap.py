@@ -33,7 +33,7 @@ import numpy as np
 from scipy.ndimage import label
 from skimage.filters import threshold_otsu
 from skimage.measure import regionprops
-from useq import MDAEvent, SLMImage
+from useq import MDAEvent
 
 from ..hardware.core import run_events
 
@@ -89,8 +89,6 @@ def detect_bacteria_gfp(img, threshold=None, min_area=3, max_area=50):
         positions = np.zeros((0, 2))
 
     return positions, len(cells), thr
-
-
 
 
 def detect_bacteria_area_threshold(img, min_area=8, max_area=120, std_multiplier=2.0):
@@ -186,15 +184,18 @@ def compute_enrichment(positions, center_row, center_col, radius, fov_size=512):
             frac_inside: float, fraction of bacteria inside circle.
             area_frac: float, fraction of FOV inside circle.
     """
-    area_inside = np.pi * radius ** 2
-    area_fov = fov_size ** 2
+    area_inside = np.pi * radius**2
+    area_fov = fov_size**2
     area_frac = area_inside / area_fov
 
     if len(positions) == 0:
         return {
-            'enrichment': 0.0,
-            'n_inside': 0, 'n_outside': 0, 'n_total': 0,
-            'frac_inside': 0.0, 'area_frac': area_frac,
+            "enrichment": 0.0,
+            "n_inside": 0,
+            "n_outside": 0,
+            "n_total": 0,
+            "frac_inside": 0.0,
+            "area_frac": area_frac,
         }
 
     rows = positions[:, 0]
@@ -212,12 +213,12 @@ def compute_enrichment(positions, center_row, center_col, radius, fov_size=512):
     enrichment = (frac_inside / area_frac) if area_frac > 0 else 0.0
 
     return {
-        'enrichment': round(float(enrichment), 3),
-        'n_inside': n_inside,
-        'n_outside': n_outside,
-        'n_total': n_total,
-        'frac_inside': round(float(frac_inside), 4),
-        'area_frac': round(float(area_frac), 4),
+        "enrichment": round(float(enrichment), 3),
+        "n_inside": n_inside,
+        "n_outside": n_outside,
+        "n_total": n_total,
+        "frac_inside": round(float(frac_inside), 4),
+        "area_frac": round(float(area_frac), 4),
     }
 
 
@@ -226,12 +227,12 @@ def run_bacteria_trap_mda(
     target_center_x,
     target_center_y,
     target_radius,
-    gfp_channel='nucleus-channel',
-    config_group='Fake',
+    gfp_channel="nucleus-channel",
+    config_group="Fake",
     n_baseline=5,
     n_accum=50,
     n_final=3,
-    slm_device='SLM',
+    slm_device="SLM",
     min_area=8,
     max_area=120,
     std_multiplier=2.0,
@@ -282,7 +283,9 @@ def run_bacteria_trap_mda(
     """
     circle_mask_arr = np.zeros((512, 512), dtype=bool)
     yy, xx = np.ogrid[:512, :512]
-    circle_mask_arr[:] = (xx - target_center_x)**2 + (yy - target_center_y)**2 <= target_radius**2
+    circle_mask_arr[:] = (xx - target_center_x) ** 2 + (
+        yy - target_center_y
+    ) ** 2 <= target_radius**2
     area_frac = float(np.sum(circle_mask_arr)) / (512.0 * 512.0)
 
     # Phase 1: baseline (SLM off)
@@ -292,21 +295,21 @@ def run_bacteria_trap_mda(
 
     def baseline_gen():
         for _ in range(n_baseline):
-            yield MDAEvent(channel={'config': gfp_channel, 'group': config_group})
+            yield MDAEvent(channel={"config": gfp_channel, "group": config_group})
 
     def on_baseline(img, event):
         g = img[:, :, 0].astype(float) if img.ndim == 3 else img.astype(float)
         nonlocal locked_threshold
-        n, pos, thr = detect_bacteria_area_threshold(g, min_area=min_area,
-                                                     max_area=max_area,
-                                                     std_multiplier=std_multiplier)
+        n, pos, thr = detect_bacteria_area_threshold(
+            g, min_area=min_area, max_area=max_area, std_multiplier=std_multiplier
+        )
         if locked_threshold is None:
             locked_threshold = thr
         n_in = count_bacteria_in_circle(pos, target_center_x, target_center_y, target_radius)
         ie = measure_bacteria_intensity(g, circle_mask_arr)
         baseline_counts.append(n)
         baseline_in.append(n_in)
-        baseline_intensity.append(ie['enrichment'])
+        baseline_intensity.append(ie["enrichment"])
 
     run_events(core, baseline_gen(), on_frame=on_baseline)
 
@@ -321,18 +324,18 @@ def run_bacteria_trap_mda(
 
     def accum_gen():
         for _ in range(n_accum):
-            yield MDAEvent(channel={'config': gfp_channel, 'group': config_group})
+            yield MDAEvent(channel={"config": gfp_channel, "group": config_group})
 
     def on_accum(img, event):
         g = img[:, :, 0].astype(float) if img.ndim == 3 else img.astype(float)
-        n, pos, _ = detect_bacteria_area_threshold(g, min_area=min_area,
-                                                   max_area=max_area,
-                                                   std_multiplier=std_multiplier)
+        n, pos, _ = detect_bacteria_area_threshold(
+            g, min_area=min_area, max_area=max_area, std_multiplier=std_multiplier
+        )
         n_in = count_bacteria_in_circle(pos, target_center_x, target_center_y, target_radius)
         ie = measure_bacteria_intensity(g, circle_mask_arr)
         accum_counts.append(n)
         accum_in.append(n_in)
-        accum_intensity.append(ie['enrichment'])
+        accum_intensity.append(ie["enrichment"])
 
     run_events(core, accum_gen(), on_frame=on_accum)
 
@@ -344,18 +347,18 @@ def run_bacteria_trap_mda(
 
     def final_gen():
         for _ in range(n_final):
-            yield MDAEvent(channel={'config': gfp_channel, 'group': config_group})
+            yield MDAEvent(channel={"config": gfp_channel, "group": config_group})
 
     def on_final(img, event):
         g = img[:, :, 0].astype(float) if img.ndim == 3 else img.astype(float)
-        n, pos, _ = detect_bacteria_area_threshold(g, min_area=min_area,
-                                                   max_area=max_area,
-                                                   std_multiplier=std_multiplier)
+        n, pos, _ = detect_bacteria_area_threshold(
+            g, min_area=min_area, max_area=max_area, std_multiplier=std_multiplier
+        )
         n_in = count_bacteria_in_circle(pos, target_center_x, target_center_y, target_radius)
         ie = measure_bacteria_intensity(g, circle_mask_arr)
         final_counts_raw.append(n)
         final_in_raw.append(n_in)
-        final_ie_raw.append(ie['enrichment'])
+        final_ie_raw.append(ie["enrichment"])
 
     run_events(core, final_gen(), on_frame=on_final)
 
@@ -366,19 +369,19 @@ def run_bacteria_trap_mda(
     count_enrichment = final_frac / max(area_frac, 1e-6)
 
     return {
-        'baseline_counts': baseline_counts,
-        'baseline_in': baseline_in,
-        'baseline_intensity': baseline_intensity,
-        'accum_counts': accum_counts,
-        'accum_in': accum_in,
-        'accum_intensity': accum_intensity,
-        'final_count': final_count,
-        'final_in': final_in,
-        'final_intensity_enrichment': round(final_int_enrichment, 3),
-        'count_enrichment': round(count_enrichment, 3),
-        'intensity_enrichment': round(final_int_enrichment, 3),
-        'area_frac': round(area_frac, 4),
-        'locked_threshold': float(locked_threshold) if locked_threshold is not None else 0.0,
+        "baseline_counts": baseline_counts,
+        "baseline_in": baseline_in,
+        "baseline_intensity": baseline_intensity,
+        "accum_counts": accum_counts,
+        "accum_in": accum_in,
+        "accum_intensity": accum_intensity,
+        "final_count": final_count,
+        "final_in": final_in,
+        "final_intensity_enrichment": round(final_int_enrichment, 3),
+        "count_enrichment": round(count_enrichment, 3),
+        "intensity_enrichment": round(final_int_enrichment, 3),
+        "area_frac": round(area_frac, 4),
+        "locked_threshold": float(locked_threshold) if locked_threshold is not None else 0.0,
     }
 
 
@@ -431,10 +434,10 @@ def measure_bacteria_intensity(img, circle_mask, total_mask=None):
     enrichment = frac_in / area_frac if area_frac > 0 else 0.0
 
     return {
-        'intensity_in': round(intensity_in, 2),
-        'intensity_out': round(intensity_out, 2),
-        'intensity_total': round(intensity_total, 2),
-        'frac_in': round(frac_in, 4),
-        'area_frac': round(area_frac, 4),
-        'enrichment': round(enrichment, 3),
+        "intensity_in": round(intensity_in, 2),
+        "intensity_out": round(intensity_out, 2),
+        "intensity_total": round(intensity_total, 2),
+        "frac_in": round(frac_in, 4),
+        "area_frac": round(area_frac, 4),
+        "enrichment": round(enrichment, 3),
     }

@@ -11,12 +11,12 @@ import warnings
 
 import numpy as np
 
-from .config import get_config, refresh_config, _mag_to_pixel_size
-
+from .config import _mag_to_pixel_size, get_config, refresh_config
 
 # ---------------------------------------------------------------------------
 # Image acquisition
 # ---------------------------------------------------------------------------
+
 
 def snap(core, channel=None, exposure=None):
     """Snap an image, optionally switching channel/exposure first.
@@ -37,6 +37,7 @@ def snap(core, channel=None, exposure=None):
 # ---------------------------------------------------------------------------
 # Stage movement
 # ---------------------------------------------------------------------------
+
 
 def move_to(core, x, y, wait=True):
     """Move stage to (x, y) in world coordinates."""
@@ -60,6 +61,7 @@ def get_position(core):
 # ---------------------------------------------------------------------------
 # Objectives
 # ---------------------------------------------------------------------------
+
 
 def set_objective(core, mag):
     """Set objective by magnification (e.g. 10, 20, 40, 100).
@@ -92,10 +94,7 @@ def set_objective(core, mag):
     except Exception:
         pass
     available = [lbl for _, lbl in cfg.objective_labels]
-    raise ValueError(
-        f"No objective with magnification {mag}x found. "
-        f"Available: {available}"
-    )
+    raise ValueError(f"No objective with magnification {mag}x found. " f"Available: {available}")
 
 
 def get_objective(core):
@@ -131,6 +130,7 @@ def fov_size(core):
 # Z / Focus
 # ---------------------------------------------------------------------------
 
+
 def set_z(core, z, wait=True):
     """Set Z position."""
     cfg = get_config(core)
@@ -153,6 +153,7 @@ def get_z(core):
 # SLM
 # ---------------------------------------------------------------------------
 
+
 def make_slm_circle(center, radius, size=None, intensity=255, core=None):
     """Create a circular SLM mask in viewport coordinates.
 
@@ -174,7 +175,7 @@ def make_slm_circle(center, radius, size=None, intensity=255, core=None):
             size = 512
     mask = np.zeros((size, size), dtype=np.uint8)
     yy, xx = np.ogrid[:size, :size]
-    dist_sq = (xx - center[0])**2 + (yy - center[1])**2
+    dist_sq = (xx - center[0]) ** 2 + (yy - center[1]) ** 2
     mask[dist_sq <= radius**2] = intensity
     return mask
 
@@ -191,7 +192,7 @@ def apply_slm(core, mask, device=None):
         cfg = get_config(core)
         device = cfg.slm_device
         if device is None:
-            warnings.warn("No SLM device available")
+            warnings.warn("No SLM device available", stacklevel=2)
             return
     core.setSLMImage(device, mask)
     core.displaySLMImage(device)
@@ -200,6 +201,7 @@ def apply_slm(core, mask, device=None):
 # ---------------------------------------------------------------------------
 # Coordinate conversion
 # ---------------------------------------------------------------------------
+
 
 def world_to_viewport(world_x, world_y, stage_x, stage_y, viewport_size=512):
     """Convert world coordinates to viewport pixel coordinates.
@@ -286,6 +288,7 @@ def world_to_pixel(wx, wy, stage_x, stage_y, config=None, core=None, mag=None):
 # MDA helpers
 # ---------------------------------------------------------------------------
 
+
 def run_events(core, events, on_frame=None):
     """Execute MDAEvent generators via core.mda.run() with optional frame callback.
 
@@ -319,10 +322,10 @@ def run_events(core, events, on_frame=None):
     def _filtered(events):
         """Strip CustomAction events and execute them inline."""
         for event in events:
-            action = getattr(event, 'action', None)
-            if action is not None and type(action).__name__ == 'CustomAction':
-                if action.name == 'switch_objective':
-                    set_objective(core, action.data.get('mag', 10))
+            action = getattr(event, "action", None)
+            if action is not None and type(action).__name__ == "CustomAction":
+                if action.name == "switch_objective":
+                    set_objective(core, action.data.get("mag", 10))
                 # Don't forward to the engine — no image to acquire
             else:
                 yield event

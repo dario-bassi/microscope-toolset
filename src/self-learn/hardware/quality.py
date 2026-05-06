@@ -29,42 +29,43 @@ def assess_image(img):
 
     # Laplacian variance as focus metric
     # Higher = sharper. Normalized by image mean to be scale-invariant.
-    from cv2 import Laplacian, CV_64F
+    from cv2 import CV_64F, Laplacian
+
     lap = Laplacian(img_f, CV_64F)
     lap_var = float(lap.var())
 
     # Channel classification
     if mean < 3 and std < 2:
-        channel_type = 'empty'
+        channel_type = "empty"
     elif mean < 10 and snr > 1.0:
         # Low mean but high std/mean ratio = bright spots on dark background
-        channel_type = 'fluorescence'
+        channel_type = "fluorescence"
     elif mean > 20:
-        channel_type = 'brightfield'
+        channel_type = "brightfield"
     else:
-        channel_type = 'unknown'
+        channel_type = "unknown"
 
     # Quality assessment
-    if channel_type == 'empty':
-        quality = 'no_signal'
-    elif mean < 5 and channel_type != 'fluorescence':
-        quality = 'underexposed'
+    if channel_type == "empty":
+        quality = "no_signal"
+    elif mean < 5 and channel_type != "fluorescence":
+        quality = "underexposed"
     elif mean > 240:
-        quality = 'overexposed'
-    elif channel_type == 'brightfield' and lap_var < 10:
-        quality = 'out_of_focus'
-    elif channel_type == 'fluorescence' and lap_var < 5:
-        quality = 'out_of_focus'
+        quality = "overexposed"
+    elif channel_type == "brightfield" and lap_var < 10:
+        quality = "out_of_focus"
+    elif channel_type == "fluorescence" and lap_var < 5:
+        quality = "out_of_focus"
     else:
-        quality = 'good'
+        quality = "good"
 
     return {
-        'channel_type': channel_type,
-        'quality': quality,
-        'mean': round(mean, 1),
-        'std': round(std, 1),
-        'snr': round(snr, 3),
-        'laplacian_var': round(lap_var, 1),
+        "channel_type": channel_type,
+        "quality": quality,
+        "mean": round(mean, 1),
+        "std": round(std, 1),
+        "snr": round(snr, 3),
+        "laplacian_var": round(lap_var, 1),
     }
 
 
@@ -85,16 +86,13 @@ def check_focus_quality(core, z_range=5.0, z_step=1.0):
             focus_curve: list of (z, laplacian_var) tuples
             improvement: ratio of best focus to current focus
     """
-    from cv2 import Laplacian, CV_64F
+    from cv2 import CV_64F, Laplacian
     from useq import MDAEvent
+
     from .core import run_events, set_z
 
-    current_z = float(core.getPosition('ZStage'))
-    z_positions = np.arange(
-        current_z - z_range / 2,
-        current_z + z_range / 2 + z_step / 2,
-        z_step
-    )
+    current_z = float(core.getPosition("ZStage"))
+    z_positions = np.arange(current_z - z_range / 2, current_z + z_range / 2 + z_step / 2, z_step)
 
     focus_curve = []
 
@@ -104,10 +102,7 @@ def check_focus_quality(core, z_range=5.0, z_step=1.0):
         lap_var = float(Laplacian(img_f, CV_64F).var())
         focus_curve.append((round(float(z), 2), round(lap_var, 1)))
 
-    events = [
-        MDAEvent(z_pos=float(z), index={"z": i})
-        for i, z in enumerate(z_positions)
-    ]
+    events = [MDAEvent(z_pos=float(z), index={"z": i}) for i, z in enumerate(z_positions)]
     run_events(core, events, on_frame=on_frame)
 
     # Find best Z
@@ -122,17 +117,18 @@ def check_focus_quality(core, z_range=5.0, z_step=1.0):
             current_sharpness = sharp
             break
 
-    improvement = (best_sharpness / current_sharpness
-                   if current_sharpness and current_sharpness > 0 else 1.0)
+    improvement = (
+        best_sharpness / current_sharpness if current_sharpness and current_sharpness > 0 else 1.0
+    )
 
     # Move to best focus
     set_z(core, best_z)
 
     return {
-        'best_z': best_z,
-        'current_z': round(current_z, 2),
-        'focus_curve': focus_curve,
-        'improvement': round(improvement, 2),
+        "best_z": best_z,
+        "current_z": round(current_z, 2),
+        "focus_curve": focus_curve,
+        "improvement": round(improvement, 2),
     }
 
 
@@ -165,7 +161,7 @@ def estimate_snr(img, signal_mask=None):
         noise = img_f[img_f <= thresh]
 
     if len(signal) == 0 or len(noise) == 0:
-        return {'snr_db': 0.0, 'signal_mean': 0.0, 'noise_std': 0.0}
+        return {"snr_db": 0.0, "signal_mean": 0.0, "noise_std": 0.0}
 
     signal_mean = float(signal.mean())
     noise_std = float(noise.std())
@@ -174,12 +170,12 @@ def estimate_snr(img, signal_mask=None):
         snr_linear = signal_mean / noise_std
         snr_db = 20 * np.log10(snr_linear)
     else:
-        snr_db = float('inf')
+        snr_db = float("inf")
 
     return {
-        'snr_db': round(snr_db, 1),
-        'signal_mean': round(signal_mean, 1),
-        'noise_std': round(noise_std, 2),
+        "snr_db": round(snr_db, 1),
+        "signal_mean": round(signal_mean, 1),
+        "noise_std": round(noise_std, 2),
     }
 
 
@@ -194,27 +190,27 @@ def validate_acquisition(core):
             issues: list of issue descriptions
             assessment: full image assessment dict
     """
-    core.setConfig('Fake', 'brightfield')
+    core.setConfig("Fake", "brightfield")
     core.snapImage()
     img = core.getImage().copy()
 
     assessment = assess_image(img)
     issues = []
 
-    if assessment['quality'] == 'no_signal':
-        issues.append('No signal detected — check illumination')
-    elif assessment['quality'] == 'underexposed':
+    if assessment["quality"] == "no_signal":
+        issues.append("No signal detected — check illumination")
+    elif assessment["quality"] == "underexposed":
         issues.append(f'Underexposed (mean={assessment["mean"]})')
-    elif assessment['quality'] == 'overexposed':
+    elif assessment["quality"] == "overexposed":
         issues.append(f'Overexposed (mean={assessment["mean"]})')
-    elif assessment['quality'] == 'out_of_focus':
+    elif assessment["quality"] == "out_of_focus":
         issues.append(f'Out of focus (laplacian_var={assessment["laplacian_var"]})')
 
-    if assessment['channel_type'] == 'fluorescence':
-        issues.append('Expected BF but got fluorescence — wrong channel?')
+    if assessment["channel_type"] == "fluorescence":
+        issues.append("Expected BF but got fluorescence — wrong channel?")
 
     return {
-        'ok': len(issues) == 0,
-        'issues': issues,
-        'assessment': assessment,
+        "ok": len(issues) == 0,
+        "issues": issues,
+        "assessment": assessment,
     }

@@ -11,10 +11,9 @@ Key functions:
 """
 
 import numpy as np
-from scipy import ndimage
 
 
-def kymograph(frames, y=None, x_range=None, axis='horizontal', width=3):
+def kymograph(frames, y=None, x_range=None, axis="horizontal", width=3):
     """Extract a kymograph (space-time image) from a timelapse.
 
     A kymograph shows how intensity along a line changes over time.
@@ -38,7 +37,7 @@ def kymograph(frames, y=None, x_range=None, axis='horizontal', width=3):
     frames = np.asarray(frames, dtype=np.float64)
     n_frames, h, w = frames.shape
 
-    if axis == 'horizontal':
+    if axis == "horizontal":
         if y is None:
             y = h // 2
         half_w = width // 2
@@ -53,7 +52,7 @@ def kymograph(frames, y=None, x_range=None, axis='horizontal', width=3):
         kymo = frames[:, y_lo:y_hi, x0:x1].mean(axis=1)
         spatial = np.arange(x0, x1)
 
-    elif axis == 'vertical':
+    elif axis == "vertical":
         x = y if y is not None else w // 2  # reinterpret y as x
         half_w = width // 2
         x_lo = max(0, int(x) - half_w)
@@ -70,9 +69,9 @@ def kymograph(frames, y=None, x_range=None, axis='horizontal', width=3):
         raise ValueError(f"axis must be 'horizontal' or 'vertical', got {axis!r}")
 
     return {
-        'image': kymo,
-        'spatial_axis': spatial,
-        'time_axis': np.arange(n_frames),
+        "image": kymo,
+        "spatial_axis": spatial,
+        "time_axis": np.arange(n_frames),
     }
 
 
@@ -113,7 +112,7 @@ def optical_flow(frame0, frame1, window=15):
     half = window // 2
     for iy, cy in enumerate(grid_y):
         for ix, cx in enumerate(grid_x):
-            template = f0[cy - half:cy + half + 1, cx - half:cx + half + 1]
+            template = f0[cy - half : cy + half + 1, cx - half : cx + half + 1]
             t_mean = template.mean()
             t_std = template.std()
             if t_std < 1e-6:
@@ -131,7 +130,7 @@ def optical_flow(frame0, frame1, window=15):
                     if sx - half < 0 or sx + half + 1 > w:
                         continue
 
-                    patch = f1[sy - half:sy + half + 1, sx - half:sx + half + 1]
+                    patch = f1[sy - half : sy + half + 1, sx - half : sx + half + 1]
                     p_std = patch.std()
                     if p_std < 1e-6:
                         continue
@@ -150,12 +149,18 @@ def optical_flow(frame0, frame1, window=15):
     from scipy.interpolate import RegularGridInterpolator
 
     interp_dx = RegularGridInterpolator(
-        (grid_y.astype(float), grid_x.astype(float)), dx_grid,
-        method='linear', bounds_error=False, fill_value=0.0
+        (grid_y.astype(float), grid_x.astype(float)),
+        dx_grid,
+        method="linear",
+        bounds_error=False,
+        fill_value=0.0,
     )
     interp_dy = RegularGridInterpolator(
-        (grid_y.astype(float), grid_x.astype(float)), dy_grid,
-        method='linear', bounds_error=False, fill_value=0.0
+        (grid_y.astype(float), grid_x.astype(float)),
+        dy_grid,
+        method="linear",
+        bounds_error=False,
+        fill_value=0.0,
     )
 
     yy, xx = np.mgrid[:h, :w]
@@ -166,10 +171,10 @@ def optical_flow(frame0, frame1, window=15):
     mag = np.sqrt(dx_full**2 + dy_full**2)
 
     return {
-        'dx': dx_full,
-        'dy': dy_full,
-        'magnitude': mag,
-        'mean_magnitude': float(mag.mean()),
+        "dx": dx_full,
+        "dy": dy_full,
+        "magnitude": mag,
+        "mean_magnitude": float(mag.mean()),
     }
 
 
@@ -204,15 +209,14 @@ def contraction_amplitude(frames, roi_mask=None, dt=1.0):
     times = np.arange(n_frames - 1) * dt
 
     return {
-        'signal': signal,
-        'times': times,
-        'mean_amplitude': float(np.mean(signal)),
-        'peak_amplitude': float(np.max(signal)),
+        "signal": signal,
+        "times": times,
+        "mean_amplitude": float(np.mean(signal)),
+        "peak_amplitude": float(np.max(signal)),
     }
 
 
-def migration_front(frames, axis='horizontal', threshold_method='otsu',
-                    direction='left_to_right'):
+def migration_front(frames, axis="horizontal", threshold_method="otsu", direction="left_to_right"):
     """Track the leading edge of a migrating cell sheet over time.
 
     Detects where the cell sheet boundary is along the specified axis
@@ -239,8 +243,9 @@ def migration_front(frames, axis='horizontal', threshold_method='otsu',
     for i in range(n_frames):
         img = frames[i]
 
-        if threshold_method == 'otsu':
+        if threshold_method == "otsu":
             from skimage.filters import threshold_otsu
+
             try:
                 thresh = threshold_otsu(img)
             except ValueError:
@@ -250,11 +255,11 @@ def migration_front(frames, axis='horizontal', threshold_method='otsu',
 
         binary = img > thresh
 
-        if axis == 'horizontal':
+        if axis == "horizontal":
             # Project along y-axis to get x-profile
             profile = binary.mean(axis=0)  # fraction of rows with cells at each x
 
-            if direction == 'left_to_right':
+            if direction == "left_to_right":
                 # Find rightmost x where cells are present
                 cell_cols = np.where(profile > 0.2)[0]
                 positions[i] = float(cell_cols[-1]) if len(cell_cols) > 0 else 0
@@ -262,10 +267,10 @@ def migration_front(frames, axis='horizontal', threshold_method='otsu',
                 cell_cols = np.where(profile > 0.2)[0]
                 positions[i] = float(cell_cols[0]) if len(cell_cols) > 0 else w
 
-        elif axis == 'vertical':
+        elif axis == "vertical":
             profile = binary.mean(axis=1)
 
-            if direction == 'left_to_right':
+            if direction == "left_to_right":
                 cell_rows = np.where(profile > 0.2)[0]
                 positions[i] = float(cell_rows[-1]) if len(cell_rows) > 0 else 0
             else:
@@ -276,8 +281,8 @@ def migration_front(frames, axis='horizontal', threshold_method='otsu',
     total = float(np.abs(positions[-1] - positions[0]))
 
     return {
-        'positions': positions,
-        'speeds': speeds,
-        'mean_speed': float(np.mean(speeds)),
-        'total_distance': total,
+        "positions": positions,
+        "speeds": speeds,
+        "mean_speed": float(np.mean(speeds)),
+        "total_distance": total,
     }

@@ -18,7 +18,7 @@ def extract_roi_traces(frames, roi_masks):
         Dict mapping label -> 1D numpy array of mean intensities per frame.
     """
     if isinstance(roi_masks, list):
-        roi_masks = {i: m for i, m in enumerate(roi_masks)}
+        roi_masks = dict(enumerate(roi_masks))
 
     traces = {label: [] for label in roi_masks}
     for frame in frames:
@@ -50,7 +50,7 @@ def compute_dff(traces, baseline_indices=None, n_baseline=None):
     """
     single = not isinstance(traces, dict)
     if single:
-        traces = {'_single': np.asarray(traces, dtype=np.float64)}
+        traces = {"_single": np.asarray(traces, dtype=np.float64)}
 
     results = {}
     for label, trace in traces.items():
@@ -69,18 +69,17 @@ def compute_dff(traces, baseline_indices=None, n_baseline=None):
             dff = trace - f0
 
         results[label] = {
-            'dff': dff,
-            'dff_mean': float(dff.mean()),
-            'dff_peak': float(dff.max()),
-            'f0': float(f0),
-            'f_mean': float(trace.mean()),
+            "dff": dff,
+            "dff_mean": float(dff.mean()),
+            "dff_peak": float(dff.max()),
+            "f0": float(f0),
+            "f_mean": float(trace.mean()),
         }
 
-    return results['_single'] if single else results
+    return results["_single"] if single else results
 
 
-def detect_calcium_transients(trace, baseline_frames=None, threshold_std=3.0,
-                               min_separation=2):
+def detect_calcium_transients(trace, baseline_frames=None, threshold_std=3.0, min_separation=2):
     """Detect calcium transient events in a fluorescence trace.
 
     A transient is a frame where intensity exceeds baseline + threshold_std * baseline_std.
@@ -129,7 +128,7 @@ def detect_calcium_transients(trace, baseline_frames=None, threshold_std=3.0,
             j = i
             while j + 1 < n and above[j + 1]:
                 j += 1
-            peak_idx = i + int(np.argmax(trace[i:j + 1]))
+            peak_idx = i + int(np.argmax(trace[i : j + 1]))
             event_indices.append(peak_idx)
             event_amplitudes.append(float(trace[peak_idx] - bl_mean))
             i = j + min_separation
@@ -137,11 +136,11 @@ def detect_calcium_transients(trace, baseline_frames=None, threshold_std=3.0,
             i += 1
 
     return {
-        'event_indices': np.array(event_indices, dtype=int),
-        'event_amplitudes': np.array(event_amplitudes),
-        'n_events': len(event_indices),
-        'event_rate': len(event_indices) / max(n, 1),
-        'baseline_mean': bl_mean,
-        'baseline_std': bl_std,
-        'threshold': float(threshold),
+        "event_indices": np.array(event_indices, dtype=int),
+        "event_amplitudes": np.array(event_amplitudes),
+        "n_events": len(event_indices),
+        "event_rate": len(event_indices) / max(n, 1),
+        "baseline_mean": bl_mean,
+        "baseline_std": bl_std,
+        "threshold": float(threshold),
     }

@@ -28,9 +28,8 @@ from __future__ import annotations
 import json
 import shutil
 import sys
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
-
 
 EXPERIMENTS_DIR = Path(__file__).parent / "experiments"
 MARKER_FILE = Path(".experiment_marker.json")
@@ -39,6 +38,7 @@ MARKER_FILE = Path(".experiment_marker.json")
 # ---------------------------------------------------------------------------
 # Locating the Claude Code session file
 # ---------------------------------------------------------------------------
+
 
 def _claude_project_dir() -> Path | None:
     """Return ~/.claude/projects/<hash>/ for the current working directory."""
@@ -92,6 +92,7 @@ def _line_count(path: Path) -> int:
 # Public API
 # ---------------------------------------------------------------------------
 
+
 def start_experiment(name: str | None = None) -> tuple[str, Path]:
     """Record the start of an experiment and return (name, workspace_dir).
 
@@ -117,7 +118,7 @@ def start_experiment(name: str | None = None) -> tuple[str, Path]:
 
     marker = {
         "experiment_name": name,
-        "start_time": datetime.now(timezone.utc).isoformat(),
+        "start_time": datetime.now(UTC).isoformat(),
         "session_file": str(session_file) if session_file else None,
         "session_data_dir": str(session_data) if session_data else None,
         "start_line": line_count,
@@ -145,9 +146,7 @@ def end_experiment(output_dir: Path | str | None = None) -> Path:
     Raises FileNotFoundError if no experiment has been started.
     """
     if not MARKER_FILE.exists():
-        raise FileNotFoundError(
-            "No active experiment. Run start_experiment() first."
-        )
+        raise FileNotFoundError("No active experiment. Run start_experiment() first.")
 
     marker = json.loads(MARKER_FILE.read_text(encoding="utf-8"))
     name = marker["experiment_name"]
@@ -171,7 +170,9 @@ def end_experiment(output_dir: Path | str | None = None) -> Path:
     # fall back to creating a new timestamped folder for legacy markers.
     if "exp_dir" in marker:
         base_dir = Path(output_dir) if output_dir else None
-        exp_dir = Path(marker["exp_dir"]) if base_dir is None else base_dir / Path(marker["exp_dir"]).name
+        exp_dir = (
+            Path(marker["exp_dir"]) if base_dir is None else base_dir / Path(marker["exp_dir"]).name
+        )
         exp_dir.mkdir(parents=True, exist_ok=True)
     else:
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
@@ -196,9 +197,17 @@ def end_experiment(output_dir: Path | str | None = None) -> Path:
     if session_data and session_data.is_dir():
         dest = exp_dir / "session_data"
         shutil.copytree(session_data, dest)
-        n_tool = len(list((dest / "tool-results").glob("*.txt"))) if (dest / "tool-results").exists() else 0
-        n_agent = len(list((dest / "subagents").glob("*.jsonl"))) if (dest / "subagents").exists() else 0
-        print(f"[experiment_saver] session_data/       — {n_tool} tool-result file(s), {n_agent} subagent(s)")
+        n_tool = (
+            len(list((dest / "tool-results").glob("*.txt")))
+            if (dest / "tool-results").exists()
+            else 0
+        )
+        n_agent = (
+            len(list((dest / "subagents").glob("*.jsonl"))) if (dest / "subagents").exists() else 0
+        )
+        print(
+            f"[experiment_saver] session_data/       — {n_tool} tool-result file(s), {n_agent} subagent(s)"
+        )
     else:
         print("[experiment_saver] session_data/       — (no session subdirectory found)")
 
@@ -228,6 +237,7 @@ def list_experiments(experiments_dir: Path | str | None = None) -> list[Path]:
 # CLI entry point
 # ---------------------------------------------------------------------------
 
+
 def _main() -> None:
     args = sys.argv[1:]
     if not args:
@@ -244,8 +254,10 @@ def _main() -> None:
     elif cmd == "end":
         try:
             exp_dir = end_experiment()
-            print(f"\nOpen in dashboard:")
-            print(f"  python -m src.benchmarking.view_experiment \"{exp_dir / 'conversation.jsonl'}\"")
+            print("\nOpen in dashboard:")
+            print(
+                f"  python -m src.benchmarking.view_experiment \"{exp_dir / 'conversation.jsonl'}\""
+            )
         except FileNotFoundError as e:
             print(f"Error: {e}", file=sys.stderr)
             sys.exit(1)

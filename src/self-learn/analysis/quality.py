@@ -15,8 +15,9 @@ Key functions:
 import numpy as np
 
 
-def check_density(n_cells, fov_area_um2, expected_density=None,
-                  min_density=0.0001, max_density=0.01):
+def check_density(
+    n_cells, fov_area_um2, expected_density=None, min_density=0.0001, max_density=0.01
+):
     """Check if detected cell count is physically reasonable.
 
     Args:
@@ -36,36 +37,54 @@ def check_density(n_cells, fov_area_um2, expected_density=None,
             message: Human-readable assessment.
     """
     if fov_area_um2 <= 0:
-        return {'density': 0, 'status': 'error', 'message': 'Invalid FOV area'}
+        return {"density": 0, "status": "error", "message": "Invalid FOV area"}
 
     density = n_cells / fov_area_um2
 
     if expected_density is not None:
-        ratio = density / expected_density if expected_density > 0 else float('inf')
+        ratio = density / expected_density if expected_density > 0 else float("inf")
         if 0.5 <= ratio <= 2.0:
-            return {'density': density, 'status': 'ok',
-                    'message': f'{n_cells} cells in {fov_area_um2:.0f} µm² '
-                               f'(density {density:.4f}/µm², expected {expected_density:.4f})'}
+            return {
+                "density": density,
+                "status": "ok",
+                "message": f"{n_cells} cells in {fov_area_um2:.0f} µm² "
+                f"(density {density:.4f}/µm², expected {expected_density:.4f})",
+            }
         elif ratio < 0.5:
-            return {'density': density, 'status': 'too_sparse',
-                    'message': f'Detected {n_cells} but expected ~{int(expected_density * fov_area_um2)}. '
-                               f'May be undercounting.'}
+            return {
+                "density": density,
+                "status": "too_sparse",
+                "message": f"Detected {n_cells} but expected ~{int(expected_density * fov_area_um2)}. "
+                f"May be undercounting.",
+            }
         else:
-            return {'density': density, 'status': 'too_dense',
-                    'message': f'Detected {n_cells} but expected ~{int(expected_density * fov_area_um2)}. '
-                               f'May be overcounting or detecting noise.'}
+            return {
+                "density": density,
+                "status": "too_dense",
+                "message": f"Detected {n_cells} but expected ~{int(expected_density * fov_area_um2)}. "
+                f"May be overcounting or detecting noise.",
+            }
 
     if density < min_density:
-        return {'density': density, 'status': 'too_sparse',
-                'message': f'{n_cells} cells in {fov_area_um2:.0f} µm² '
-                           f'seems very sparse (density {density:.6f}/µm²)'}
+        return {
+            "density": density,
+            "status": "too_sparse",
+            "message": f"{n_cells} cells in {fov_area_um2:.0f} µm² "
+            f"seems very sparse (density {density:.6f}/µm²)",
+        }
     elif density > max_density:
-        return {'density': density, 'status': 'too_dense',
-                'message': f'{n_cells} cells in {fov_area_um2:.0f} µm² '
-                           f'seems overcrowded (density {density:.4f}/µm²). Check for noise.'}
+        return {
+            "density": density,
+            "status": "too_dense",
+            "message": f"{n_cells} cells in {fov_area_um2:.0f} µm² "
+            f"seems overcrowded (density {density:.4f}/µm²). Check for noise.",
+        }
     else:
-        return {'density': density, 'status': 'ok',
-                'message': f'{n_cells} cells at density {density:.5f}/µm²'}
+        return {
+            "density": density,
+            "status": "ok",
+            "message": f"{n_cells} cells at density {density:.5f}/µm²",
+        }
 
 
 def check_size_range(areas, pixel_size_um=1.0, min_cell_um2=5, max_cell_um2=5000):
@@ -90,13 +109,20 @@ def check_size_range(areas, pixel_size_um=1.0, min_cell_um2=5, max_cell_um2=5000
             message: Human-readable assessment.
     """
     areas = np.asarray(areas, dtype=float)
-    px_area = pixel_size_um ** 2
+    px_area = pixel_size_um**2
     areas_um2 = areas * px_area
 
     n_total = len(areas)
     if n_total == 0:
-        return {'n_total': 0, 'n_valid': 0, 'n_too_small': 0, 'n_too_large': 0,
-                'median_area_um2': 0, 'status': 'empty', 'message': 'No objects detected'}
+        return {
+            "n_total": 0,
+            "n_valid": 0,
+            "n_too_small": 0,
+            "n_too_large": 0,
+            "median_area_um2": 0,
+            "status": "empty",
+            "message": "No objects detected",
+        }
 
     too_small = int((areas_um2 < min_cell_um2).sum())
     too_large = int((areas_um2 > max_cell_um2).sum())
@@ -105,26 +131,26 @@ def check_size_range(areas, pixel_size_um=1.0, min_cell_um2=5, max_cell_um2=5000
     median_um2 = float(np.median(areas_um2))
 
     if too_small > n_total * 0.3:
-        status = 'many_small'
-        message = f'{too_small}/{n_total} objects below {min_cell_um2} µm² — likely noise'
+        status = "many_small"
+        message = f"{too_small}/{n_total} objects below {min_cell_um2} µm² — likely noise"
     elif too_large > n_total * 0.3:
-        status = 'many_large'
-        message = f'{too_large}/{n_total} objects above {max_cell_um2} µm² — clusters or tissue'
+        status = "many_large"
+        message = f"{too_large}/{n_total} objects above {max_cell_um2} µm² — clusters or tissue"
     elif too_small + too_large > n_total * 0.3:
-        status = 'mixed'
-        message = f'{too_small} too small, {too_large} too large out of {n_total}'
+        status = "mixed"
+        message = f"{too_small} too small, {too_large} too large out of {n_total}"
     else:
-        status = 'ok'
-        message = f'{n_valid}/{n_total} objects in valid size range. Median: {median_um2:.1f} µm²'
+        status = "ok"
+        message = f"{n_valid}/{n_total} objects in valid size range. Median: {median_um2:.1f} µm²"
 
     return {
-        'n_total': n_total,
-        'n_valid': n_valid,
-        'n_too_small': too_small,
-        'n_too_large': too_large,
-        'median_area_um2': median_um2,
-        'status': status,
-        'message': message,
+        "n_total": n_total,
+        "n_valid": n_valid,
+        "n_too_small": too_small,
+        "n_too_large": too_large,
+        "median_area_um2": median_um2,
+        "status": status,
+        "message": message,
     }
 
 
@@ -156,26 +182,29 @@ def check_edge_bias(centroids, fov_size, margin=10):
 
     if n_total == 0:
         return {
-            'n_total': 0, 'n_excluded_estimate': 0,
-            'exclusion_fraction': exclusion_frac,
-            'message': 'No cells detected',
+            "n_total": 0,
+            "n_excluded_estimate": 0,
+            "exclusion_fraction": exclusion_frac,
+            "message": "No cells detected",
         }
 
     # Estimate excluded cells assuming uniform distribution
     n_excluded_estimate = int(round(n_total * exclusion_frac / (1 - exclusion_frac)))
 
     if exclusion_frac > 0.15:
-        message = (f'Edge margin={margin}px excludes {exclusion_frac:.1%} of FOV area. '
-                   f'Estimated {n_excluded_estimate} cells lost. '
-                   f'Consider reducing margin for this sample.')
+        message = (
+            f"Edge margin={margin}px excludes {exclusion_frac:.1%} of FOV area. "
+            f"Estimated {n_excluded_estimate} cells lost. "
+            f"Consider reducing margin for this sample."
+        )
     else:
-        message = f'Edge margin={margin}px excludes {exclusion_frac:.1%} of area — acceptable.'
+        message = f"Edge margin={margin}px excludes {exclusion_frac:.1%} of area — acceptable."
 
     return {
-        'n_total': n_total,
-        'n_excluded_estimate': n_excluded_estimate,
-        'exclusion_fraction': exclusion_frac,
-        'message': message,
+        "n_total": n_total,
+        "n_excluded_estimate": n_excluded_estimate,
+        "exclusion_fraction": exclusion_frac,
+        "message": message,
     }
 
 
@@ -204,9 +233,12 @@ def check_bimodal(values, min_separation=1.0):
 
     if n < 10:
         return {
-            'is_bimodal': False, 'n_modes': 1,
-            'valley': None, 'mode1_mean': float(values.mean()) if n > 0 else 0,
-            'mode2_mean': None, 'separation_sigma': 0,
+            "is_bimodal": False,
+            "n_modes": 1,
+            "valley": None,
+            "mode1_mean": float(values.mean()) if n > 0 else 0,
+            "mode2_mean": None,
+            "separation_sigma": 0,
         }
 
     # Histogram-based approach
@@ -217,7 +249,7 @@ def check_bimodal(values, min_separation=1.0):
     # Smooth histogram
     if len(counts) >= 5:
         kernel = np.ones(3) / 3
-        counts_smooth = np.convolve(counts, kernel, mode='same')
+        counts_smooth = np.convolve(counts, kernel, mode="same")
     else:
         counts_smooth = counts.astype(float)
 
@@ -233,7 +265,7 @@ def check_bimodal(values, min_separation=1.0):
         peak_heights.sort(reverse=True)
         p1, p2 = sorted([peak_heights[0][1], peak_heights[1][1]])
 
-        valley_idx = p1 + np.argmin(counts_smooth[p1:p2 + 1])
+        valley_idx = p1 + np.argmin(counts_smooth[p1 : p2 + 1])
         valley_val = float(centers[valley_idx])
 
         mode1_vals = values[values < valley_val]
@@ -250,31 +282,40 @@ def check_bimodal(values, min_separation=1.0):
         peak_min_height = min(counts_smooth[p1], counts_smooth[p2])
         valley_ratio = valley_depth / max(peak_min_height, 1e-10)
 
-        is_bimodal = (separation >= min_separation
-                      and valley_ratio < 0.75
-                      and len(mode1_vals) >= n * 0.1
-                      and len(mode2_vals) >= n * 0.1)
+        is_bimodal = (
+            separation >= min_separation
+            and valley_ratio < 0.75
+            and len(mode1_vals) >= n * 0.1
+            and len(mode2_vals) >= n * 0.1
+        )
 
         return {
-            'is_bimodal': bool(is_bimodal),
-            'n_modes': 2 if is_bimodal else 1,
-            'valley': valley_val,
-            'mode1_mean': mode1_mean,
-            'mode2_mean': mode2_mean,
-            'separation_sigma': round(separation, 2),
+            "is_bimodal": bool(is_bimodal),
+            "n_modes": 2 if is_bimodal else 1,
+            "valley": valley_val,
+            "mode1_mean": mode1_mean,
+            "mode2_mean": mode2_mean,
+            "separation_sigma": round(separation, 2),
         }
 
     return {
-        'is_bimodal': False, 'n_modes': 1,
-        'valley': None,
-        'mode1_mean': float(values.mean()),
-        'mode2_mean': None,
-        'separation_sigma': 0,
+        "is_bimodal": False,
+        "n_modes": 1,
+        "valley": None,
+        "mode1_mean": float(values.mean()),
+        "mode2_mean": None,
+        "separation_sigma": 0,
     }
 
 
-def validate_count(n_cells, fov_area_um2, areas_px=None, pixel_size_um=1.0,
-                   expected_density=None, sample_type='generic'):
+def validate_count(
+    n_cells,
+    fov_area_um2,
+    areas_px=None,
+    pixel_size_um=1.0,
+    expected_density=None,
+    sample_type="generic",
+):
     """Combined sanity check for cell counting results.
 
     Runs density check, size check, and provides overall assessment.
@@ -297,10 +338,10 @@ def validate_count(n_cells, fov_area_um2, areas_px=None, pixel_size_um=1.0,
     """
     # Size range by sample type
     size_ranges = {
-        'bacteria': (0.5, 20),
-        'mammalian': (50, 5000),
-        'tissue': (20, 2000),
-        'generic': (5, 5000),
+        "bacteria": (0.5, 20),
+        "mammalian": (50, 5000),
+        "tissue": (20, 2000),
+        "generic": (5, 5000),
     }
     min_sz, max_sz = size_ranges.get(sample_type, (5, 5000))
 
@@ -308,42 +349,44 @@ def validate_count(n_cells, fov_area_um2, areas_px=None, pixel_size_um=1.0,
     suggestions = []
 
     # Density check
-    checks['density'] = check_density(n_cells, fov_area_um2,
-                                       expected_density=expected_density)
-    if checks['density']['status'] != 'ok':
-        if checks['density']['status'] == 'too_dense':
-            suggestions.append('Verify at higher magnification — may be detecting noise')
-            suggestions.append('Try cross-validating with a second channel')
-        elif checks['density']['status'] == 'too_sparse':
-            suggestions.append('Check if sample is in the FOV — try 10x overview first')
-            suggestions.append('Lower detection threshold or check edge exclusion')
+    checks["density"] = check_density(n_cells, fov_area_um2, expected_density=expected_density)
+    if checks["density"]["status"] != "ok":
+        if checks["density"]["status"] == "too_dense":
+            suggestions.append("Verify at higher magnification — may be detecting noise")
+            suggestions.append("Try cross-validating with a second channel")
+        elif checks["density"]["status"] == "too_sparse":
+            suggestions.append("Check if sample is in the FOV — try 10x overview first")
+            suggestions.append("Lower detection threshold or check edge exclusion")
 
     # Size check
     if areas_px is not None and len(areas_px) > 0:
-        checks['size'] = check_size_range(areas_px, pixel_size_um, min_sz, max_sz)
-        if checks['size']['status'] == 'many_small':
-            suggestions.append(f'Many objects below {min_sz} µm² — likely noise. '
-                              f'Increase min_area or use morphological filtering')
-        elif checks['size']['status'] == 'many_large':
-            suggestions.append(f'Many objects above {max_sz} µm² — clusters? '
-                              f'Try watershed splitting')
+        checks["size"] = check_size_range(areas_px, pixel_size_um, min_sz, max_sz)
+        if checks["size"]["status"] == "many_small":
+            suggestions.append(
+                f"Many objects below {min_sz} µm² — likely noise. "
+                f"Increase min_area or use morphological filtering"
+            )
+        elif checks["size"]["status"] == "many_large":
+            suggestions.append(
+                f"Many objects above {max_sz} µm² — clusters? " f"Try watershed splitting"
+            )
 
     # Overall status
-    statuses = [c['status'] for c in checks.values()]
-    if all(s == 'ok' for s in statuses):
-        status = 'ok'
-        message = f'{n_cells} cells detected — all checks passed'
-    elif any(s in ('too_dense', 'too_sparse', 'many_small') for s in statuses):
-        status = 'warning'
-        messages = [c['message'] for c in checks.values() if c['status'] != 'ok']
-        message = '; '.join(messages)
+    statuses = [c["status"] for c in checks.values()]
+    if all(s == "ok" for s in statuses):
+        status = "ok"
+        message = f"{n_cells} cells detected — all checks passed"
+    elif any(s in ("too_dense", "too_sparse", "many_small") for s in statuses):
+        status = "warning"
+        messages = [c["message"] for c in checks.values() if c["status"] != "ok"]
+        message = "; ".join(messages)
     else:
-        status = 'ok'
-        message = f'{n_cells} cells detected — minor issues noted'
+        status = "ok"
+        message = f"{n_cells} cells detected — minor issues noted"
 
     return {
-        'status': status,
-        'checks': checks,
-        'message': message,
-        'suggestions': suggestions,
+        "status": status,
+        "checks": checks,
+        "message": message,
+        "suggestions": suggestions,
     }

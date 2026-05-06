@@ -98,13 +98,13 @@ def ring_radii(image, center=None, threshold=None, n_angles=360):
     valid_angles = np.array(valid_angles)
 
     return {
-        'inner_radii': inner_radii,
-        'outer_radii': outer_radii,
-        'angles': valid_angles,
-        'inner_mean': float(inner_radii.mean()),
-        'outer_mean': float(outer_radii.mean()),
-        'inner_std': float(inner_radii.std()),
-        'outer_std': float(outer_radii.std()),
+        "inner_radii": inner_radii,
+        "outer_radii": outer_radii,
+        "angles": valid_angles,
+        "inner_mean": float(inner_radii.mean()),
+        "outer_mean": float(outer_radii.mean()),
+        "inner_std": float(inner_radii.std()),
+        "outer_std": float(outer_radii.std()),
     }
 
 
@@ -124,7 +124,7 @@ def measure_ring(image, center=None, threshold=None, pixel_size=1.0):
         dict with outer_diameter_um, inner_diameter_um, wall_thickness_um,
         center, and raw radii data.
     """
-    from skimage.measure import regionprops, label
+    from skimage.measure import label, regionprops
 
     radii = ring_radii(image, center=center, threshold=threshold)
 
@@ -141,11 +141,11 @@ def measure_ring(image, center=None, threshold=None, pixel_size=1.0):
     lbl, n = ndimage.label(mask)
     if n == 0:
         return {
-            'outer_diameter_um': 2 * radii['outer_mean'] * pixel_size,
-            'inner_diameter_um': 2 * radii['inner_mean'] * pixel_size,
-            'wall_thickness_um': (radii['outer_mean'] - radii['inner_mean']) * pixel_size,
-            'center': center,
-            'radii': radii,
+            "outer_diameter_um": 2 * radii["outer_mean"] * pixel_size,
+            "inner_diameter_um": 2 * radii["inner_mean"] * pixel_size,
+            "wall_thickness_um": (radii["outer_mean"] - radii["inner_mean"]) * pixel_size,
+            "center": center,
+            "radii": radii,
         }
 
     sizes = ndimage.sum(mask, lbl, range(1, n + 1))
@@ -153,7 +153,9 @@ def measure_ring(image, center=None, threshold=None, pixel_size=1.0):
     filled = ndimage.binary_fill_holes(wall_mask)
 
     fp = regionprops(filled.astype(int))
-    outer_d = fp[0].equivalent_diameter_area * pixel_size if fp else 2 * radii['outer_mean'] * pixel_size
+    outer_d = (
+        fp[0].equivalent_diameter_area * pixel_size if fp else 2 * radii["outer_mean"] * pixel_size
+    )
 
     # Lumen = hole in the filled ring
     hole = filled & ~wall_mask
@@ -163,32 +165,32 @@ def measure_ring(image, center=None, threshold=None, pixel_size=1.0):
         if center is not None:
             cx, cy = center
         else:
-            cx, cy = radii.get('center', (smooth.shape[1] / 2, smooth.shape[0] / 2))
+            cx, cy = radii.get("center", (smooth.shape[1] / 2, smooth.shape[0] / 2))
         # Pick the center-connected hole
         center_hole = max(
-            [h for h in hp if np.sqrt((h.centroid[1] - cx)**2 + (h.centroid[0] - cy)**2) < 50],
-            key=lambda h: h.area, default=None
+            [h for h in hp if np.sqrt((h.centroid[1] - cx) ** 2 + (h.centroid[0] - cy) ** 2) < 50],
+            key=lambda h: h.area,
+            default=None,
         )
         if center_hole:
             inner_d = center_hole.equivalent_diameter_area * pixel_size
         else:
-            inner_d = 2 * radii['inner_mean'] * pixel_size
+            inner_d = 2 * radii["inner_mean"] * pixel_size
     else:
-        inner_d = 2 * radii['inner_mean'] * pixel_size
+        inner_d = 2 * radii["inner_mean"] * pixel_size
 
     wall_t = (outer_d - inner_d) / 2
 
     return {
-        'outer_diameter_um': float(outer_d),
-        'inner_diameter_um': float(inner_d),
-        'wall_thickness_um': float(wall_t),
-        'center': center or find_ring_center(mask),
-        'radii': radii,
+        "outer_diameter_um": float(outer_d),
+        "inner_diameter_um": float(inner_d),
+        "wall_thickness_um": float(wall_t),
+        "center": center or find_ring_center(mask),
+        "radii": radii,
     }
 
 
-def find_best_z_plane(stack, z_positions, metric='filled_area',
-                      signal_threshold=5):
+def find_best_z_plane(stack, z_positions, metric="filled_area", signal_threshold=5):
     """Find the Z-plane with the best metric for a ring structure.
 
     Args:
@@ -203,7 +205,7 @@ def find_best_z_plane(stack, z_positions, metric='filled_area',
     """
     scores = np.zeros(len(z_positions))
 
-    for i, z in enumerate(z_positions):
+    for i, _z in enumerate(z_positions):
         img = stack[i].astype(float)
         smooth = gaussian_filter(img, sigma=1)
         mask = smooth > signal_threshold
@@ -215,15 +217,15 @@ def find_best_z_plane(stack, z_positions, metric='filled_area',
         sizes = ndimage.sum(mask, lbl, range(1, n + 1))
         largest = lbl == (np.argmax(sizes) + 1)
 
-        if metric == 'filled_area':
+        if metric == "filled_area":
             filled = ndimage.binary_fill_holes(largest)
             scores[i] = filled.sum()
-        elif metric == 'ring_contrast':
+        elif metric == "ring_contrast":
             scores[i] = img[largest].mean() if largest.sum() > 0 else 0
 
     best_idx = int(np.argmax(scores))
     return {
-        'best_z': float(z_positions[best_idx]),
-        'best_idx': best_idx,
-        'scores': scores,
+        "best_z": float(z_positions[best_idx]),
+        "best_idx": best_idx,
+        "scores": scores,
     }

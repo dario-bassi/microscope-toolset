@@ -14,14 +14,12 @@ Key classes:
 from __future__ import annotations
 
 import re
-import warnings
 from dataclasses import dataclass, field
-from typing import Optional
-
 
 # ---------------------------------------------------------------------------
 # MicroscopeConfig
 # ---------------------------------------------------------------------------
+
 
 @dataclass(frozen=True)
 class MicroscopeConfig:
@@ -43,18 +41,19 @@ class MicroscopeConfig:
         objective_labels: Mapping of state index to label string.
         slm_device: SLM device name, or None.
     """
+
     image_width: int
     image_height: int
     pixel_size_um: float
     n_components: int = 1
 
-    channel_group: Optional[str] = None
+    channel_group: str | None = None
     available_channels: tuple = field(default_factory=tuple)
-    xy_device: Optional[str] = None
-    z_device: Optional[str] = None
-    objective_device: Optional[str] = None
+    xy_device: str | None = None
+    z_device: str | None = None
+    objective_device: str | None = None
     objective_labels: tuple = field(default_factory=tuple)  # ((idx, label), ...)
-    slm_device: Optional[str] = None
+    slm_device: str | None = None
 
     # ------------------------------------------------------------------
     # Derived properties
@@ -79,14 +78,14 @@ class MicroscopeConfig:
         """Field of view height in micrometers."""
         return self.image_height * self.pixel_size_um
 
-    def magnification_for_label(self, label: str) -> Optional[int]:
+    def magnification_for_label(self, label: str) -> int | None:
         """Parse magnification from an objective label string.
 
         Handles formats like "10x", "Plan 40x ELWD", "Nikon 100x Oil", etc.
         """
         return _parse_mag_from_label(label)
 
-    def state_for_mag(self, mag: int) -> Optional[int]:
+    def state_for_mag(self, mag: int) -> int | None:
         """Find the objective state index for a given magnification."""
         for idx, label in self.objective_labels:
             parsed = _parse_mag_from_label(label)
@@ -94,7 +93,7 @@ class MicroscopeConfig:
                 return idx
         return None
 
-    def current_magnification(self, core) -> Optional[int]:
+    def current_magnification(self, core) -> int | None:
         """Get current objective magnification by reading core state."""
         if self.objective_device is None:
             return None
@@ -122,7 +121,7 @@ class MicroscopeConfig:
     # ------------------------------------------------------------------
 
     @classmethod
-    def from_core(cls, core, pixel_size_um: Optional[float] = None) -> MicroscopeConfig:
+    def from_core(cls, core, pixel_size_um: float | None = None) -> MicroscopeConfig:
         """Discover microscope configuration from a live core instance.
 
         Args:
@@ -195,18 +194,13 @@ class MicroscopeConfig:
 
                     # If state labels are generic ("State-0"), try Label
                     # property which some proxies expose with real names
-                    if all(_parse_mag_from_label(lbl) is None
-                           for _, lbl in objective_labels):
+                    if all(_parse_mag_from_label(lbl) is None for _, lbl in objective_labels):
                         try:
-                            allowed = list(core.getAllowedPropertyValues(
-                                obj_name, "Label"))
-                            if (len(allowed) == len(objective_labels)
-                                    and any(_parse_mag_from_label(a)
-                                            for a in allowed)):
-                                objective_labels = [
-                                    (i, allowed[i])
-                                    for i in range(len(allowed))
-                                ]
+                            allowed = list(core.getAllowedPropertyValues(obj_name, "Label"))
+                            if len(allowed) == len(objective_labels) and any(
+                                _parse_mag_from_label(a) for a in allowed
+                            ):
+                                objective_labels = [(i, allowed[i]) for i in range(len(allowed))]
                         except Exception:
                             pass
                     break
@@ -227,7 +221,9 @@ class MicroscopeConfig:
             px_size = float(pixel_size_um)
         else:
             px_size = _discover_pixel_size(
-                core, objective_labels, width,
+                core,
+                objective_labels,
+                width,
                 objective_device=objective_device,
             )
 
@@ -283,10 +279,10 @@ def clear_config_cache():
 # Internal helpers
 # ---------------------------------------------------------------------------
 
-_MAG_RE = re.compile(r'(\d+)\s*[xX]')
+_MAG_RE = re.compile(r"(\d+)\s*[xX]")
 
 
-def _parse_mag_from_label(label: str) -> Optional[int]:
+def _parse_mag_from_label(label: str) -> int | None:
     """Extract magnification integer from an objective label.
 
     Handles: "10x", "Plan 40x ELWD", "Nikon 100x/1.4 Oil", "State-0", etc.
@@ -297,8 +293,7 @@ def _parse_mag_from_label(label: str) -> Optional[int]:
     return None
 
 
-def _discover_pixel_size(core, objective_labels, image_width,
-                         objective_device=None) -> float:
+def _discover_pixel_size(core, objective_labels, image_width, objective_device=None) -> float:
     """Try to determine pixel size from core or objective labels.
 
     Strategy:
@@ -323,7 +318,7 @@ def _discover_pixel_size(core, objective_labels, image_width,
     return 1.0
 
 
-def _current_mag(core, objective_device, objective_labels) -> 'int | None':
+def _current_mag(core, objective_device, objective_labels) -> int | None:
     """Get the current objective magnification."""
     if objective_device is None:
         return None

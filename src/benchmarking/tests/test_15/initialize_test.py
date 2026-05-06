@@ -2,8 +2,8 @@
 
 
 def create_sim_override():
-    from virtual_microscope.sims.cell.sim import ScatteredCellSim
     from virtual_microscope.pipeline.optical_pipeline import OpticalPipeline
+    from virtual_microscope.sims.cell.sim import ScatteredCellSim
 
     sim = ScatteredCellSim(
         width=TEST_CONFIG["width"],
@@ -17,9 +17,9 @@ def create_sim_override():
 
     noisy_cfg = {
         "photon_scale": TEST_CONFIG["photon_scale"],
-        "read_std":     TEST_CONFIG["read_std"],
+        "read_std": TEST_CONFIG["read_std"],
         "dark_current": TEST_CONFIG["dark_current"],
-        "banding_std":  TEST_CONFIG["banding_std"],
+        "banding_std": TEST_CONFIG["banding_std"],
     }
     sim._pipeline[1] = OpticalPipeline(psf_sigma=0.6, noise=noisy_cfg)
     sim._pipeline[2] = OpticalPipeline(psf_sigma=0.6, noise=noisy_cfg)

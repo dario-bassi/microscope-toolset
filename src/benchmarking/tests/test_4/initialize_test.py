@@ -21,7 +21,7 @@ def create_sim_override():
         size=TEST_CONFIG["n_cells"],
     )
 
-    for i, (cell, r) in enumerate(zip(sim._cells, radii_um)):
+    for i, (cell, r) in enumerate(zip(sim._cells, radii_um, strict=False)):
         cell.base_r = float(r)
         cell.area0 = float(np.pi * r**2)
         cell.brownian_d = TEST_CONFIG["brownian_d"]

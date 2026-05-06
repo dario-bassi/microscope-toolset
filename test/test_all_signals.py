@@ -47,9 +47,7 @@ import numpy as np
 import pytest
 
 _ROOT = pathlib.Path(__file__).parent.parent
-_PARTICLE_CFG = (
-    _ROOT / "virtual-microscope/src/virtual_microscope/backends/particle/particle.cfg"
-)
+_PARTICLE_CFG = _ROOT / "virtual-microscope/src/virtual_microscope/backends/particle/particle.cfg"
 
 _SKIP = pytest.mark.skipif(
     os.environ.get("VIRTUAL_MICROSCOPE_TESTS") != "1",
@@ -62,6 +60,7 @@ pytestmark = _SKIP
 # ---------------------------------------------------------------------------
 # Fixtures
 # ---------------------------------------------------------------------------
+
 
 def _free_port() -> int:
     with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
@@ -79,10 +78,12 @@ def virtual_core():
         pytest.skip(f"particle.cfg not found at {_PARTICLE_CFG}")
 
     import os as _os
+
     _old = _os.environ.get("PYMM_SIGNALS_BACKEND")
     _os.environ["PYMM_SIGNALS_BACKEND"] = "psygnal"
     try:
         from pymmcore_plus.experimental.unicore import UniMMCore
+
         core = UniMMCore()
     finally:
         if _old is None:
@@ -110,6 +111,7 @@ def server_url(virtual_core):
     url = f"http://127.0.0.1:{port}"
     deadline = time.monotonic() + 15.0
     import httpx
+
     while time.monotonic() < deadline:
         try:
             r = httpx.get(f"{url}/health", timeout=1.0)
@@ -134,7 +136,7 @@ def core(server_url):
     from pymmcore_proxy import RemoteMMCore
 
     client = RemoteMMCore(server_url, connect_signals=True)
-    time.sleep(0.3)   # let signal listener connect
+    time.sleep(0.3)  # let signal listener connect
     yield client
     client.close()
 
@@ -143,6 +145,7 @@ def core(server_url):
 # Helpers
 # ---------------------------------------------------------------------------
 
+
 def _subscribe(core_events, signal_names: list[str]):
     done: dict[str, threading.Event] = {}
     handlers: dict[str, object] = {}
@@ -150,6 +153,7 @@ def _subscribe(core_events, signal_names: list[str]):
     def make_handler(name):
         def h(*args):
             done[name].set()
+
         return h
 
     for s in signal_names:
@@ -180,6 +184,7 @@ def _wait(done: dict, name: str, timeout: float = 3.0) -> str:
 # Group 1 — Property & config signals
 # ---------------------------------------------------------------------------
 
+
 class TestPropertyAndConfigSignals:
     # propertiesChanged excluded — UniMMCore never emits this batch signal (see module docstring)
     SIGS = ["exposureChanged", "propertyChanged", "configSet"]
@@ -199,7 +204,7 @@ class TestPropertyAndConfigSignals:
         done, handlers = _subscribe(core.events, self.SIGS)
         try:
             core.setConfig("Channel", "membrane")
-            core.setConfig("Channel", "DAPI")   # changes LED + Filter Wheel → fires signal
+            core.setConfig("Channel", "DAPI")  # changes LED + Filter Wheel → fires signal
             assert _wait(done, "propertyChanged") == "OK", "propertyChanged timed out"
         finally:
             _unsubscribe(core.events, self.SIGS, handlers)
@@ -217,6 +222,7 @@ class TestPropertyAndConfigSignals:
 # ---------------------------------------------------------------------------
 # Group 2 — Stage movement signals
 # ---------------------------------------------------------------------------
+
 
 class TestStageSignals:
     SIGS = ["XYStagePositionChanged", "stagePositionChanged"]
@@ -244,6 +250,7 @@ class TestStageSignals:
 # ---------------------------------------------------------------------------
 # Group 3 — Shutter & snap signals
 # ---------------------------------------------------------------------------
+
 
 class TestShutterAndSnapSignals:
     SIGS = ["autoShutterSet", "shutterOpenChanged", "imageSnapped"]
@@ -279,6 +286,7 @@ class TestShutterAndSnapSignals:
 # ---------------------------------------------------------------------------
 # Group 4 — Config CRUD & ROI signals
 # ---------------------------------------------------------------------------
+
 
 class TestConfigCrudAndRoiSignals:
     SIGS = ["roiSet", "configDefined", "configDeleted", "configGroupDeleted"]
@@ -317,14 +325,17 @@ class TestConfigCrudAndRoiSignals:
 # Group 5 — MDA signals
 # ---------------------------------------------------------------------------
 
+
 class TestMDASignals:
     # awaitingEvent excluded — see module docstring. The particle camera's per-frame
     # cost always exceeds any practical interval, so remaining is never positive.
     # sequencePauseToggled excluded here — it needs an explicit pause mid-run and is
     # covered by the dedicated test_pause_and_resume test below.
     MDA_SIGS = [
-        "sequenceStarted", "sequenceFinished",
-        "eventStarted", "frameReady",
+        "sequenceStarted",
+        "sequenceFinished",
+        "eventStarted",
+        "frameReady",
     ]
 
     def test_all_mda_signals_fire(self, core):
@@ -345,6 +356,7 @@ class TestMDASignals:
 
     def test_pause_and_resume(self, core):
         import threading as _threading
+
         from useq import MDASequence
 
         paused_signals = []
@@ -362,17 +374,17 @@ class TestMDASignals:
             if len(frames) == 2 and not _triggered.is_set():
                 _triggered.set()
                 core.mda.set_paused(True)
+
                 def resume_and_cancel():
                     time.sleep(0.5)
                     core.mda.set_paused(False)
                     time.sleep(0.5)
                     core.mda.cancel()
+
                 _threading.Thread(target=resume_and_cancel, daemon=True).start()
 
         core.mda.events.frameReady.connect(on_frame)
-        core.mda.events.sequencePauseToggled.connect(
-            lambda p: paused_signals.append(p)
-        )
+        core.mda.events.sequencePauseToggled.connect(lambda p: paused_signals.append(p))
         try:
             # Use enough loops so the sequence outlasts the pause/resume cycle
             seq = MDASequence(time_plan={"loops": 100, "interval": 0})

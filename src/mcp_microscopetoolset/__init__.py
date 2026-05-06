@@ -1,6 +1,6 @@
-from .utils import get_user_information, logger_database_exists
-from .server_setup import create_mcp_server
 from .agents_init import initialize_agents
+from .server_setup import create_mcp_server
+from .utils import get_user_information, logger_database_exists
 from .viewer import NapariViewerMC
 
 __all__ = [

@@ -10,10 +10,10 @@ Key functions:
 """
 
 import numpy as np
-from skimage.filters import threshold_otsu, threshold_triangle, threshold_li
+from skimage.filters import threshold_li, threshold_otsu, threshold_triangle
 
 
-def auto_threshold(image, method='auto', background_fraction=0.5):
+def auto_threshold(image, method="auto", background_fraction=0.5):
     """Select an appropriate threshold for a microscopy image.
 
     Analyzes the image histogram to determine whether Otsu, triangle,
@@ -35,53 +35,50 @@ def auto_threshold(image, method='auto', background_fraction=0.5):
     """
     img = np.asarray(image, dtype=np.float64)
     if img.size == 0:
-        return {'threshold': 0.0, 'method': 'empty', 'image_stats': {}}
+        return {"threshold": 0.0, "method": "empty", "image_stats": {}}
 
     stats = {
-        'mean': float(img.mean()),
-        'std': float(img.std()),
-        'min': float(img.min()),
-        'max': float(img.max()),
-        'p5': float(np.percentile(img, 5)),
-        'p95': float(np.percentile(img, 95)),
-        'dynamic_range': float(img.max() - img.min()),
+        "mean": float(img.mean()),
+        "std": float(img.std()),
+        "min": float(img.min()),
+        "max": float(img.max()),
+        "p5": float(np.percentile(img, 5)),
+        "p95": float(np.percentile(img, 95)),
+        "dynamic_range": float(img.max() - img.min()),
     }
 
-    if method == 'otsu':
+    if method == "otsu":
         thresh = float(threshold_otsu(img))
-        return {'threshold': thresh, 'method': 'otsu', 'image_stats': stats}
+        return {"threshold": thresh, "method": "otsu", "image_stats": stats}
 
-    elif method == 'triangle':
+    elif method == "triangle":
         thresh = float(threshold_triangle(img))
-        return {'threshold': thresh, 'method': 'triangle', 'image_stats': stats}
+        return {"threshold": thresh, "method": "triangle", "image_stats": stats}
 
-    elif method == 'li':
+    elif method == "li":
         thresh = float(threshold_li(img))
-        return {'threshold': thresh, 'method': 'li', 'image_stats': stats}
+        return {"threshold": thresh, "method": "li", "image_stats": stats}
 
-    elif method == 'percentile':
+    elif method == "percentile":
         # Objects are bright outliers above background
         thresh = float(np.percentile(img, 95))
-        return {'threshold': thresh, 'method': 'percentile_95',
-                'image_stats': stats}
+        return {"threshold": thresh, "method": "percentile_95", "image_stats": stats}
 
-    elif method == 'background':
+    elif method == "background":
         # Estimate background from the majority of pixels
         sorted_vals = np.sort(img.ravel())
         n_bg = int(len(sorted_vals) * background_fraction)
         bg = sorted_vals[:n_bg]
         thresh = float(bg.mean() + 3 * bg.std())
-        stats['bg_mean'] = float(bg.mean())
-        stats['bg_std'] = float(bg.std())
-        return {'threshold': thresh, 'method': 'background_3sigma',
-                'image_stats': stats}
+        stats["bg_mean"] = float(bg.mean())
+        stats["bg_std"] = float(bg.std())
+        return {"threshold": thresh, "method": "background_3sigma", "image_stats": stats}
 
     # Auto mode: analyze histogram to pick best method
-    if stats['dynamic_range'] < 10:
+    if stats["dynamic_range"] < 10:
         # Very low contrast — use percentile
         thresh = float(np.percentile(img, 97))
-        return {'threshold': thresh, 'method': 'percentile_97_low_contrast',
-                'image_stats': stats}
+        return {"threshold": thresh, "method": "percentile_97_low_contrast", "image_stats": stats}
 
     # Check if bimodal (objects vs background)
     try:
@@ -90,8 +87,7 @@ def auto_threshold(image, method='auto', background_fraction=0.5):
         above = float((img > otsu_val).sum()) / img.size
         if 0.05 < above < 0.7:
             # Good bimodal split
-            return {'threshold': otsu_val, 'method': 'otsu',
-                    'image_stats': stats}
+            return {"threshold": otsu_val, "method": "otsu", "image_stats": stats}
     except ValueError:
         pass
 
@@ -100,10 +96,9 @@ def auto_threshold(image, method='auto', background_fraction=0.5):
     n_bg = int(len(sorted_vals) * background_fraction)
     bg = sorted_vals[:n_bg]
     thresh = float(bg.mean() + 3 * bg.std())
-    stats['bg_mean'] = float(bg.mean())
-    stats['bg_std'] = float(bg.std())
-    return {'threshold': thresh, 'method': 'background_3sigma',
-            'image_stats': stats}
+    stats["bg_mean"] = float(bg.mean())
+    stats["bg_std"] = float(bg.std())
+    return {"threshold": thresh, "method": "background_3sigma", "image_stats": stats}
 
 
 def threshold_sweep(image, thresholds, count_fn=None, min_area=5):
@@ -158,15 +153,14 @@ def threshold_sweep(image, thresholds, count_fn=None, min_area=5):
         best_threshold = float(thresholds_arr[0]) if len(thresholds_arr) > 0 else 0
 
     return {
-        'thresholds': list(thresholds),
-        'counts': counts.tolist(),
-        'areas_median': areas_median,
-        'best_threshold': best_threshold,
+        "thresholds": list(thresholds),
+        "counts": counts.tolist(),
+        "areas_median": areas_median,
+        "best_threshold": best_threshold,
     }
 
 
-def detect_with_retry(image, detect_fn, quality_fn=None, max_retries=3,
-                      threshold_range=None):
+def detect_with_retry(image, detect_fn, quality_fn=None, max_retries=3, threshold_range=None):
     """Run detection with automatic retry on quality failure.
 
     If the initial detection fails quality checks, adjusts the threshold
@@ -192,7 +186,7 @@ def detect_with_retry(image, detect_fn, quality_fn=None, max_retries=3,
     """
     # Initial threshold
     auto = auto_threshold(image)
-    initial_thresh = auto['threshold']
+    initial_thresh = auto["threshold"]
 
     if threshold_range is None:
         low = initial_thresh * 0.5
@@ -217,19 +211,19 @@ def detect_with_retry(image, detect_fn, quality_fn=None, max_retries=3,
         if quality_fn is not None:
             q = quality_fn(det)
             quality_results.append(q)
-            if q.get('status') == 'ok':
+            if q.get("status") == "ok":
                 return {
-                    'result': det,
-                    'attempts': len(results),
-                    'thresholds_tried': thresholds_to_try[:len(results)],
-                    'quality_results': quality_results,
+                    "result": det,
+                    "attempts": len(results),
+                    "thresholds_tried": thresholds_to_try[: len(results)],
+                    "quality_results": quality_results,
                 }
         else:
             return {
-                'result': det,
-                'attempts': 1,
-                'thresholds_tried': [t],
-                'quality_results': [],
+                "result": det,
+                "attempts": 1,
+                "thresholds_tried": [t],
+                "quality_results": [],
             }
 
     # No threshold passed quality — return best (most 'ok'-like)
@@ -237,19 +231,19 @@ def detect_with_retry(image, detect_fn, quality_fn=None, max_retries=3,
         # Prefer 'ok', then lowest count difference from expected
         best_idx = 0
         for i, q in enumerate(quality_results):
-            if q.get('status') == 'ok':
+            if q.get("status") == "ok":
                 best_idx = i
                 break
         return {
-            'result': results[best_idx],
-            'attempts': len(results),
-            'thresholds_tried': thresholds_to_try[:len(results)],
-            'quality_results': quality_results,
+            "result": results[best_idx],
+            "attempts": len(results),
+            "thresholds_tried": thresholds_to_try[: len(results)],
+            "quality_results": quality_results,
         }
 
     return {
-        'result': results[0] if results else {},
-        'attempts': len(results),
-        'thresholds_tried': thresholds_to_try[:len(results)],
-        'quality_results': quality_results,
+        "result": results[0] if results else {},
+        "attempts": len(results),
+        "thresholds_tried": thresholds_to_try[: len(results)],
+        "quality_results": quality_results,
     }

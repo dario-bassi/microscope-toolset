@@ -26,7 +26,7 @@ Real microscope note:
 
 import numpy as np
 from scipy import ndimage
-from skimage import filters, morphology, measure
+from skimage import filters, measure, morphology
 from skimage.color import rgb2hed
 from skimage.feature import peak_local_max
 from skimage.segmentation import watershed
@@ -53,14 +53,13 @@ def deconvolve_hae(image):
 
     hed = rgb2hed(image)
     return {
-        'hematoxylin': hed[:, :, 0],
-        'eosin': hed[:, :, 1],
-        'dab': hed[:, :, 2],
+        "hematoxylin": hed[:, :, 0],
+        "eosin": hed[:, :, 1],
+        "dab": hed[:, :, 2],
     }
 
 
-def segment_nuclei_hae(image, min_area=30, max_area=8000,
-                       min_distance=8):
+def segment_nuclei_hae(image, min_area=30, max_area=8000, min_distance=8):
     """Segment nuclei from an H&E image using hematoxylin channel.
 
     Performs color deconvolution, Otsu thresholding, and watershed
@@ -81,7 +80,7 @@ def segment_nuclei_hae(image, min_area=30, max_area=8000,
             threshold: float, Otsu threshold applied.
     """
     stains = deconvolve_hae(image)
-    h = stains['hematoxylin']
+    h = stains["hematoxylin"]
 
     h_thresh = filters.threshold_otsu(h)
     mask = h > h_thresh
@@ -114,11 +113,11 @@ def segment_nuclei_hae(image, min_area=30, max_area=8000,
         filtered_props = []
 
     return {
-        'labeled': filtered,
-        'props': filtered_props,
-        'n_nuclei': len(filtered_props),
-        'hematoxylin': h,
-        'threshold': float(h_thresh),
+        "labeled": filtered,
+        "props": filtered_props,
+        "n_nuclei": len(filtered_props),
+        "hematoxylin": h,
+        "threshold": float(h_thresh),
     }
 
 
@@ -142,8 +141,8 @@ def detect_necrosis(image, min_area=200):
             patch_areas: list of int, areas of necrotic patches.
     """
     stains = deconvolve_hae(image)
-    h = stains['hematoxylin']
-    e = stains['eosin']
+    h = stains["hematoxylin"]
+    e = stains["eosin"]
 
     # Nuclear mask
     h_thresh = filters.threshold_otsu(h)
@@ -163,8 +162,7 @@ def detect_necrosis(image, min_area=200):
     if len(e_in_tissue) == 0:
         e_thresh = 0
     else:
-        e_thresh = np.percentile(e_in_tissue[e_in_tissue > 0], 50) \
-            if (e_in_tissue > 0).any() else 0
+        e_thresh = np.percentile(e_in_tissue[e_in_tissue > 0], 50) if (e_in_tissue > 0).any() else 0
 
     necrotic = nuclear_free & tissue & (e > e_thresh)
     necrotic = morphology.remove_small_objects(necrotic, max_size=min_area - 1)
@@ -178,11 +176,11 @@ def detect_necrosis(image, min_area=200):
     necrosis_frac = necrotic.sum() / tissue_area if tissue_area > 0 else 0
 
     return {
-        'necrosis_present': len(props) > 0,
-        'necrosis_mask': necrotic,
-        'n_patches': len(props),
-        'necrosis_fraction': round(float(necrosis_frac), 4),
-        'patch_areas': patch_areas,
+        "necrosis_present": len(props) > 0,
+        "necrosis_mask": necrotic,
+        "n_patches": len(props),
+        "necrosis_fraction": round(float(necrosis_frac), 4),
+        "patch_areas": patch_areas,
     }
 
 
@@ -206,8 +204,8 @@ def assess_glands(image, min_cluster_area=1000):
     """
     seg = segment_nuclei_hae(image, max_area=50000)
     # Get large connected regions from nuclear mask
-    h = seg['hematoxylin']
-    h_thresh = seg['threshold']
+    h = seg["hematoxylin"]
+    h_thresh = seg["threshold"]
     nuc_mask = h > h_thresh
     nuc_mask = morphology.remove_small_objects(nuc_mask, max_size=29)
     nuc_mask = ndimage.binary_fill_holes(nuc_mask)
@@ -223,18 +221,18 @@ def assess_glands(image, min_cluster_area=1000):
     ratio = len(ring_glands) / total if total > 0 else 0
 
     if ratio > 0.75:
-        pattern = 'well-formed'
+        pattern = "well-formed"
     elif ratio > 0.10:
-        pattern = 'poorly-formed'
+        pattern = "poorly-formed"
     else:
-        pattern = 'absent'
+        pattern = "absent"
 
     return {
-        'n_ring_glands': len(ring_glands),
-        'n_solid_nests': len(solid_nests),
-        'total_structures': total,
-        'gland_ratio': round(ratio, 3),
-        'pattern': pattern,
+        "n_ring_glands": len(ring_glands),
+        "n_solid_nests": len(solid_nests),
+        "total_structures": total,
+        "gland_ratio": round(ratio, 3),
+        "pattern": pattern,
     }
 
 
@@ -253,8 +251,7 @@ def measure_pleomorphism(props):
             n_nuclei: int.
     """
     if not props:
-        return {'cv': 0, 'q75_q25_ratio': 1, 'mean_area': 0,
-                'std_area': 0, 'n_nuclei': 0}
+        return {"cv": 0, "q75_q25_ratio": 1, "mean_area": 0, "std_area": 0, "n_nuclei": 0}
 
     areas = np.array([p.area for p in props], dtype=float)
     mean_a = float(areas.mean())
@@ -266,17 +263,23 @@ def measure_pleomorphism(props):
     ratio = q75 / q25 if q25 > 0 else 1
 
     return {
-        'cv': round(cv, 3),
-        'q75_q25_ratio': round(ratio, 2),
-        'mean_area': round(mean_a, 1),
-        'std_area': round(std_a, 1),
-        'n_nuclei': len(areas),
+        "cv": round(cv, 3),
+        "q75_q25_ratio": round(ratio, 2),
+        "mean_area": round(mean_a, 1),
+        "std_area": round(std_a, 1),
+        "n_nuclei": len(areas),
     }
 
 
-def detect_mitoses(props, hematoxylin, labeled, max_area=800,
-                   stain_percentile=65, min_eccentricity=0.75,
-                   max_solidity=0.80):
+def detect_mitoses(
+    props,
+    hematoxylin,
+    labeled,
+    max_area=800,
+    stain_percentile=65,
+    min_eccentricity=0.75,
+    max_solidity=0.80,
+):
     """Detect mitotic figures from nuclear properties.
 
     Mitotic nuclei have condensed chromosomes: small-medium size,
@@ -298,13 +301,13 @@ def detect_mitoses(props, hematoxylin, labeled, max_area=800,
             candidates: list of regionprops of mitotic nuclei.
     """
     if not props:
-        return {'mitotic_count': 0, 'mitotic_index': 0, 'candidates': []}
+        return {"mitotic_count": 0, "mitotic_index": 0, "candidates": []}
 
     # Stain intensity threshold from nuclear regions
     nuc_mask = labeled > 0
     h_values = hematoxylin[nuc_mask]
     if len(h_values) == 0:
-        return {'mitotic_count': 0, 'mitotic_index': 0, 'candidates': []}
+        return {"mitotic_count": 0, "mitotic_index": 0, "candidates": []}
     stain_thresh = np.percentile(h_values, stain_percentile)
 
     candidates = []
@@ -322,9 +325,9 @@ def detect_mitoses(props, hematoxylin, labeled, max_area=800,
     mitotic_index = len(candidates) / len(props) if props else 0
 
     return {
-        'mitotic_count': len(candidates),
-        'mitotic_index': round(mitotic_index, 4),
-        'candidates': candidates,
+        "mitotic_count": len(candidates),
+        "mitotic_index": round(mitotic_index, 4),
+        "candidates": candidates,
     }
 
 
@@ -345,9 +348,9 @@ def grade_tumor(gland_pattern, q75_q25_ratio, mitotic_index):
             mitotic_score: int, 1-3.
     """
     # Tubule formation score
-    if gland_pattern == 'well-formed':
+    if gland_pattern == "well-formed":
         tubule = 1
-    elif gland_pattern == 'poorly-formed':
+    elif gland_pattern == "poorly-formed":
         tubule = 2
     else:
         tubule = 3
@@ -377,9 +380,9 @@ def grade_tumor(gland_pattern, q75_q25_ratio, mitotic_index):
         grade = 3
 
     return {
-        'grade': grade,
-        'total_score': total,
-        'tubule_score': tubule,
-        'pleomorphism_score': pleo,
-        'mitotic_score': mitotic,
+        "grade": grade,
+        "total_score": total,
+        "tubule_score": tubule,
+        "pleomorphism_score": pleo,
+        "mitotic_score": mitotic,
     }

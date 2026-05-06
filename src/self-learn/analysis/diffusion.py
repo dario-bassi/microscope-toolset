@@ -32,8 +32,7 @@ def compute_msd(positions, max_lag=None):
     N = len(pos)
 
     if N < 2:
-        return {'lags': np.array([]), 'msd': np.array([]),
-                'n_pairs': np.array([])}
+        return {"lags": np.array([]), "msd": np.array([]), "n_pairs": np.array([])}
 
     if max_lag is None:
         max_lag = max(1, N // 4)
@@ -45,11 +44,11 @@ def compute_msd(positions, max_lag=None):
 
     for tau in lags:
         displacements = pos[tau:] - pos[:-tau]
-        sq_disp = np.sum(displacements ** 2, axis=1)
+        sq_disp = np.sum(displacements**2, axis=1)
         msd[tau - 1] = float(sq_disp.mean())
         n_pairs[tau - 1] = len(sq_disp)
 
-    return {'lags': lags, 'msd': msd, 'n_pairs': n_pairs}
+    return {"lags": lags, "msd": msd, "n_pairs": n_pairs}
 
 
 def fit_diffusion(lags, msd, dt=1.0, n_dims=2, max_fit_lag=None):
@@ -77,16 +76,14 @@ def fit_diffusion(lags, msd, dt=1.0, n_dims=2, max_fit_lag=None):
     msd = np.asarray(msd, dtype=np.float64)
 
     if len(lags) < 2:
-        return {'D': 0.0, 'alpha': 1.0, 'D_error': 0.0,
-                'fit_type': 'insufficient_data'}
+        return {"D": 0.0, "alpha": 1.0, "D_error": 0.0, "fit_type": "insufficient_data"}
 
     times = lags * dt
 
     # Fit power law: log(MSD) = alpha * log(t) + log(A)
     valid = msd > 0
     if valid.sum() < 2:
-        return {'D': 0.0, 'alpha': 1.0, 'D_error': 0.0,
-                'fit_type': 'insufficient_data'}
+        return {"D": 0.0, "alpha": 1.0, "D_error": 0.0, "fit_type": "insufficient_data"}
 
     log_t = np.log(times[valid])
     log_msd = np.log(msd[valid])
@@ -95,7 +92,7 @@ def fit_diffusion(lags, msd, dt=1.0, n_dims=2, max_fit_lag=None):
     coeffs = np.polyfit(log_t, log_msd, 1)
     alpha = float(coeffs[0])
     log_A = float(coeffs[1])
-    A = float(np.exp(log_A))
+    float(np.exp(log_A))
 
     # Linear fit for D (using short lags only)
     if max_fit_lag is None:
@@ -112,7 +109,7 @@ def fit_diffusion(lags, msd, dt=1.0, n_dims=2, max_fit_lag=None):
         # Residuals for error estimate
         residuals = msd_fit - (slope * t_fit + intercept)
         if len(residuals) > 2:
-            rmse = float(np.sqrt(np.mean(residuals ** 2)))
+            rmse = float(np.sqrt(np.mean(residuals**2)))
             D_error = rmse / (2 * n_dims * np.sqrt(len(t_fit)))
         else:
             D_error = 0.0
@@ -122,19 +119,19 @@ def fit_diffusion(lags, msd, dt=1.0, n_dims=2, max_fit_lag=None):
 
     # Classify
     if alpha < 0.8:
-        fit_type = 'confined'
+        fit_type = "confined"
     elif alpha > 1.2:
-        fit_type = 'directed'
+        fit_type = "directed"
     elif 0.8 <= alpha <= 1.2:
-        fit_type = 'normal'
+        fit_type = "normal"
     else:
-        fit_type = 'anomalous'
+        fit_type = "anomalous"
 
     return {
-        'D': max(D, 0.0),
-        'alpha': alpha,
-        'D_error': D_error,
-        'fit_type': fit_type,
+        "D": max(D, 0.0),
+        "alpha": alpha,
+        "D_error": D_error,
+        "fit_type": fit_type,
     }
 
 
@@ -162,38 +159,38 @@ def classify_motion(positions, dt=1.0, n_dims=2):
 
     if N < 3:
         return {
-            'motion_type': 'stationary',
-            'D': 0.0, 'alpha': 1.0,
-            'total_displacement': 0.0,
-            'path_length': 0.0,
-            'straightness': 0.0,
+            "motion_type": "stationary",
+            "D": 0.0,
+            "alpha": 1.0,
+            "total_displacement": 0.0,
+            "path_length": 0.0,
+            "straightness": 0.0,
         }
 
     # MSD analysis
     msd_result = compute_msd(pos)
-    diff_result = fit_diffusion(msd_result['lags'], msd_result['msd'],
-                                dt=dt, n_dims=n_dims)
+    diff_result = fit_diffusion(msd_result["lags"], msd_result["msd"], dt=dt, n_dims=n_dims)
 
     # Displacement metrics
     steps = np.diff(pos, axis=0)
-    step_lengths = np.sqrt(np.sum(steps ** 2, axis=1))
+    step_lengths = np.sqrt(np.sum(steps**2, axis=1))
     path_length = float(step_lengths.sum())
     total_disp = float(np.sqrt(np.sum((pos[-1] - pos[0]) ** 2)))
     straightness = total_disp / path_length if path_length > 0 else 0.0
 
     # Override classification if effectively stationary
     if path_length < 1e-6:
-        motion_type = 'stationary'
+        motion_type = "stationary"
     else:
-        motion_type = diff_result['fit_type']
+        motion_type = diff_result["fit_type"]
 
     return {
-        'motion_type': motion_type,
-        'D': diff_result['D'],
-        'alpha': diff_result['alpha'],
-        'total_displacement': total_disp,
-        'path_length': path_length,
-        'straightness': straightness,
+        "motion_type": motion_type,
+        "D": diff_result["D"],
+        "alpha": diff_result["alpha"],
+        "total_displacement": total_disp,
+        "path_length": path_length,
+        "straightness": straightness,
     }
 
 
@@ -215,9 +212,14 @@ def ensemble_msd(trajectories, max_lag=None, dt=1.0):
             alpha: Ensemble anomalous exponent.
     """
     if not trajectories:
-        return {'lags': np.array([]), 'msd': np.array([]),
-                'msd_sem': np.array([]), 'n_trajectories': 0,
-                'D': 0.0, 'alpha': 1.0}
+        return {
+            "lags": np.array([]),
+            "msd": np.array([]),
+            "msd_sem": np.array([]),
+            "n_trajectories": 0,
+            "D": 0.0,
+            "alpha": 1.0,
+        }
 
     lengths = [len(t) for t in trajectories]
     min_len = min(lengths)
@@ -230,13 +232,18 @@ def ensemble_msd(trajectories, max_lag=None, dt=1.0):
     all_msd = []
     for traj in trajectories:
         result = compute_msd(traj, max_lag=max_lag)
-        if len(result['msd']) == max_lag:
-            all_msd.append(result['msd'])
+        if len(result["msd"]) == max_lag:
+            all_msd.append(result["msd"])
 
     if not all_msd:
-        return {'lags': np.arange(1, max_lag + 1), 'msd': np.zeros(max_lag),
-                'msd_sem': np.zeros(max_lag), 'n_trajectories': 0,
-                'D': 0.0, 'alpha': 1.0}
+        return {
+            "lags": np.arange(1, max_lag + 1),
+            "msd": np.zeros(max_lag),
+            "msd_sem": np.zeros(max_lag),
+            "n_trajectories": 0,
+            "D": 0.0,
+            "alpha": 1.0,
+        }
 
     all_msd = np.array(all_msd)
     lags = np.arange(1, max_lag + 1)
@@ -247,10 +254,10 @@ def ensemble_msd(trajectories, max_lag=None, dt=1.0):
     diff = fit_diffusion(lags, mean_msd, dt=dt)
 
     return {
-        'lags': lags,
-        'msd': mean_msd,
-        'msd_sem': sem_msd,
-        'n_trajectories': len(all_msd),
-        'D': diff['D'],
-        'alpha': diff['alpha'],
+        "lags": lags,
+        "msd": mean_msd,
+        "msd_sem": sem_msd,
+        "n_trajectories": len(all_msd),
+        "D": diff["D"],
+        "alpha": diff["alpha"],
     }

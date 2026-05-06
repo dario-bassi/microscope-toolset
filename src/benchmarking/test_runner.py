@@ -26,7 +26,6 @@ from __future__ import annotations
 
 import importlib.util
 import sys
-import tempfile
 from pathlib import Path
 from typing import Any
 
@@ -40,11 +39,20 @@ _YAML_FILENAME = "test.yaml"
 
 # Runner-level keys that are extracted explicitly in run_test() and must not
 # be forwarded to backend create_sim() as unknown kwargs.
-_RUNNER_KEYS = frozenset({
-    "title", "backend", "focal_plane", "channels",
-    "cell_type", "phase_contrast", "slm",
-    "time_scale", "tick_hz", "initial_properties",
-})
+_RUNNER_KEYS = frozenset(
+    {
+        "title",
+        "backend",
+        "focal_plane",
+        "channels",
+        "cell_type",
+        "phase_contrast",
+        "slm",
+        "time_scale",
+        "tick_hz",
+        "initial_properties",
+    }
+)
 
 
 class _TestSpec:
@@ -73,8 +81,7 @@ def _load_yaml_config(yaml_file: Path) -> dict:
         import yaml
     except ImportError as exc:
         raise ImportError(
-            "pyyaml is required for YAML test configs.  "
-            "Install with: pip install pyyaml"
+            "pyyaml is required for YAML test configs.  " "Install with: pip install pyyaml"
         ) from exc
 
     with yaml_file.open(encoding="utf-8") as fh:
@@ -121,7 +128,7 @@ def _load_test_module(test_name: str):
     init_file = test_dir / "initialize_test.py"
 
     has_yaml = yaml_file.exists()
-    has_py   = init_file.exists()
+    has_py = init_file.exists()
 
     if not has_yaml and not has_py:
         raise FileNotFoundError(
@@ -154,7 +161,7 @@ def list_tests() -> list[dict]:
         if not test_dir.is_dir():
             continue
         has_yaml = (test_dir / _YAML_FILENAME).exists()
-        has_py   = (test_dir / "initialize_test.py").exists()
+        has_py = (test_dir / "initialize_test.py").exists()
         if not has_yaml and not has_py:
             continue
         entry = {"name": test_dir.name, "title": "", "backend": "", "channels": []}
@@ -183,12 +190,13 @@ def print_tests() -> None:
         print(f"  [{t['name']}]{title}")
         if t["backend"]:
             print(f"    backend: {t['backend']}  |  channels: {channels}")
-    print(f"\nUsage: python -m src.plugin_napari --test <name>")
+    print("\nUsage: python -m src.plugin_napari --test <name>")
 
 
 # ---------------------------------------------------------------------------
 # Validation
 # ---------------------------------------------------------------------------
+
 
 def _validate_channels(channels: list[dict], sim) -> None:
     """Raise ValueError if any channel's (filter, led) pair is not in the sim's mode_map."""
@@ -247,10 +255,15 @@ _SLM_DEVICE = """\
 """
 
 
-def _generate_cfg(backend: str, channels: list[dict], output_dir: Path,
-                  cell_type: str = "normal", phase_contrast: bool = False,
-                  slm: bool = False,
-                  initial_properties: list[tuple[str, str, str]] | None = None) -> Path:
+def _generate_cfg(
+    backend: str,
+    channels: list[dict],
+    output_dir: Path,
+    cell_type: str = "normal",
+    phase_contrast: bool = False,
+    slm: bool = False,
+    initial_properties: list[tuple[str, str, str]] | None = None,
+) -> Path:
     """Write a .cfg with custom channel names and return its path.
 
     The filename uses the pattern ``virtual_<cell_type>.cfg`` so that
@@ -287,6 +300,7 @@ def _generate_cfg(backend: str, channels: list[dict], output_dir: Path,
 # Public API
 # ---------------------------------------------------------------------------
 
+
 def run_test(test_name: str) -> Path:
     """Set up a test simulation and return a cfg path ready for MCPServer.
 
@@ -305,9 +319,7 @@ def run_test(test_name: str) -> Path:
 
     cfg: dict[str, Any] = getattr(module, "TEST_CONFIG", None)
     if cfg is None:
-        raise AttributeError(
-            f"initialize_test.py in '{test_name}' must define a TEST_CONFIG dict."
-        )
+        raise AttributeError(f"initialize_test.py in '{test_name}' must define a TEST_CONFIG dict.")
 
     backend: str = cfg.get("backend", "particle")
     focal_plane: float = cfg.get("focal_plane", 0.0)
@@ -322,6 +334,7 @@ def run_test(test_name: str) -> Path:
         sim = module.create_sim_override()
     else:
         import importlib as _il
+
         sim_kwargs = {k: v for k, v in cfg.items() if k not in _RUNNER_KEYS}
         backend_mod = _il.import_module(f"virtual_microscope.backends.{backend}")
         sim = backend_mod.create_sim(**sim_kwargs)
@@ -333,8 +346,9 @@ def run_test(test_name: str) -> Path:
     _validate_channels(channels, sim)
 
     # Pre-set GLOBAL_BRIDGE so SimServer.initialize() skips creating its own sim
-    from virtual_microscope.engine.simulation_bridge import SimulationBridge, set_global_bridge
     from virtual_microscope.engine.realtime import RealtimeEngine
+    from virtual_microscope.engine.simulation_bridge import SimulationBridge, set_global_bridge
+
     bridge = SimulationBridge(sim)
     set_global_bridge(bridge)
 
@@ -342,11 +356,12 @@ def run_test(test_name: str) -> Path:
     # engine here instead.  time_scale and tick_hz are read from TEST_CONFIG so
     # each test can tune simulation speed independently.
     # Default time_scale=0.05 preserves existing cell-cycle timing (9 min/cycle).
-    if getattr(sim, 'continuous', False) and hasattr(sim, 'step'):
+    if getattr(sim, "continuous", False) and hasattr(sim, "step"):
         time_scale: float = cfg.get("time_scale", 0.05)
         tick_hz: int = cfg.get("tick_hz", 10)
-        engine = RealtimeEngine(sim, time_scale=time_scale, tick_hz=tick_hz,
-                                idle_timeout=30.0, bridge=bridge)
+        engine = RealtimeEngine(
+            sim, time_scale=time_scale, tick_hz=tick_hz, idle_timeout=30.0, bridge=bridge
+        )
         engine.patch_snap_frame()
         engine.start()
         bridge._engine = engine
@@ -358,9 +373,15 @@ def run_test(test_name: str) -> Path:
     initial_properties: list = cfg.get("initial_properties", [])
     output_dir = _TESTS_DIR / test_name
     output_dir.mkdir(parents=True, exist_ok=True)
-    cfg_path = _generate_cfg(backend, channels, output_dir, cell_type=cell_type,
-                             phase_contrast=phase_contrast, slm=slm,
-                             initial_properties=initial_properties)
+    cfg_path = _generate_cfg(
+        backend,
+        channels,
+        output_dir,
+        cell_type=cell_type,
+        phase_contrast=phase_contrast,
+        slm=slm,
+        initial_properties=initial_properties,
+    )
 
     print(f"[test_runner] Test '{test_name}' ready:")
     print(f"  backend     : {backend}")
@@ -375,6 +396,7 @@ def run_test(test_name: str) -> Path:
 # ---------------------------------------------------------------------------
 # CLI entry point
 # ---------------------------------------------------------------------------
+
 
 def _main() -> None:
     if len(sys.argv) < 2:

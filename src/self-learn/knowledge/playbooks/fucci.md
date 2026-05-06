@@ -20,7 +20,7 @@ FUCCI (Fluorescent Ubiquitination-based Cell Cycle Indicator) uses two reporters
 set_objective(core, 10)  # Full FOV = 512x512 world px
 core.setXYPosition(256.0, 256.0)
 
-nuc = snap('nucleus-channel').astype(float)  
+nuc = snap('nucleus-channel').astype(float)
 gem = snap('geminin-channel').astype(float)
 
 # Segment cells: use max(nuc, gem) with Otsu threshold
@@ -151,7 +151,7 @@ for b in blobs_gem:
     gem_val = gem[r-4:r+5, c-4:c+5].max()  # max in 4px window
     nuc_val = nuc[r-4:r+5, c-4:c+5].max()  # mCherry at same position
     ratio = gem_val / max(nuc_val, 1.0)
-    
+
     if ratio > 5.0 and gem_val > 25:  # G2/M criterion
         g2m_cells.append(cell)
 ```

@@ -24,22 +24,20 @@ from __future__ import annotations
 import argparse
 import sys
 
+from pymmcore_proxy import ProxyServer
 from starlette.requests import Request
 from starlette.responses import JSONResponse
 from starlette.routing import Route
-
-from pymmcore_proxy import ProxyServer
-
 
 # ---------------------------------------------------------------------------
 # TestProxyServer
 # ---------------------------------------------------------------------------
 
+
 class TestProxyServer(ProxyServer):
     """ProxyServer with an additional GET /test/info endpoint."""
 
-    def __init__(self, core, test_info: dict,
-                 host: str = "127.0.0.1", port: int = 5601):
+    def __init__(self, core, test_info: dict, host: str = "127.0.0.1", port: int = 5601):
         self._test_info = test_info
         extra = [Route("/test/info", self._handle_test_info, methods=["GET"])]
         super().__init__(core, host=host, port=port, extra_routes=extra)
@@ -51,6 +49,7 @@ class TestProxyServer(ProxyServer):
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
+
 
 def _extract_public_info(test_name: str, module) -> dict:
     """Return only the information the agent is allowed to know.
@@ -72,6 +71,7 @@ def _extract_public_info(test_name: str, module) -> dict:
 # ---------------------------------------------------------------------------
 # Public API
 # ---------------------------------------------------------------------------
+
 
 def serve_test(test_name: str, host: str = "127.0.0.1", port: int = 5601) -> None:
     """Set up a benchmark test and run the proxy server (blocking).
@@ -99,14 +99,15 @@ def serve_test(test_name: str, host: str = "127.0.0.1", port: int = 5601) -> Non
 
     print(f"[test_server] Ready — serving '{test_name}' on http://{host}:{port}")
     print(f"[test_server] Channels : {test_info['channels']}")
-    print(f"[test_server] GET /test/info for task description")
-    print(f"[test_server] Press Ctrl-C to stop.")
+    print("[test_server] GET /test/info for task description")
+    print("[test_server] Press Ctrl-C to stop.")
     server.run()
 
 
 # ---------------------------------------------------------------------------
 # CLI entry point
 # ---------------------------------------------------------------------------
+
 
 def _main() -> None:
     parser = argparse.ArgumentParser(
@@ -120,25 +121,31 @@ def _main() -> None:
         ),
     )
     parser.add_argument(
-        "test_name", nargs="?",
+        "test_name",
+        nargs="?",
         help="Test folder name, e.g. test_1",
     )
     parser.add_argument(
-        "--host", default="127.0.0.1",
+        "--host",
+        default="127.0.0.1",
         help="Bind address (default: 127.0.0.1)",
     )
     parser.add_argument(
-        "--port", type=int, default=5601,
+        "--port",
+        type=int,
+        default=5601,
         help="Port to listen on (default: 5601)",
     )
     parser.add_argument(
-        "--list", action="store_true",
+        "--list",
+        action="store_true",
         help="List available tests and exit",
     )
     args = parser.parse_args()
 
     if args.list:
         from src.benchmarking.test_runner import print_tests
+
         print_tests()
         sys.exit(0)
 

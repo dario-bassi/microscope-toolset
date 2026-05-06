@@ -12,8 +12,8 @@ Centroid-based tracking with Hungarian matching gives interpretable results
 but requires consistent cell detection across frames.
 """
 
-import numpy as np
 import cv2
+import numpy as np
 from scipy.optimize import linear_sum_assignment
 
 
@@ -109,13 +109,12 @@ def centroid_drift(ref_centroids, tgt_centroids, max_dist=50):
     cost = np.zeros((len(ref), len(tgt)))
     for i in range(len(ref)):
         for j in range(len(tgt)):
-            cost[i, j] = np.sqrt((ref[i, 0] - tgt[j, 0])**2 +
-                                 (ref[i, 1] - tgt[j, 1])**2)
+            cost[i, j] = np.sqrt((ref[i, 0] - tgt[j, 0]) ** 2 + (ref[i, 1] - tgt[j, 1]) ** 2)
 
     ri, ci = linear_sum_assignment(cost)
 
     dxs, dys = [], []
-    for r, c in zip(ri, ci):
+    for r, c in zip(ri, ci, strict=False):
         if cost[r, c] < max_dist:
             dxs.append(float(tgt[c, 0] - ref[r, 0]))
             dys.append(float(tgt[c, 1] - ref[r, 1]))
@@ -125,7 +124,7 @@ def centroid_drift(ref_centroids, tgt_centroids, max_dist=50):
     return 0.0, 0.0
 
 
-def measure_drift_timelapse(frames, method='fft', ref_frame=0):
+def measure_drift_timelapse(frames, method="fft", ref_frame=0):
     """Measure drift for each frame relative to a reference.
 
     Args:
@@ -137,15 +136,15 @@ def measure_drift_timelapse(frames, method='fft', ref_frame=0):
         list of dicts with frame, dx, dy, magnitude per timepoint
     """
     ref = frames[ref_frame]
-    func = fft_cross_correlate if method == 'fft' else phase_correlate
+    func = fft_cross_correlate if method == "fft" else phase_correlate
 
     results = []
     for i, frame in enumerate(frames):
         if i == ref_frame:
-            results.append({'frame': i, 'dx': 0.0, 'dy': 0.0, 'magnitude': 0.0})
+            results.append({"frame": i, "dx": 0.0, "dy": 0.0, "magnitude": 0.0})
             continue
 
-        if method == 'both':
+        if method == "both":
             dx_f, dy_f = fft_cross_correlate(ref, frame)
             dx_p, dy_p = phase_correlate(ref, frame)
             # Average both methods
@@ -155,17 +154,19 @@ def measure_drift_timelapse(frames, method='fft', ref_frame=0):
             dx, dy = func(ref, frame)
 
         mag = float(np.sqrt(dx**2 + dy**2))
-        results.append({
-            'frame': i,
-            'dx': round(float(dx), 3),
-            'dy': round(float(dy), 3),
-            'magnitude': round(mag, 3),
-        })
+        results.append(
+            {
+                "frame": i,
+                "dx": round(float(dx), 3),
+                "dy": round(float(dy), 3),
+                "magnitude": round(mag, 3),
+            }
+        )
 
     return results
 
 
-def measure_drift_incremental(frames, method='fft'):
+def measure_drift_incremental(frames, method="fft"):
     """Measure frame-to-frame drift and accumulate.
 
     Useful when absolute correlation fails for large total drifts.
@@ -177,24 +178,27 @@ def measure_drift_incremental(frames, method='fft'):
     Returns:
         list of dicts with frame, dx_inc, dy_inc, dx_cum, dy_cum, magnitude
     """
-    func = fft_cross_correlate if method == 'fft' else phase_correlate
+    func = fft_cross_correlate if method == "fft" else phase_correlate
     cum_dx, cum_dy = 0.0, 0.0
-    results = [{'frame': 0, 'dx_inc': 0.0, 'dy_inc': 0.0,
-                'dx_cum': 0.0, 'dy_cum': 0.0, 'magnitude': 0.0}]
+    results = [
+        {"frame": 0, "dx_inc": 0.0, "dy_inc": 0.0, "dx_cum": 0.0, "dy_cum": 0.0, "magnitude": 0.0}
+    ]
 
     for i in range(1, len(frames)):
         dx, dy = func(frames[i - 1], frames[i])
         cum_dx += dx
         cum_dy += dy
         mag = float(np.sqrt(cum_dx**2 + cum_dy**2))
-        results.append({
-            'frame': i,
-            'dx_inc': round(float(dx), 3),
-            'dy_inc': round(float(dy), 3),
-            'dx_cum': round(float(cum_dx), 3),
-            'dy_cum': round(float(cum_dy), 3),
-            'magnitude': round(mag, 3),
-        })
+        results.append(
+            {
+                "frame": i,
+                "dx_inc": round(float(dx), 3),
+                "dy_inc": round(float(dy), 3),
+                "dx_cum": round(float(cum_dx), 3),
+                "dy_cum": round(float(cum_dy), 3),
+                "magnitude": round(mag, 3),
+            }
+        )
 
     return results
 

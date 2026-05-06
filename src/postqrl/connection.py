@@ -1,16 +1,21 @@
-import os
 import logging
-from typing import Optional
+import os
+
 import psycopg2
-from psycopg2 import pool
 from dotenv import load_dotenv
 
 logger = logging.getLogger(__name__)
 
-class DBConnection:
-    def __init__(self, db_host: Optional[str] = None, db_name: Optional[str] = None, db_user: Optional[str] = None,
-                 db_password: Optional[str] = None, db_port: Optional[int] = None):
 
+class DBConnection:
+    def __init__(
+        self,
+        db_host: str | None = None,
+        db_name: str | None = None,
+        db_user: str | None = None,
+        db_password: str | None = None,
+        db_port: int | None = None,
+    ):
         load_dotenv()
 
         self.db_host = db_host or os.getenv("DB_HOST")
@@ -26,11 +31,10 @@ class DBConnection:
                 raise ValueError("DB_PORT is not set in environment.")
             try:
                 self.db_port = int(raw_port)
-            except ValueError:
-                raise ValueError(f"DB_PORT must be an integer, got: {raw_port!r}")
+            except ValueError as err:
+                raise ValueError(f"DB_PORT must be an integer, got: {raw_port!r}") from err
 
-
-        #print(self.db_port,self.db_password,self.db_user,self.db_name, self.db_host)
+        # print(self.db_port,self.db_password,self.db_user,self.db_name, self.db_host)
 
         self.pool = psycopg2.pool.SimpleConnectionPool(
             minconn=1,
@@ -39,7 +43,8 @@ class DBConnection:
             user=self.db_user,
             database=self.db_name,
             password=self.db_password,
-            port=self.db_port)
+            port=self.db_port,
+        )
 
     def get_connect(self):
         return self.pool.getconn()

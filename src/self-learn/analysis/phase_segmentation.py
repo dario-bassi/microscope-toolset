@@ -39,9 +39,9 @@ def segment_phases(signal, min_segment=5, sensitivity=1.0):
 
     if n < 2 * min_segment:
         return {
-            'boundaries': [],
-            'n_phases': 1,
-            'segments': [(0, n)],
+            "boundaries": [],
+            "n_phases": 1,
+            "segments": [(0, n)],
         }
 
     # Smooth for derivative estimation
@@ -57,7 +57,7 @@ def segment_phases(signal, min_segment=5, sensitivity=1.0):
     # Threshold for significant change
     # Use the overall signal range to set a meaningful threshold
     signal_range = float(np.ptp(signal))
-    baseline_noise = np.std(signal[:min(min_segment * 2, n)])
+    baseline_noise = np.std(signal[: min(min_segment * 2, n)])
     if baseline_noise < 1e-10:
         baseline_noise = np.std(signal) * 0.1
     # Threshold must exceed both noise-based and range-based minimums
@@ -126,13 +126,12 @@ def segment_phases(signal, min_segment=5, sensitivity=1.0):
 
     # Build segments
     all_bounds = [0] + boundaries + [n]
-    segments = [(all_bounds[i], all_bounds[i + 1])
-                for i in range(len(all_bounds) - 1)]
+    segments = [(all_bounds[i], all_bounds[i + 1]) for i in range(len(all_bounds) - 1)]
 
     return {
-        'boundaries': boundaries,
-        'n_phases': len(segments),
-        'segments': segments,
+        "boundaries": boundaries,
+        "n_phases": len(segments),
+        "segments": segments,
     }
 
 
@@ -163,7 +162,7 @@ def classify_phases(signal, segments):
     means = []
 
     if not segments:
-        return {'labels': [], 'trends': [], 'means': []}
+        return {"labels": [], "trends": [], "means": []}
 
     # Compute per-segment stats
     for start, end in segments:
@@ -181,20 +180,19 @@ def classify_phases(signal, segments):
 
     # Baseline reference: first segment's mean
     baseline_mean = means[0]
-    baseline_std = float(np.std(signal[segments[0][0]:segments[0][1]]))
+    baseline_std = float(np.std(signal[segments[0][0] : segments[0][1]]))
     if baseline_std < 1e-10:
         baseline_std = abs(baseline_mean) * 0.01 if baseline_mean != 0 else 1.0
 
     # Classify each segment
-    for i, ((start, end), slope, seg_mean) in enumerate(
-            zip(segments, trends, means)):
+    for i, ((start, end), slope, seg_mean) in enumerate(zip(segments, trends, means, strict=False)):
         seg = signal[start:end]
         seg_std = float(np.std(seg))
         deviation = abs(seg_mean - baseline_mean)
         rel_slope = abs(slope) / max(abs(baseline_mean), baseline_std, 1e-10)
 
         if i == 0:
-            labels.append('baseline')
+            labels.append("baseline")
             continue
 
         # Check if this segment is returning toward baseline
@@ -202,44 +200,43 @@ def classify_phases(signal, segments):
             prev_mean = means[i - 1]
             prev_deviation = abs(prev_mean - baseline_mean)
             curr_deviation = deviation
-            if (prev_deviation > 2 * baseline_std and
-                    curr_deviation < prev_deviation * 0.7):
-                labels.append('recovery')
+            if prev_deviation > 2 * baseline_std and curr_deviation < prev_deviation * 0.7:
+                labels.append("recovery")
                 continue
 
         # Ramp detection: significant trend
         if rel_slope > 0.02 and abs(slope) * len(seg) > baseline_std:
             if slope > 0:
-                labels.append('ramp_up')
+                labels.append("ramp_up")
             else:
-                labels.append('ramp_down')
+                labels.append("ramp_down")
             continue
 
         # Plateau: stable but different from baseline
         if deviation > 2 * baseline_std and seg_std < deviation * 0.3:
-            labels.append('plateau')
+            labels.append("plateau")
             continue
 
         # If close to baseline, it's a return to baseline
         if deviation < 2 * baseline_std:
             if i > 1:
-                labels.append('recovery')
+                labels.append("recovery")
             else:
-                labels.append('baseline')
+                labels.append("baseline")
             continue
 
         # Default: classify by trend
         if slope > 0:
-            labels.append('ramp_up')
+            labels.append("ramp_up")
         elif slope < 0:
-            labels.append('ramp_down')
+            labels.append("ramp_down")
         else:
-            labels.append('plateau')
+            labels.append("plateau")
 
     return {
-        'labels': labels,
-        'trends': trends,
-        'means': means,
+        "labels": labels,
+        "trends": trends,
+        "means": means,
     }
 
 
@@ -266,16 +263,16 @@ def detect_steady_state(signal, window=5, tolerance=0.05):
 
     if n < window:
         return {
-            'onset_index': -1,
-            'steady_value': float(signal.mean()) if n > 0 else 0.0,
-            'time_to_steady': n,
-            'cv_trace': np.zeros(n),
+            "onset_index": -1,
+            "steady_value": float(signal.mean()) if n > 0 else 0.0,
+            "time_to_steady": n,
+            "cv_trace": np.zeros(n),
         }
 
     # Compute rolling CV
     cv_trace = np.zeros(n)
     for i in range(window - 1, n):
-        seg = signal[i - window + 1:i + 1]
+        seg = signal[i - window + 1 : i + 1]
         seg_mean = seg.mean()
         if abs(seg_mean) > 1e-10:
             cv_trace[i] = seg.std() / abs(seg_mean)
@@ -301,10 +298,10 @@ def detect_steady_state(signal, window=5, tolerance=0.05):
         steady_value = float(signal[-window:].mean())
 
     return {
-        'onset_index': onset,
-        'steady_value': round(steady_value, 4),
-        'time_to_steady': onset if onset >= 0 else n,
-        'cv_trace': cv_trace,
+        "onset_index": onset,
+        "steady_value": round(steady_value, 4),
+        "time_to_steady": onset if onset >= 0 else n,
+        "cv_trace": cv_trace,
     }
 
 
@@ -328,7 +325,7 @@ def phase_metrics(signal, segments, labels=None):
 
     if labels is None:
         result = classify_phases(signal, segments)
-        labels = result['labels']
+        labels = result["labels"]
 
     phases = []
     baseline_mean = None
@@ -353,31 +350,33 @@ def phase_metrics(signal, segments, labels=None):
         else:
             fold_change = 1.0
 
-        label = labels[i] if i < len(labels) else 'unknown'
-        phases.append({
-            'label': label,
-            'start': start,
-            'end': end,
-            'duration': end - start,
-            'mean': round(seg_mean, 4),
-            'std': round(float(seg.std()), 4),
-            'min': round(float(seg.min()), 4),
-            'max': round(float(seg.max()), 4),
-            'slope': round(slope, 6),
-            'fold_change_from_baseline': round(fold_change, 4),
-        })
+        label = labels[i] if i < len(labels) else "unknown"
+        phases.append(
+            {
+                "label": label,
+                "start": start,
+                "end": end,
+                "duration": end - start,
+                "mean": round(seg_mean, 4),
+                "std": round(float(seg.std()), 4),
+                "min": round(float(seg.min()), 4),
+                "max": round(float(seg.max()), 4),
+                "slope": round(slope, 6),
+                "fold_change_from_baseline": round(fold_change, 4),
+            }
+        )
 
     if baseline_mean is None:
         baseline_mean = float(signal.mean())
 
     # Max deviation
-    deviations = [abs(p['mean'] - baseline_mean) for p in phases]
+    deviations = [abs(p["mean"] - baseline_mean) for p in phases]
     max_dev = max(deviations) if deviations else 0.0
 
     return {
-        'phases': phases,
-        'baseline_mean': round(baseline_mean, 4),
-        'max_deviation': round(max_dev, 4),
+        "phases": phases,
+        "baseline_mean": round(baseline_mean, 4),
+        "max_deviation": round(max_dev, 4),
     }
 
 
@@ -398,20 +397,19 @@ def experiment_phases(signal, min_segment=5, sensitivity=1.0):
     signal = np.asarray(signal, dtype=float)
 
     seg_result = segment_phases(signal, min_segment, sensitivity)
-    cls_result = classify_phases(signal, seg_result['segments'])
-    met_result = phase_metrics(signal, seg_result['segments'],
-                               cls_result['labels'])
+    cls_result = classify_phases(signal, seg_result["segments"])
+    met_result = phase_metrics(signal, seg_result["segments"], cls_result["labels"])
 
     return {
-        'boundaries': seg_result['boundaries'],
-        'n_phases': seg_result['n_phases'],
-        'segments': seg_result['segments'],
-        'labels': cls_result['labels'],
-        'trends': cls_result['trends'],
-        'means': cls_result['means'],
-        'phases': met_result['phases'],
-        'baseline_mean': met_result['baseline_mean'],
-        'max_deviation': met_result['max_deviation'],
+        "boundaries": seg_result["boundaries"],
+        "n_phases": seg_result["n_phases"],
+        "segments": seg_result["segments"],
+        "labels": cls_result["labels"],
+        "trends": cls_result["trends"],
+        "means": cls_result["means"],
+        "phases": met_result["phases"],
+        "baseline_mean": met_result["baseline_mean"],
+        "max_deviation": met_result["max_deviation"],
     }
 
 
@@ -420,6 +418,6 @@ def _moving_average(signal, window):
     if window <= 1 or len(signal) < window:
         return signal.copy()
     pad = window // 2
-    padded = np.pad(signal, pad, mode='edge')
+    padded = np.pad(signal, pad, mode="edge")
     cumsum = np.cumsum(padded)
     return (cumsum[window:] - cumsum[:-window]) / window

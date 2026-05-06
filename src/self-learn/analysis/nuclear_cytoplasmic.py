@@ -13,7 +13,6 @@ Functions:
 """
 
 import numpy as np
-from scipy import ndimage
 
 
 def segment_cytoplasm(cell_mask, nuclear_mask, min_cytoplasm_area=10):
@@ -67,10 +66,10 @@ def segment_cytoplasm(cell_mask, nuclear_mask, min_cytoplasm_area=10):
             cyto[cyto_region] = cell_id
 
     return {
-        'cytoplasm_mask': cyto,
-        'matched_pairs': matched,
-        'unmatched_cells': sorted(cell_labels - matched_cells),
-        'unmatched_nuclei': sorted(nuc_labels - matched_nucs),
+        "cytoplasm_mask": cyto,
+        "matched_pairs": matched,
+        "unmatched_cells": sorted(cell_labels - matched_cells),
+        "unmatched_nuclei": sorted(nuc_labels - matched_nucs),
     }
 
 
@@ -122,18 +121,18 @@ def compute_nc_ratio(image, nuclear_mask, cytoplasm_mask, background=None):
         if c_mean > 0:
             ratios[label] = round(n_mean / c_mean, 4)
         else:
-            ratios[label] = float('inf') if n_mean > 0 else 1.0
+            ratios[label] = float("inf") if n_mean > 0 else 1.0
 
     ratio_vals = [v for v in ratios.values() if np.isfinite(v)]
     mean_r = float(np.mean(ratio_vals)) if ratio_vals else 0.0
     median_r = float(np.median(ratio_vals)) if ratio_vals else 0.0
 
     return {
-        'ratios': ratios,
-        'nuclear_intensities': nuc_int,
-        'cytoplasmic_intensities': cyto_int,
-        'mean_ratio': round(mean_r, 4),
-        'median_ratio': round(median_r, 4),
+        "ratios": ratios,
+        "nuclear_intensities": nuc_int,
+        "cytoplasmic_intensities": cyto_int,
+        "mean_ratio": round(mean_r, 4),
+        "median_ratio": round(median_r, 4),
     }
 
 
@@ -161,15 +160,15 @@ def classify_localization(ratios, nuclear_threshold=2.0, cytoplasmic_threshold=0
     classifications = {}
     for key, r in items:
         if not np.isfinite(r):
-            classifications[key] = 'nuclear'
+            classifications[key] = "nuclear"
         elif r >= nuclear_threshold:
-            classifications[key] = 'nuclear'
+            classifications[key] = "nuclear"
         elif r <= cytoplasmic_threshold:
-            classifications[key] = 'cytoplasmic'
+            classifications[key] = "cytoplasmic"
         else:
-            classifications[key] = 'uniform'
+            classifications[key] = "uniform"
 
-    counts = {'nuclear': 0, 'cytoplasmic': 0, 'uniform': 0}
+    counts = {"nuclear": 0, "cytoplasmic": 0, "uniform": 0}
     for cls in classifications.values():
         counts[cls] += 1
 
@@ -179,14 +178,15 @@ def classify_localization(ratios, nuclear_threshold=2.0, cytoplasmic_threshold=0
     result_cls = classifications if as_dict else list(classifications.values())
 
     return {
-        'classifications': result_cls,
-        'counts': counts,
-        'fractions': fractions,
+        "classifications": result_cls,
+        "counts": counts,
+        "fractions": fractions,
     }
 
 
-def translocation_timecourse(images, nuclear_mask, cytoplasm_mask,
-                              timepoints=None, background=None):
+def translocation_timecourse(
+    images, nuclear_mask, cytoplasm_mask, timepoints=None, background=None
+):
     """Track N:C ratio over time for translocation kinetics.
 
     Computes mean population N:C ratio at each timepoint.
@@ -219,22 +219,21 @@ def translocation_timecourse(images, nuclear_mask, cytoplasm_mask,
     median_ratios = np.zeros(n_frames)
 
     for t in range(n_frames):
-        result = compute_nc_ratio(images[t], nuclear_mask, cytoplasm_mask,
-                                   background=background)
-        mean_ratios[t] = result['mean_ratio']
-        median_ratios[t] = result['median_ratio']
+        result = compute_nc_ratio(images[t], nuclear_mask, cytoplasm_mask, background=background)
+        mean_ratios[t] = result["mean_ratio"]
+        median_ratios[t] = result["median_ratio"]
 
     initial = mean_ratios[0] if mean_ratios[0] > 0 else 1.0
     fold = float(mean_ratios[-1] / initial)
     peak_idx = int(np.argmax(mean_ratios))
 
     return {
-        'timepoints': timepoints,
-        'mean_ratios': mean_ratios,
-        'median_ratios': median_ratios,
-        'fold_change': round(fold, 4),
-        'max_ratio': round(float(mean_ratios[peak_idx]), 4),
-        'time_to_peak': float(timepoints[peak_idx]),
+        "timepoints": timepoints,
+        "mean_ratios": mean_ratios,
+        "median_ratios": median_ratios,
+        "fold_change": round(fold, 4),
+        "max_ratio": round(float(mean_ratios[peak_idx]), 4),
+        "time_to_peak": float(timepoints[peak_idx]),
     }
 
 
@@ -261,8 +260,14 @@ def population_nc_stats(ratios, bins=None):
 
     if len(ratios) == 0:
         return {
-            'mean': 0.0, 'median': 0.0, 'std': 0.0, 'cv': 0.0,
-            'q25': 0.0, 'q75': 0.0, 'iqr': 0.0, 'n': 0,
+            "mean": 0.0,
+            "median": 0.0,
+            "std": 0.0,
+            "cv": 0.0,
+            "q25": 0.0,
+            "q75": 0.0,
+            "iqr": 0.0,
+            "n": 0,
         }
 
     mean_val = float(np.mean(ratios))
@@ -271,18 +276,18 @@ def population_nc_stats(ratios, bins=None):
     q75 = float(np.percentile(ratios, 75))
 
     result = {
-        'mean': round(mean_val, 4),
-        'median': round(float(np.median(ratios)), 4),
-        'std': round(std_val, 4),
-        'cv': round(std_val / mean_val, 4) if mean_val > 0 else 0.0,
-        'q25': round(q25, 4),
-        'q75': round(q75, 4),
-        'iqr': round(q75 - q25, 4),
-        'n': len(ratios),
+        "mean": round(mean_val, 4),
+        "median": round(float(np.median(ratios)), 4),
+        "std": round(std_val, 4),
+        "cv": round(std_val / mean_val, 4) if mean_val > 0 else 0.0,
+        "q25": round(q25, 4),
+        "q75": round(q75, 4),
+        "iqr": round(q75 - q25, 4),
+        "n": len(ratios),
     }
 
     if bins is not None:
         hist, edges = np.histogram(ratios, bins=bins)
-        result['histogram'] = (hist, edges)
+        result["histogram"] = (hist, edges)
 
     return result

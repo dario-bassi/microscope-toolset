@@ -38,7 +38,7 @@ def track_morphology(label_stack, properties=None):
     n_frames = label_stack.shape[0]
 
     if properties is None:
-        properties = ['area', 'eccentricity', 'solidity', 'perimeter']
+        properties = ["area", "eccentricity", "solidity", "perimeter"]
 
     # Find all unique labels across all frames
     all_labels = set()
@@ -62,10 +62,10 @@ def track_morphology(label_stack, properties=None):
         objects[int(lab)] = obj
 
     return {
-        'objects': objects,
-        'n_objects': len(objects),
-        'n_frames': n_frames,
-        'properties': properties,
+        "objects": objects,
+        "n_objects": len(objects),
+        "n_frames": n_frames,
+        "properties": properties,
     }
 
 
@@ -94,11 +94,11 @@ def detect_shape_change(property_series, window=3, threshold=2.0):
 
     if valid.sum() < window + 1:
         return {
-            'change_frames': [],
-            'change_magnitudes': [],
-            'n_changes': 0,
-            'baseline_mean': 0.0,
-            'baseline_std': 0.0,
+            "change_frames": [],
+            "change_magnitudes": [],
+            "n_changes": 0,
+            "baseline_mean": 0.0,
+            "baseline_std": 0.0,
         }
 
     # Use first window frames as baseline
@@ -121,11 +121,11 @@ def detect_shape_change(property_series, window=3, threshold=2.0):
             change_mags.append(round(float(z), 3))
 
     return {
-        'change_frames': change_frames,
-        'change_magnitudes': change_mags,
-        'n_changes': len(change_frames),
-        'baseline_mean': round(bl_mean, 4),
-        'baseline_std': round(bl_std, 4),
+        "change_frames": change_frames,
+        "change_magnitudes": change_mags,
+        "n_changes": len(change_frames),
+        "baseline_mean": round(bl_mean, 4),
+        "baseline_std": round(bl_std, 4),
     }
 
 
@@ -147,21 +147,21 @@ def morphology_timecourse(label_stack, properties=None):
     n_frames = label_stack.shape[0]
 
     if properties is None:
-        properties = ['area', 'eccentricity', 'solidity']
+        properties = ["area", "eccentricity", "solidity"]
 
-    stats = {prop: {'mean': [], 'std': [], 'median': []} for prop in properties}
+    stats = {prop: {"mean": [], "std": [], "median": []} for prop in properties}
     n_obj = []
 
     for t in range(n_frames):
         labels_t = label_stack[t]
-        unique_labels = [l for l in np.unique(labels_t) if l > 0]
+        unique_labels = [lbl for lbl in np.unique(labels_t) if lbl > 0]
         n_obj.append(len(unique_labels))
 
         if not unique_labels:
             for prop in properties:
-                stats[prop]['mean'].append(np.nan)
-                stats[prop]['std'].append(np.nan)
-                stats[prop]['median'].append(np.nan)
+                stats[prop]["mean"].append(np.nan)
+                stats[prop]["std"].append(np.nan)
+                stats[prop]["median"].append(np.nan)
             continue
 
         prop_vals = {prop: [] for prop in properties}
@@ -173,14 +173,14 @@ def morphology_timecourse(label_stack, properties=None):
 
         for prop in properties:
             arr = np.array(prop_vals[prop])
-            stats[prop]['mean'].append(round(float(np.mean(arr)), 4))
-            stats[prop]['std'].append(round(float(np.std(arr)), 4))
-            stats[prop]['median'].append(round(float(np.median(arr)), 4))
+            stats[prop]["mean"].append(round(float(np.mean(arr)), 4))
+            stats[prop]["std"].append(round(float(np.std(arr)), 4))
+            stats[prop]["median"].append(round(float(np.median(arr)), 4))
 
     return {
-        'frames': list(range(n_frames)),
-        'stats': stats,
-        'n_objects_per_frame': n_obj,
+        "frames": list(range(n_frames)),
+        "stats": stats,
+        "n_objects_per_frame": n_obj,
     }
 
 
@@ -207,7 +207,7 @@ def spreading_index(label_stack):
     si_means = []
     for t in range(n_frames):
         labels_t = label_stack[t]
-        unique_labels = [l for l in np.unique(labels_t) if l > 0]
+        unique_labels = [lbl for lbl in np.unique(labels_t) if lbl > 0]
         if not unique_labels:
             si_means.append(np.nan)
             continue
@@ -230,11 +230,11 @@ def spreading_index(label_stack):
 
     if valid.sum() < 2:
         return {
-            'mean_si': si_means,
-            'population_trend': 'stable',
-            'initial_si': si_means[0] if si_means else 0.0,
-            'final_si': si_means[-1] if si_means else 0.0,
-            'change_rate': 0.0,
+            "mean_si": si_means,
+            "population_trend": "stable",
+            "initial_si": si_means[0] if si_means else 0.0,
+            "final_si": si_means[-1] if si_means else 0.0,
+            "change_rate": 0.0,
         }
 
     valid_si = si_arr[valid]
@@ -242,18 +242,18 @@ def spreading_index(label_stack):
     slope = float(np.polyfit(valid_idx, valid_si, 1)[0])
 
     if abs(slope) < 0.005:
-        trend = 'stable'
+        trend = "stable"
     elif slope > 0:
-        trend = 'spreading'
+        trend = "spreading"
     else:
-        trend = 'rounding'
+        trend = "rounding"
 
     return {
-        'mean_si': si_means,
-        'population_trend': trend,
-        'initial_si': round(float(valid_si[0]), 4),
-        'final_si': round(float(valid_si[-1]), 4),
-        'change_rate': round(slope, 6),
+        "mean_si": si_means,
+        "population_trend": trend,
+        "initial_si": round(float(valid_si[0]), 4),
+        "final_si": round(float(valid_si[-1]), 4),
+        "change_rate": round(slope, 6),
     }
 
 
@@ -278,26 +278,26 @@ def shape_heterogeneity(label_stack, frame_index=-1):
     """
     label_stack = np.asarray(label_stack, dtype=int)
     frame = label_stack[frame_index]
-    unique_labels = [l for l in np.unique(frame) if l > 0]
+    unique_labels = [lbl for lbl in np.unique(frame) if lbl > 0]
     n = len(unique_labels)
 
     if n < 3:
         return {
-            'area_cv': 0.0,
-            'eccentricity_cv': 0.0,
-            'solidity_cv': 0.0,
-            'heterogeneity_score': 0.0,
-            'n_objects': n,
-            'outlier_labels': [],
+            "area_cv": 0.0,
+            "eccentricity_cv": 0.0,
+            "solidity_cv": 0.0,
+            "heterogeneity_score": 0.0,
+            "n_objects": n,
+            "outlier_labels": [],
         }
 
     areas, eccs, sols = [], [], []
     for lab in unique_labels:
         mask = frame == lab
-        vals = _measure_single_object(mask, ['area', 'eccentricity', 'solidity'])
-        areas.append(vals['area'])
-        eccs.append(vals['eccentricity'])
-        sols.append(vals['solidity'])
+        vals = _measure_single_object(mask, ["area", "eccentricity", "solidity"])
+        areas.append(vals["area"])
+        eccs.append(vals["eccentricity"])
+        sols.append(vals["solidity"])
 
     areas, eccs, sols = np.array(areas), np.array(eccs), np.array(sols)
 
@@ -320,16 +320,17 @@ def shape_heterogeneity(label_stack, frame_index=-1):
                     outliers.add(lab)
 
     return {
-        'area_cv': round(area_cv, 4),
-        'eccentricity_cv': round(ecc_cv, 4),
-        'solidity_cv': round(sol_cv, 4),
-        'heterogeneity_score': round(hetero, 4),
-        'n_objects': n,
-        'outlier_labels': sorted(outliers),
+        "area_cv": round(area_cv, 4),
+        "eccentricity_cv": round(ecc_cv, 4),
+        "solidity_cv": round(sol_cv, 4),
+        "heterogeneity_score": round(hetero, 4),
+        "n_objects": n,
+        "outlier_labels": sorted(outliers),
     }
 
 
 # ── Private helpers ──────────────────────────────────────────────────
+
 
 def _measure_single_object(mask, properties):
     """Measure properties of a single binary mask."""
@@ -337,45 +338,45 @@ def _measure_single_object(mask, properties):
     area = float(mask.sum())
 
     for prop in properties:
-        if prop == 'area':
-            vals['area'] = area
-        elif prop == 'perimeter':
+        if prop == "area":
+            vals["area"] = area
+        elif prop == "perimeter":
             eroded = ndimage.binary_erosion(mask)
-            vals['perimeter'] = float((mask & ~eroded).sum())
-        elif prop == 'eccentricity':
+            vals["perimeter"] = float((mask & ~eroded).sum())
+        elif prop == "eccentricity":
             ys, xs = np.where(mask)
             if len(ys) < 5:
-                vals['eccentricity'] = 0.0
+                vals["eccentricity"] = 0.0
             else:
                 cov = np.cov(xs.astype(float), ys.astype(float))
                 eigvals = np.linalg.eigvalsh(cov)
                 eigvals = np.maximum(eigvals, 0)
                 if eigvals[-1] > 0:
-                    vals['eccentricity'] = float(np.sqrt(
-                        1 - eigvals[0] / eigvals[-1]))
+                    vals["eccentricity"] = float(np.sqrt(1 - eigvals[0] / eigvals[-1]))
                 else:
-                    vals['eccentricity'] = 0.0
-        elif prop == 'solidity':
+                    vals["eccentricity"] = 0.0
+        elif prop == "solidity":
             from scipy.spatial import ConvexHull
+
             ys, xs = np.where(mask)
             if len(ys) < 4:
-                vals['solidity'] = 1.0
+                vals["solidity"] = 1.0
             else:
                 pts = np.column_stack([xs, ys])
                 try:
                     hull = ConvexHull(pts)
-                    vals['solidity'] = float(area / hull.volume)
+                    vals["solidity"] = float(area / hull.volume)
                 except Exception:
-                    vals['solidity'] = 1.0
-        elif prop == 'centroid':
+                    vals["solidity"] = 1.0
+        elif prop == "centroid":
             cy, cx = ndimage.center_of_mass(mask)
-            vals['centroid'] = (float(cy), float(cx))
-        elif prop == 'compactness':
+            vals["centroid"] = (float(cy), float(cx))
+        elif prop == "compactness":
             eroded = ndimage.binary_erosion(mask)
             perimeter = float((mask & ~eroded).sum())
             if perimeter > 0:
-                vals['compactness'] = 4 * np.pi * area / (perimeter ** 2)
+                vals["compactness"] = 4 * np.pi * area / (perimeter**2)
             else:
-                vals['compactness'] = 1.0
+                vals["compactness"] = 1.0
 
     return vals

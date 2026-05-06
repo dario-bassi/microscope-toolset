@@ -13,8 +13,8 @@ Functions:
 import numpy as np
 from useq import MDAEvent
 
+from ..analysis.image_quality import assess_quality
 from ..analysis.intensity import compute_snr
-from ..analysis.image_quality import assess_quality, focus_score
 
 
 def optimize_exposure(images, exposures, target_snr=None):
@@ -43,52 +43,54 @@ def optimize_exposure(images, exposures, target_snr=None):
         raise ValueError("At least one image required")
 
     results = []
-    for img, exp in zip(images, exposures):
+    for img, exp in zip(images, exposures, strict=False):
         img_f = np.asarray(img, dtype=np.float64)
         snr_info = compute_snr(img_f)
         quality = assess_quality(img_f)
 
-        results.append({
-            'exposure': exp,
-            'snr': snr_info['snr'],
-            'signal_mean': snr_info['signal_mean'],
-            'bg_mean': snr_info['bg_mean'],
-            'bg_std': snr_info['bg_std'],
-            'saturation': quality['saturation_fraction'],
-            'dynamic_range': quality['dynamic_range_fraction'],
-            'focus': quality['focus_score'],
-            'warnings': quality['warnings'],
-        })
+        results.append(
+            {
+                "exposure": exp,
+                "snr": snr_info["snr"],
+                "signal_mean": snr_info["signal_mean"],
+                "bg_mean": snr_info["bg_mean"],
+                "bg_std": snr_info["bg_std"],
+                "saturation": quality["saturation_fraction"],
+                "dynamic_range": quality["dynamic_range_fraction"],
+                "focus": quality["focus_score"],
+                "warnings": quality["warnings"],
+            }
+        )
 
     # Selection logic
     if target_snr is not None:
         # Shortest exposure that meets target SNR without saturation
         for i, r in enumerate(results):
-            if r['snr'] >= target_snr and r['saturation'] < 0.01:
+            if r["snr"] >= target_snr and r["saturation"] < 0.01:
                 return {
-                    'best_exposure': exposures[i],
-                    'best_index': i,
-                    'best_snr': r['snr'],
-                    'results': results,
-                    'method': f'target_snr>={target_snr}',
+                    "best_exposure": exposures[i],
+                    "best_index": i,
+                    "best_snr": r["snr"],
+                    "results": results,
+                    "method": f"target_snr>={target_snr}",
                 }
 
     # Default: best SNR among unsaturated images
-    valid = [(i, r) for i, r in enumerate(results) if r['saturation'] < 0.01]
+    valid = [(i, r) for i, r in enumerate(results) if r["saturation"] < 0.01]
     if not valid:
         # All saturated — pick least saturated
-        best_i = int(np.argmin([r['saturation'] for r in results]))
-        method = 'least_saturated'
+        best_i = int(np.argmin([r["saturation"] for r in results]))
+        method = "least_saturated"
     else:
-        best_i = max(valid, key=lambda x: x[1]['snr'])[0]
-        method = 'max_snr_unsaturated'
+        best_i = max(valid, key=lambda x: x[1]["snr"])[0]
+        method = "max_snr_unsaturated"
 
     return {
-        'best_exposure': exposures[best_i],
-        'best_index': best_i,
-        'best_snr': results[best_i]['snr'],
-        'results': results,
-        'method': method,
+        "best_exposure": exposures[best_i],
+        "best_index": best_i,
+        "best_snr": results[best_i]["snr"],
+        "results": results,
+        "method": method,
     }
 
 
@@ -116,50 +118,52 @@ def optimize_gain(images, gains):
         raise ValueError("At least one image required")
 
     results = []
-    for img, gain in zip(images, gains):
+    for img, gain in zip(images, gains, strict=False):
         img_f = np.asarray(img, dtype=np.float64)
         snr_info = compute_snr(img_f)
         quality = assess_quality(img_f)
 
-        results.append({
-            'gain': gain,
-            'snr': snr_info['snr'],
-            'signal_mean': snr_info['signal_mean'],
-            'bg_std': snr_info['bg_std'],
-            'saturation': quality['saturation_fraction'],
-            'dynamic_range': quality['dynamic_range_fraction'],
-        })
+        results.append(
+            {
+                "gain": gain,
+                "snr": snr_info["snr"],
+                "signal_mean": snr_info["signal_mean"],
+                "bg_std": snr_info["bg_std"],
+                "saturation": quality["saturation_fraction"],
+                "dynamic_range": quality["dynamic_range_fraction"],
+            }
+        )
 
     # Check SNR trend
-    snrs = [r['snr'] for r in results]
+    snrs = [r["snr"] for r in results]
     if len(snrs) >= 2:
         slope = np.polyfit(range(len(snrs)), snrs, 1)[0]
         if slope > 0.5:
-            snr_trend = 'improving'
+            snr_trend = "improving"
         elif slope < -0.5:
-            snr_trend = 'degrading'
+            snr_trend = "degrading"
         else:
-            snr_trend = 'flat'
+            snr_trend = "flat"
     else:
-        snr_trend = 'unknown'
+        snr_trend = "unknown"
 
     # Pick lowest gain with acceptable SNR (>3) and no saturation
     for i, r in enumerate(results):
-        if r['snr'] > 3 and r['saturation'] < 0.01:
+        if r["snr"] > 3 and r["saturation"] < 0.01:
             return {
-                'best_gain': gains[i],
-                'best_index': i,
-                'results': results,
-                'snr_trend': snr_trend,
+                "best_gain": gains[i],
+                "best_index": i,
+                "results": results,
+                "snr_trend": snr_trend,
             }
 
     # Fallback: best SNR
     best_i = int(np.argmax(snrs))
     return {
-        'best_gain': gains[best_i],
-        'best_index': best_i,
-        'results': results,
-        'snr_trend': snr_trend,
+        "best_gain": gains[best_i],
+        "best_index": best_i,
+        "results": results,
+        "snr_trend": snr_trend,
     }
 
 
@@ -200,15 +204,17 @@ def parameter_sweep(images, exposures, gains):
             snr_info = compute_snr(img_f)
             quality = assess_quality(img_f)
 
-            snr_matrix[i, j] = snr_info['snr']
-            row_results.append({
-                'exposure': exp,
-                'gain': gain,
-                'snr': snr_info['snr'],
-                'signal_mean': snr_info['signal_mean'],
-                'bg_std': snr_info['bg_std'],
-                'saturation': quality['saturation_fraction'],
-            })
+            snr_matrix[i, j] = snr_info["snr"]
+            row_results.append(
+                {
+                    "exposure": exp,
+                    "gain": gain,
+                    "snr": snr_info["snr"],
+                    "signal_mean": snr_info["signal_mean"],
+                    "bg_std": snr_info["bg_std"],
+                    "saturation": quality["saturation_fraction"],
+                }
+            )
         all_results.append(row_results)
 
     # Find best: max SNR among unsaturated
@@ -217,32 +223,31 @@ def parameter_sweep(images, exposures, gains):
     for i in range(n_exp):
         for j in range(n_gain):
             r = all_results[i][j]
-            if r['saturation'] < 0.01 and r['snr'] > best_snr:
-                best_snr = r['snr']
+            if r["saturation"] < 0.01 and r["snr"] > best_snr:
+                best_snr = r["snr"]
                 best_idx = (i, j)
 
     if best_snr < 0:
         # All saturated — pick least saturated
-        min_sat = float('inf')
+        min_sat = float("inf")
         for i in range(n_exp):
             for j in range(n_gain):
-                if all_results[i][j]['saturation'] < min_sat:
-                    min_sat = all_results[i][j]['saturation']
+                if all_results[i][j]["saturation"] < min_sat:
+                    min_sat = all_results[i][j]["saturation"]
                     best_idx = (i, j)
         best_snr = snr_matrix[best_idx]
 
     return {
-        'snr_matrix': snr_matrix,
-        'best_exposure': exposures[best_idx[0]],
-        'best_gain': gains[best_idx[1]],
-        'best_snr': float(best_snr),
-        'best_indices': best_idx,
-        'results': all_results,
+        "snr_matrix": snr_matrix,
+        "best_exposure": exposures[best_idx[0]],
+        "best_gain": gains[best_idx[1]],
+        "best_snr": float(best_snr),
+        "best_indices": best_idx,
+        "results": all_results,
     }
 
 
-def suggest_parameters(image, current_exposure, current_gain=1.0,
-                       bit_depth=None):
+def suggest_parameters(image, current_exposure, current_gain=1.0, bit_depth=None):
     """Quick parameter suggestion from a single test image.
 
     Analyzes the current image and suggests adjustments to exposure
@@ -272,14 +277,14 @@ def suggest_parameters(image, current_exposure, current_gain=1.0,
     suggested_gain = current_gain
 
     # Check saturation
-    if quality['saturation_fraction'] > 0.01:
+    if quality["saturation_fraction"] > 0.01:
         factor = 0.5
         suggested_exposure = current_exposure * factor
         reasoning.append(
             f"Image saturated ({quality['saturation_fraction']:.1%}). "
             f"Reduce exposure from {current_exposure} to {suggested_exposure} ms."
         )
-    elif quality['saturation_fraction'] > 0.001:
+    elif quality["saturation_fraction"] > 0.001:
         reasoning.append("Near saturation — exposure is at upper limit.")
     else:
         # Check if we have headroom to increase exposure
@@ -294,7 +299,7 @@ def suggest_parameters(image, current_exposure, current_gain=1.0,
             full_range = 255
 
         usage = max_val / full_range
-        if usage < 0.3 and snr_info['snr'] < 10:
+        if usage < 0.3 and snr_info["snr"] < 10:
             # Underexposed — increase exposure
             factor = min(0.7 / max(usage, 0.01), 4.0)
             suggested_exposure = current_exposure * factor
@@ -302,7 +307,7 @@ def suggest_parameters(image, current_exposure, current_gain=1.0,
                 f"Underexposed ({usage:.0%} of range used, SNR={snr_info['snr']:.1f}). "
                 f"Increase exposure to {suggested_exposure:.1f} ms."
             )
-        elif usage < 0.5 and snr_info['snr'] < 5:
+        elif usage < 0.5 and snr_info["snr"] < 5:
             factor = min(0.6 / max(usage, 0.01), 2.0)
             suggested_exposure = current_exposure * factor
             reasoning.append(
@@ -311,7 +316,7 @@ def suggest_parameters(image, current_exposure, current_gain=1.0,
             )
 
     # Check if gain could help (only if exposure is already at limit)
-    if snr_info['snr'] < 3 and suggested_exposure == current_exposure:
+    if snr_info["snr"] < 3 and suggested_exposure == current_exposure:
         # SNR is very low and we didn't suggest exposure change
         reasoning.append(
             f"Low SNR ({snr_info['snr']:.1f}). Consider increasing exposure "
@@ -325,12 +330,12 @@ def suggest_parameters(image, current_exposure, current_gain=1.0,
         )
 
     return {
-        'current_snr': snr_info['snr'],
-        'suggested_exposure': suggested_exposure,
-        'suggested_gain': suggested_gain,
-        'exposure_factor': suggested_exposure / max(current_exposure, 1e-10),
-        'reasoning': reasoning,
-        'quality': quality,
+        "current_snr": snr_info["snr"],
+        "suggested_exposure": suggested_exposure,
+        "suggested_gain": suggested_gain,
+        "exposure_factor": suggested_exposure / max(current_exposure, 1e-10),
+        "reasoning": reasoning,
+        "quality": quality,
     }
 
 
@@ -356,11 +361,11 @@ def make_sweep_events(channel, exposures, gains=None, group=None):
     for exp in exposures:
         for gain in gains_list:
             evt_kwargs = {
-                'channel': {'config': channel, 'group': group} if group else {'config': channel},
-                'exposure': exp,
+                "channel": {"config": channel, "group": group} if group else {"config": channel},
+                "exposure": exp,
             }
             if gain is not None:
-                evt_kwargs['properties'] = [('Camera', 'Gain', str(gain))]
+                evt_kwargs["properties"] = [("Camera", "Gain", str(gain))]
 
             events.append(MDAEvent(**evt_kwargs))
 

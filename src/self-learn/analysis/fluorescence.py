@@ -15,8 +15,7 @@ import numpy as np
 from scipy import ndimage
 
 
-def subtract_background(image, method='rolling_ball', radius=50,
-                        percentile=5):
+def subtract_background(image, method="rolling_ball", radius=50, percentile=5):
     """Subtract background from a fluorescence image.
 
     Args:
@@ -36,36 +35,36 @@ def subtract_background(image, method='rolling_ball', radius=50,
     if img.ndim != 2:
         raise ValueError("Image must be 2D")
 
-    if method == 'rolling_ball':
+    if method == "rolling_ball":
         # Morphological opening approximates rolling ball
-        struct = ndimage.generate_binary_structure(2, 1)
+        ndimage.generate_binary_structure(2, 1)
         bg = ndimage.grey_opening(img, size=(radius, radius))
         corrected = img - bg
         corrected = np.clip(corrected, 0, None)
 
-    elif method == 'percentile':
+    elif method == "percentile":
         bg_val = float(np.percentile(img, percentile))
         bg = np.full_like(img, bg_val)
         corrected = img - bg_val
         corrected = np.clip(corrected, 0, None)
 
-    elif method == 'median':
+    elif method == "median":
         bg = ndimage.median_filter(img, size=radius)
         corrected = img - bg
         corrected = np.clip(corrected, 0, None)
 
     else:
-        raise ValueError(f"Unknown method: {method}. "
-                         f"Use 'rolling_ball', 'percentile', or 'median'.")
+        raise ValueError(
+            f"Unknown method: {method}. " f"Use 'rolling_ball', 'percentile', or 'median'."
+        )
 
     return {
-        'corrected': corrected,
-        'background': bg,
+        "corrected": corrected,
+        "background": bg,
     }
 
 
-def correct_illumination(image, flat_field=None, dark_field=None,
-                         sigma=None):
+def correct_illumination(image, flat_field=None, dark_field=None, sigma=None):
     """Apply flat-field illumination correction.
 
     Corrects for uneven illumination using:
@@ -108,8 +107,8 @@ def correct_illumination(image, flat_field=None, dark_field=None,
     corrected = np.clip(corrected, 0, None)
 
     return {
-        'corrected': corrected,
-        'flat_field': flat,
+        "corrected": corrected,
+        "flat_field": flat,
     }
 
 
@@ -144,11 +143,14 @@ def measure_roi(image, mask, background_mask=None):
 
     if n == 0:
         return {
-            'mean': 0.0, 'median': 0.0, 'std': 0.0,
-            'total': 0.0, 'area': 0,
-            'background_mean': 0.0,
-            'signal_to_background': 0.0,
-            'corrected_mean': 0.0,
+            "mean": 0.0,
+            "median": 0.0,
+            "std": 0.0,
+            "total": 0.0,
+            "area": 0,
+            "background_mean": 0.0,
+            "signal_to_background": 0.0,
+            "corrected_mean": 0.0,
         }
 
     roi_mean = float(np.mean(roi_pixels))
@@ -171,18 +173,18 @@ def measure_roi(image, mask, background_mask=None):
     corrected = roi_mean - bg_mean
 
     return {
-        'mean': round(roi_mean, 3),
-        'median': round(roi_median, 3),
-        'std': round(roi_std, 3),
-        'total': round(roi_total, 3),
-        'area': n,
-        'background_mean': round(bg_mean, 3),
-        'signal_to_background': round(sb_ratio, 3),
-        'corrected_mean': round(corrected, 3),
+        "mean": round(roi_mean, 3),
+        "median": round(roi_median, 3),
+        "std": round(roi_std, 3),
+        "total": round(roi_total, 3),
+        "area": n,
+        "background_mean": round(bg_mean, 3),
+        "signal_to_background": round(sb_ratio, 3),
+        "corrected_mean": round(corrected, 3),
     }
 
 
-def bleach_correct(images, method='exponential'):
+def bleach_correct(images, method="exponential"):
     """Correct photobleaching in a fluorescence time series.
 
     Args:
@@ -204,16 +206,15 @@ def bleach_correct(images, method='exponential'):
 
     n = len(stack)
     if n == 0:
-        return {'corrected': [], 'bleach_curve': np.array([]),
-                'correction_factors': np.array([])}
+        return {"corrected": [], "bleach_curve": np.array([]), "correction_factors": np.array([])}
 
     means = np.array([img.mean() for img in stack])
     ref_mean = means[0] if means[0] > 0 else 1.0
 
-    if method == 'ratio':
+    if method == "ratio":
         factors = ref_mean / np.maximum(means, 1e-10)
 
-    elif method == 'exponential':
+    elif method == "exponential":
         # Fit exponential: I(t) = A * exp(-t/tau)
         t = np.arange(n, dtype=np.float64)
         valid = means > 0
@@ -225,24 +226,25 @@ def bleach_correct(images, method='exponential'):
         else:
             factors = np.ones(n)
 
-    elif method == 'histogram':
+    elif method == "histogram":
         # Simple ratio-based (histogram matching is expensive)
         factors = ref_mean / np.maximum(means, 1e-10)
 
     else:
-        raise ValueError(f"Unknown method: {method}. "
-                         f"Use 'exponential', 'ratio', or 'histogram'.")
+        raise ValueError(
+            f"Unknown method: {method}. " f"Use 'exponential', 'ratio', or 'histogram'."
+        )
 
     corrected = [stack[i] * factors[i] for i in range(n)]
 
     return {
-        'corrected': corrected,
-        'bleach_curve': means,
-        'correction_factors': factors,
+        "corrected": corrected,
+        "bleach_curve": means,
+        "correction_factors": factors,
     }
 
 
-def normalize_intensity(image, method='minmax', pmin=1, pmax=99):
+def normalize_intensity(image, method="minmax", pmin=1, pmax=99):
     """Normalize image intensity to [0, 1] range.
 
     Args:
@@ -256,9 +258,9 @@ def normalize_intensity(image, method='minmax', pmin=1, pmax=99):
     """
     img = np.asarray(image, dtype=np.float64)
 
-    if method == 'minmax':
+    if method == "minmax":
         lo, hi = img.min(), img.max()
-    elif method == 'percentile':
+    elif method == "percentile":
         lo = float(np.percentile(img, pmin))
         hi = float(np.percentile(img, pmax))
     else:
