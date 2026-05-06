@@ -1,5 +1,20 @@
 # Microscope Toolset
-This repository is a toolset for microscope that use pymmcore-plus with LLM
+
+[![CI](https://github.com/ddd42-star/microscope-toolset/actions/workflows/ci.yml/badge.svg)](https://github.com/ddd42-star/microscope-toolset/actions/workflows/ci.yml)
+[![Python](https://img.shields.io/badge/python-3.11%20|%203.12%20|%203.13-blue)](https://www.python.org)
+[![License](https://img.shields.io/badge/license-BSD%203--Clause-green)](LICENSE)
+
+**Microscope Toolset** is a research platform that connects a Claude Code AI agent to a **real** or **virtual** microscope through an [MCP](https://modelcontextprotocol.io) server embedded in a [napari](https://napari.org) GUI. The agent can control real or simulated hardware, execute image-analysis code, query a curated knowledge database, and track complete experiment sessions — all from a natural-language prompt.
+
+### Key features
+
+- **MCP server** — exposes microscope control, image acquisition, and analysis as Claude-callable tools over HTTP
+- **Napari plugin** — control panel to start/stop the server, monitor hardware state, and review sessions
+- **Hardware abstraction** — supports real hardware via [pymmcore-plus](https://pymmcore-plus.github.io/pymmcore-plus/) / [pymmcore-proxy](https://github.com/hinderling/pymmcore-proxy) and simulated hardware via [virtual-microscope](https://github.com/hinderling/virtual-microscope)
+- **Code execution with guardrails** — agents submit Python code that is checked (AST + runtime) for unsafe patterns before running; built-in guards for `CMMCorePlus` misuse and Cellpose parameter ranges
+- **Self-learn loop** — library of ready-made analysis modules (cell detection, tracking, morphometry, workflows) the agent can invoke or learn from
+- **Benchmarking** — simulation-based evaluation of agent performance across reproducible virtual-microscope scenarios
+- **Experiment tracking** — captures every Claude Code turn, tool call, and result into a timestamped folder for offline review and replay
 
 ---
 
@@ -71,29 +86,6 @@ uv pip install -e .
 > **PyTorch + CUDA:** uv installs the CPU-only build of torch by default. To enable CUDA support, uncomment the `torch` index entry in `[tool.uv.sources]` inside `pyproject.toml` and set your CUDA version (`cu118`, `cu121`, `cu124`, …) before running `uv sync`.
 
 ---
-
-#### Optional databases: Elasticsearch and PostgreSQL
-
-Both Elasticsearch and PostgreSQL are **optional**. The toolset starts and runs without them — database-backed features (semantic search, session logging) are simply skipped when the services are not configured.
-
-A full setup and usage guide for both databases is under implementation. For now, set the relevant variables in your `.env` file to enable them:
-
-**Elasticsearch** — used for semantic search over API docs and publications:
-```
-ELASTICSEARCH="<path to your elasticsearch installation>"   # enables auto-start of the ES server
-ELASTICSEARCH_URL="http://localhost:4500"                   # connection URL (default shown)
-```
-
-**PostgreSQL** — used for logging agent sessions:
-```
-DB_HOST="localhost"
-DB_PORT=5432
-DB_NAME="<your database name>"
-DB_USER="<your user>"
-DB_PASSWORD="<your password>"
-```
-
-If any of the `DB_*` variables are absent, the PostgreSQL logger is skipped automatically.
 
 ### Model configuration
 
