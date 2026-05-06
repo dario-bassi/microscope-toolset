@@ -309,7 +309,7 @@ class NapariViewerMC:
                 return {
                 "status": "success",
                 "name": layer.name,
-                "hsape": list(np.shape(img))
+                "shape": list(np.shape(img))
             }
             elif path is None and img_data is not None:
                 layer = self._viewer.add_labels(img_data, name=name)
@@ -317,7 +317,7 @@ class NapariViewerMC:
                 return {
                     "status": "success",
                     "name": layer.name,
-                    "hsape": list(np.shape(img_data))
+                    "shape": list(np.shape(img_data))
                 }
         except Exception as e:
             return {
@@ -626,10 +626,11 @@ class NapariViewerMC:
         }
     
 
-    def add_tracks(self, 
+    def add_tracks(self,
                    track_data: np.ndarray,
-                   features: dict[str, Any] | None = None, 
-                   tail_width: float | None = None, 
+                   name: str | None = None,
+                   features: dict[str, Any] | None = None,
+                   tail_width: float | None = None,
                    tail_length: float | None = None):
         """
         This function add a tracks layer to layer list.
@@ -653,16 +654,19 @@ class NapariViewerMC:
 
         try:
             kwargs = {"data": np.asarray(track_data)}
+            if name is not None:
+                kwargs["name"] = name
             if features is not None:
                 kwargs["features"] = features
             if tail_width is not None:
                 kwargs["tail_width"] = int(tail_width)
             if tail_length is not None:
                 kwargs["tail_length"] = int(tail_length)
-            self._viewer.add_tracks(**kwargs)
+            layer = self._viewer.add_tracks(**kwargs)
 
             return {
                 "status": "success",
+                "name": layer.name,
                 "message": "The tracks data was successfully added."
             }
 

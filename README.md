@@ -256,6 +256,69 @@ To add a new test, see [Benchmark Tests](docs/benchmark_test_authoring.md).
 
 ---
 
+### Experiment Tracking
+
+Experiment Tracking records a complete snapshot of a Claude Code agent session — every user turn, tool call, and result — so you can replay or review what happened after the experiment ends.
+
+#### What gets recorded
+
+When you click **Start Tracking** in the GUI (or call `start_experiment()` programmatically), the toolset notes the current line position in the active Claude Code session file. When you click **Stop**, it extracts everything added since that point and saves it to a timestamped folder.
+
+Each saved experiment folder contains:
+
+```
+src/benchmarking/experiments/<name>_<timestamp>/
+│
+├── conversation.jsonl          # All Claude Code turns captured during the experiment
+│                               # (user messages, agent responses, tool calls + results)
+│
+├── workspace/                  # Folder pre-created for the agent to save outputs:
+│                               # images, CSV files, analysis results, figures, etc.
+│
+└── session_data/               # Copy of the Claude Code session subdirectory
+    ├── tool-results/<id>.txt   # Large tool outputs offloaded from the JSONL
+    ├── subagents/<id>.jsonl    # Full conversation of each spawned subagent
+    └── subagents/<id>.meta.json # Subagent type and description metadata
+```
+
+#### How to start and stop tracking
+
+**From the GUI** — use the **Experiment Tracking** panel in the control widget. Enter a name and click **Start Tracking**; click **Stop** when the experiment is done. The **Open** button opens the saved folder in the file explorer.
+
+**From the CLI** (useful when running without a GUI or during benchmarking):
+
+```bash
+# Start (creates the experiment folder immediately)
+python -m src.benchmarking.experiment_saver start "my_experiment"
+
+# Stop and save the conversation slice
+python -m src.benchmarking.experiment_saver end
+
+# List all saved experiments
+python -m src.benchmarking.experiment_saver list
+
+# Check whether an experiment is currently active
+python -m src.benchmarking.experiment_saver status
+```
+
+#### Reviewing a saved experiment
+
+Pass the path to a saved `conversation.jsonl` to the napari launcher to open the interactive dashboard:
+
+```bash
+python -m src.plugin_napari --review src/benchmarking/experiments/<name>/conversation.jsonl
+```
+
+The dashboard shows a full timeline of the session: user messages, agent reasoning, every tool call with its inputs and outputs, hardware events from the microscope log, subagent conversations, estimated token cost, and duration.
+
+You can optionally merge in the pymmcore-plus hardware log for a combined view of software and hardware events:
+
+```bash
+python -m src.plugin_napari --review <path_to_conversation.jsonl> --log <path_to_pymmcore-plus.log>
+```
+
+---
+
 ### TO DO LIST
 
 - [x] Fix use of Elasticsearch and PostgresSQL database
@@ -266,4 +329,5 @@ To add a new test, see [Benchmark Tests](docs/benchmark_test_authoring.md).
 - [ ] Plan to create additional metadata from the microscope session
 - [x] Build a chatbox for visualising user-agent conversation, including time, tool calls, ect.
 - [ ] Switch local virtual simulation to virtual simulation from the package virtual_microscope
+- [ ] Add `console_scripts` entry point so the toolset can be launched with `microscope-toolset` instead of `python -m src.plugin_napari` (add `[project.scripts]` to `pyproject.toml` and wrap startup in a `main()` function)
 

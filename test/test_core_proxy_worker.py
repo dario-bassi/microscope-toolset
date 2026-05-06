@@ -16,7 +16,7 @@ import pytest
 pytest.importorskip("PyQt6", reason="PyQt6 not available")
 
 from PyQt6.QtCore import QThread
-from src.utils.core_proxy_worker import CoreProxyWorker
+from src.utils import CoreProxyWorker
 
 
 # ── error path: mixed cfg ─────────────────────────────────────────────────────

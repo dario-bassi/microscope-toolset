@@ -2,7 +2,7 @@
 import pytest
 from unittest.mock import patch
 from pymmcore_plus import CMMCorePlus
-from src.local.execute import Execute
+from src.local import Execute
 
 
 # ---------------------------------------------------------------------------

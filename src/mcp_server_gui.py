@@ -16,15 +16,11 @@ from PyQt6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QPushButton, QLabel,
     QSizePolicy, QFrame, QLineEdit, QGroupBox, QMessageBox, QComboBox,
 )
-from src.mcp_microscopetoolset.utils import get_user_information
+from src.mcp_microscopetoolset import get_user_information, create_mcp_server, initialize_agents, NapariViewerMC
 from src.start_subprocess.servers import _start_server, _stop_server, wait_for_es
-from src.mcp_microscopetoolset.server_setup import create_mcp_server
-from src.mcp_microscopetoolset.agents_init import initialize_agents
-from src.mcp_microscopetoolset.viewer import NapariViewerMC
-from src.microscope.microscope_event_cache import MicroscopeEventCache
-from src.benchmarking.benchmark_logger import BenchmarkLogger
-from src.utils.cfg_utils import classify_cfg as _classify_cfg
-from src.utils.core_proxy_worker import CoreProxyWorker
+from src.microscope import MicroscopeEventCache
+from src.benchmarking import BenchmarkLogger
+from src.utils import classify_cfg as _classify_cfg, CoreProxyWorker
 
 logger = logging.getLogger("MCPServer")
 
@@ -256,7 +252,7 @@ class PostgreSQLWorker(QObject):
     @pyqtSlot()
     def run(self):
         try:
-            from src.postqrl.connection import DBConnection
+            from src.postqrl import DBConnection
             self._db_conn = DBConnection()
             host = os.getenv("DB_HOST", "localhost")
             port = os.getenv("DB_PORT", "5432")
@@ -1002,7 +998,7 @@ class MCPServer(QWidget):
     def _refresh_bench_tests(self):
         """Populate the test combo from src/benchmarking/test_*/."""
         try:
-            from src.benchmarking.test_runner import list_tests
+            from src.benchmarking import list_tests
             tests = list_tests()
         except Exception:
             tests = []
@@ -1109,7 +1105,7 @@ class MCPServer(QWidget):
     # ── Experiment tracking ─────────────────────────────────────────────────
 
     def _start_tracking(self):
-        from src.benchmarking.experiment_saver import start_experiment
+        from src.benchmarking import start_experiment
         name = self._track_name_edit.text().strip() or None
         try:
             exp_name, workspace = start_experiment(name)
@@ -1131,7 +1127,7 @@ class MCPServer(QWidget):
             logger.exception(f"Tracking start failed: {e}")
 
     def _stop_tracking(self):
-        from src.benchmarking.experiment_saver import end_experiment
+        from src.benchmarking import end_experiment
         self._track_dot.setStyleSheet(_DOT_BUSY)
         self._track_stop_btn.setEnabled(False)
         try:

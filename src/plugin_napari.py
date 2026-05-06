@@ -32,10 +32,7 @@ if __name__ == "__main__":
     args, _unknown = parser.parse_known_args()
 
     if args.review:
-        from src.benchmarking.review_conversation import (
-            read_file, parse_log_file, merge_logs, default_log_path,
-        )
-        from src.benchmarking.dashboard import launch_dashboard
+        from src.benchmarking import read_file, parse_log_file, merge_logs, default_log_path, launch_dashboard
         try:
             messages, stats = read_file(args.review)
             logger.info(
@@ -67,11 +64,11 @@ if __name__ == "__main__":
     else:
         # Resolve test / auto_config before importing napari
         if args.test is not None and args.test == "":
-            from src.benchmarking.test_runner import print_tests
+            from src.benchmarking import print_tests
             print_tests()
             sys.exit(0)
         elif args.test:
-            from src.benchmarking.test_runner import run_test
+            from src.benchmarking import run_test
             logger.info(f"Setting up test: {args.test}")
             auto_config = str(run_test(args.test))
             logger.info(f"Test cfg: {auto_config}")

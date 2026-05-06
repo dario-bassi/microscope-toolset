@@ -13,9 +13,9 @@ import time
 import os
 from io import BytesIO
 from pydantic import BaseModel
-from src.local.gatekeeper_core import GatekeeperCore
+from src.local import GatekeeperCore
 from dotenv import load_dotenv
-from src.benchmarking.benchmark_logger import BenchmarkLogger
+from src.benchmarking import BenchmarkLogger
 
 #  logger
 logger = logging.getLogger("ServerSetup")
@@ -1326,6 +1326,7 @@ def create_mcp_server(
                 The Tracks layer assumes the first column is the track_id, the second column is the time axis,
                 and columns 3-5 are Z, Y, and X, respectively. Other feature can be added in other coloumns.
                 Each row is one vertex in a track. All vertices with the same track_id are joined into a single track."""),
+        name: str | None = Field(None, description="Optional name for the tracks layer."),
         features: dict[str, Any] | None = Field(None, description="Features table where each row corresponds to a point and each column is a feature."),
         tail_width: float | None = Field(None, description="Float value representing the width of the track tails in pixels."),
         tail_length: float | None = Field(None, description="Float value representing the length of the positive (backward in time) tails in units of time."),
@@ -1334,9 +1335,9 @@ def create_mcp_server(
         """It add a Track layer to the layer List."""
 
         if viewer_proxy is not None:
-            return viewer_proxy.call_on_main_thread('add_tracks', track_data=track_data, features=features, tail_width=tail_width, tail_length= tail_length)
+            return viewer_proxy.call_on_main_thread('add_tracks', track_data=track_data, name=name, features=features, tail_width=tail_width, tail_length=tail_length)
         else:
-            return viewer.add_tracks(data=track_data, features=features, tail_width=tail_width, tail_length=tail_length)
+            return viewer.add_tracks(data=track_data, name=name, features=features, tail_width=tail_width, tail_length=tail_length)
     
     # TODO: add timelapse_screenshot later
 
@@ -1355,7 +1356,7 @@ def create_mcp_server(
     def get_experiment_workspace() -> dict[str, Any]:
         try:
             import json as _json
-            from src.benchmarking.experiment_saver import MARKER_FILE
+            from src.benchmarking import MARKER_FILE
             from pathlib import Path as _Path
             if not MARKER_FILE.exists():
                 return {"active": False, "workspace_dir": None, "experiment_name": None}

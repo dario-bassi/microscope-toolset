@@ -5,7 +5,7 @@ import os
 
 #from agentsNormal.classify_user_intent import ClassifyAgent
 #from agentsNormal.structuredOutput import ClassificationAgentOutput
-from src.postqrl.log_db import LoggerDB
+from src.postqrl import LoggerDB
 
 
 def user_message(message):

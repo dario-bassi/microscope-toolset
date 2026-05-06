@@ -2,8 +2,8 @@ from .base_agent import BaseAgent
 import anthropic
 import json
 from .structuredOutput import RephraseOutput, ExtractKeywordOutput
-from src.databases.elasticsearch_db import ElasticSearchDB
-from src.postqrl.log_db import LoggerDB
+from src.databases import ElasticSearchDB
+from src.postqrl import LoggerDB
 import torch
 from typing import Any, List
 import logging

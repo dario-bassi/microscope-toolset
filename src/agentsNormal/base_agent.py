@@ -43,7 +43,7 @@ class BaseAgent:
 
             response = self.client.messages.create(
                 model=model,
-                max_tokens=1024,
+                max_tokens=4096,
                 system=system,
                 messages=messages,
                 tools=[{

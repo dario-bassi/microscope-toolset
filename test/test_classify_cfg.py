@@ -1,6 +1,6 @@
 """Tests for src/utils/cfg_utils.classify_cfg."""
 import pytest
-from src.utils.cfg_utils import classify_cfg
+from src.utils import classify_cfg
 
 
 # ── helpers ──────────────────────────────────────────────────────────────────

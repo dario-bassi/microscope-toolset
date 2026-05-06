@@ -3,13 +3,12 @@ import anthropic
 from pymmcore_plus import CMMCorePlus
 from transformers import AutoTokenizer, AutoModelForSequenceClassification
 from sentence_transformers import SentenceTransformer
-from src.agentsNormal.specialized_agent import DatabaseAgent
-from src.databases.elasticsearch_db import ElasticSearchDB
-from src.local.execute import Execute
+from src.agentsNormal import DatabaseAgent
+from src.databases import ElasticSearchDB
+from src.local import Execute
 from src.mcp_microscopetoolset.utils import get_user_information, logger_database_exists
-from src.microscope.microscope_status import MicroscopeStatus
-from src.postqrl.connection import DBConnection
-from src.postqrl.log_db import LoggerDB
+from src.microscope import MicroscopeStatus
+from src.postqrl import DBConnection, LoggerDB
 import time
 import logging
 import sys
