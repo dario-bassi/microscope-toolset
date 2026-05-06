@@ -5,6 +5,10 @@ Strategy:
 - Real-device happy path: uses pymmcore-plus bundled MMConfig_demo.cfg (C++ DemoCamera
   drivers, no real hardware required) — runs automatically when pymmcore_proxy is present.
 - Virtual happy path: skipped unless VIRTUAL_MICROSCOPE_TESTS=1 (needs virtual_microscope).
+
+Note: the worker does NOT validate cfg path existence — it starts an empty proxy and
+emits server_ready(url, cfg_path); the caller loads the cfg via RPC after the proxy is up.
+A nonexistent path is therefore not an error at the worker level.
 """
 import os
 import pytest
@@ -13,25 +17,6 @@ pytest.importorskip("PyQt6", reason="PyQt6 not available")
 
 from PyQt6.QtCore import QThread
 from src.utils.core_proxy_worker import CoreProxyWorker
-
-
-# ── error path: missing cfg file ─────────────────────────────────────────────
-
-def test_missing_cfg_emits_server_error(qtbot):
-    """A nonexistent cfg path must emit server_error, not server_ready."""
-    worker = CoreProxyWorker(cfg_path="/nonexistent/path/config.cfg", port=15901)
-
-    errors = []
-    readys = []
-    worker.server_error.connect(errors.append)
-    worker.server_ready.connect(readys.append)
-
-    with qtbot.waitSignal(worker.server_error, timeout=10_000):
-        worker.run()
-
-    assert len(errors) == 1
-    assert len(readys) == 0
-    assert errors[0]  # non-empty message
 
 
 # ── error path: mixed cfg ─────────────────────────────────────────────────────
@@ -62,17 +47,28 @@ def test_mixed_cfg_emits_server_error(qtbot, tmp_path):
 
 # ── signal wiring: worker runs in QThread ────────────────────────────────────
 
-def test_worker_signals_cross_thread(qtbot):
-    """Signals emitted from the worker thread must reach slots on the main thread."""
+def test_worker_signals_cross_thread(qtbot, tmp_path):
+    """Signals emitted from the worker thread must reach slots on the main thread.
+
+    Uses a mixed cfg (both #py and Device lines) to trigger server_error fast —
+    the check happens before any heavy imports so the test stays quick.
+    """
+    mixed_cfg = tmp_path / "mixed_cross_thread.cfg"
+    mixed_cfg.write_text(
+        "#py pyDevice,Camera,virtual_microscope.devices.camera,SimCameraDevice\n"
+        "Device,Stage,DemoCamera,DCamStage\n",
+        encoding="utf-8",
+    )
+
     thread = QThread()
-    worker = CoreProxyWorker(cfg_path="/nonexistent/path/config.cfg", port=15902)
+    worker = CoreProxyWorker(cfg_path=str(mixed_cfg), port=15902)
     worker.moveToThread(thread)
 
     received = []
     worker.server_error.connect(received.append)
     thread.started.connect(worker.run)
 
-    with qtbot.waitSignal(worker.server_error, timeout=10_000):
+    with qtbot.waitSignal(worker.server_error, timeout=5_000):
         thread.start()
 
     thread.quit()

@@ -192,6 +192,52 @@ Execute.register_runtime_guard("mylib", my_installer_fn)   # runs during exec
 
 If you need a guardrail for a library that is not yet covered, please [open an issue or submit a PR](https://github.com/ddd42-star/microscope-toolset/issues).
 
+### Testing
+
+Run the full test suite with:
+
+```bash
+python -m pytest test/ -v
+```
+
+Most tests run without any additional setup. The table below lists every test module and what it covers:
+
+| Module | What it tests | Needs real HW? |
+|---|---|---|
+| `test_classify_cfg.py` | `classify_cfg` — detects virtual / real / mixed cfg files | No |
+| `test_execute.py` | Python code safety guards, import validation, cellpose guardrails | No |
+| `test_core_proxy_worker.py` | `CoreProxyWorker` signal wiring, mixed-cfg rejection, full proxy start with DemoCamera | No |
+| `test_all_signals.py` | Full signal coverage of `RemoteMMCore` against a virtual microscope | Opt-in (see below) |
+| `test_init.py` | Basic package import smoke tests | No |
+
+#### Opt-in: virtual microscope tests
+
+Two tests spin up a real virtual microscope backend and are **skipped by default** to keep the standard run fast:
+
+- `test_core_proxy_worker.py::test_full_server_start_virtual` — starts a proxy against `bacteria.cfg` (virtual)
+- All tests in `test_all_signals.py` — full signal coverage using `particle.cfg` (virtual)
+
+To enable them, set `VIRTUAL_MICROSCOPE_TESTS=1`:
+
+```bash
+# Windows
+$env:VIRTUAL_MICROSCOPE_TESTS = "1"
+python -m pytest test/ -v
+
+# macOS / Linux
+VIRTUAL_MICROSCOPE_TESTS=1 pytest test/ -v
+```
+
+These tests also require the `virtual-microscope` package to be installed. If you used `uv sync` it is included automatically (resolved from the git source in `[tool.uv.sources]`). If you are on a conda environment, install it manually:
+
+```bash
+pip install git+https://github.com/hinderling/virtual-microscope
+```
+
+The virtual-microscope tests also expect the `bacteria.cfg` and `particle.cfg` configuration files to be present under `virtual-microscope/src/virtual_microscope/backends/`. These are included in the cloned repository so no extra step is needed if the git source was used.
+
+---
+
 ### Benchmarking
 
 The toolset includes a simulation-based benchmarking system for evaluating agent performance using the knowledge database from the *self-learn-loop*. Each benchmark test is a self-contained virtual microscope scenario served to the agent over HTTP — the agent cannot see the ground truth or simulation configuration.

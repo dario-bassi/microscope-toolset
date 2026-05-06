@@ -156,6 +156,10 @@ known-first-party = ["src"]
 # bandit — security linting
 # ---------------------------------------------------------------------------
 
+[tool.pytest.ini_options]
+pythonpath = ["."]
+testpaths  = ["test"]
+
 [tool.bandit]
 # B101  assert used — fine in tests and guards
 # B603  subprocess with list args — used to open workspace folder in Explorer
