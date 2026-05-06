@@ -187,6 +187,7 @@ cython_debug/
 !src/self-learn/knowledge/**/*.md
 !docs/benchmark_test_authoring.md
 !docs/experiment_workflow_guidelines.md
+!docs/mcp_server_gui.md
 
 # ignore database
 chroma_storage/
