@@ -1,0 +1,30 @@
+title: "Optogenetics — phase-contrast + stimulation, 50 cells, 1000x1000 µm"
+description: |
+  Optogenetic test with phase-contrast imaging and stimulation channel.
+  Cells are nearly static (brownian_d ≈ 0); motion is driven by stimulation.
+  Per-cell radius drawn uniformly from [17, 22] µm.
+  Focal plane starts in focus.
+
+  Channels:
+    phase-contrast — brightfield / label-free imaging (CYAN + Electra1, hardcoded)
+    stimulation    — optogenetic activation (ORANGE + mScarlet3(569/582))
+
+backend: particle
+cell_type: optogenetic
+n_cells: 50
+seed: 42
+width: 1000
+height: 1000
+radius_min: 17.0
+radius_max: 22.0
+brownian_d: 0.5
+time_scale: 5.0
+tick_hz: 10
+focal_plane: 0.0
+phase_contrast: true
+slm: true
+
+channels:
+  - name: stimulation
+    filter: "mScarlet3(569/582)"
+    led: ORANGE

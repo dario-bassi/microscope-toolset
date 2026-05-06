@@ -1,0 +1,27 @@
+title: "SNR optimisation — high-noise fluorescence, 50 cells, 1500x1500 µm"
+description: |
+  The agent must find an exposure time that yields acceptable SNR for cell
+  detection. The noise model is intentionally aggressive (photon_scale=1.5,
+  read_std=6.0). At low exposure cells are barely distinguishable; at moderate
+  exposure (~100-200 ms) SNR is sufficient; at very long exposure saturation clips.
+
+backend: particle
+cell_type: normal
+n_cells: 50
+seed: 22
+width: 1500
+height: 1500
+brownian_d: 0.0
+focal_plane: 0.0
+photon_scale: 1.5
+read_std: 6.0
+dark_current: 0.3
+banding_std: 1.0
+
+channels:
+  - name: DAPI
+    filter: "SCFP2(434/474)"
+    led: UV
+  - name: mScarlet
+    filter: "mScarlet3(569/582)"
+    led: ORANGE

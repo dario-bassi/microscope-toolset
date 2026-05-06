@@ -1,12 +1,14 @@
+import os
+
 from elasticsearch import Elasticsearch
 
 
 class ElasticSearchDB:
-
-    def __init__(self) -> None:
-
-        self.es = Elasticsearch("http://localhost:4500")
-        #self.index_name = index_name
+    def __init__(self, url: str | None = None) -> None:
+        if url is None:
+            url = os.getenv("ELASTICSEARCH_URL", "http://localhost:4500")
+        self.es = Elasticsearch(url)
+        # self.index_name = index_name
 
     def is_connected(self) -> bool:
         """
@@ -33,7 +35,6 @@ class ElasticSearchDB:
 
         return api_answer
 
-
     def create_default_index(self, index_name: str, **kwargs):
         """
         This function creates a default index in the Elasticsearch database
@@ -50,20 +51,12 @@ class ElasticSearchDB:
             "dims": 512,
             "similarity": "l2_norm",
             "index": True,
-            "index_options": {
-                "type": "hnsw",
-                "m": 32,
-                "ef_construction": 100
-            }
+            "index_options": {"type": "hnsw", "m": 32, "ef_construction": 100},
         }
 
         index_settings = {
-            "settings": {
-                "similarity": {"default": {"type": "BM25"}}
-            },
-            "mappings": {
-                "properties": properties
-            }
+            "settings": {"similarity": {"default": {"type": "BM25"}}},
+            "mappings": {"properties": properties},
         }
 
         if not self.es.indices.exists(index=index_name):
@@ -107,18 +100,11 @@ class ElasticSearchDB:
                     "query": queries,
                 }
             },
-            "size": k_result
+            "size": k_result,
         }
         search_result = self.es.search(index=index_name, body=search_body)
 
         return search_result
-
-        # return [{
-        #     "doc_id": hit["_source"]["doc_id"],
-        #     "content": hit["_source"]["content"],
-        #     "score":hit["_score"]
-        # }
-        #         for hit in search_result["hits"]["hits"]]
 
     def delete_index(self, index_name: str):
         """
@@ -128,8 +114,16 @@ class ElasticSearchDB:
         print("Index deleted!")
         return api_answer
 
-    def hybrid_search(self, index_name: str, query: str, query_vector: list[float], keyword_to_search_for_bm25: str, k_result: int = 150, semantic_weight: float = 0.8,
-                      bm25_weight: float = 0.2):
+    def hybrid_search(
+        self,
+        index_name: str,
+        query: str,
+        query_vector: list[float],
+        keyword_to_search_for_bm25: str,
+        k_result: int = 150,
+        semantic_weight: float = 0.8,
+        bm25_weight: float = 0.2,
+    ):
         """
         This function retrieve the best results obtained by semantic search and keywords search (BM25)
         """
@@ -138,21 +132,16 @@ class ElasticSearchDB:
 
         search_body = {
             "query": {
-                "match": {
-                    keyword_to_search_for_bm25: {
-                        "query": query,
-                        "boost": semantic_weight
-                    }
-                }
+                "match": {keyword_to_search_for_bm25: {"query": query, "boost": semantic_weight}}
             },
             "knn": {
                 "field": "embedding",
                 "query_vector": query_vector,
                 "k": k_result,
                 "num_candidates": 2 * k_result,
-                "boost": bm25_weight
+                "boost": bm25_weight,
             },
-            "size": k_result
+            "size": k_result,
         }
 
         api_answer = self.es.search(index=index_name, body=search_body)

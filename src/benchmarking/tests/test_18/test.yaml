@@ -1,0 +1,26 @@
+title: "Rare event detection — adaptive frame rate, 100 cells, 5000x5000 µm"
+description: |
+  The agent must scan a 2500x2500 µm field and, upon detecting a rare event
+  (mitosis or apoptosis), switch to a higher frame rate to capture it in detail.
+  No cells start in M phase or apoptosis — events emerge naturally from cycle
+  progression. Cell distribution: ~70 low n_div (0-5), ~20 moderate (6-7),
+  ~10 high (8-9, will enter apoptosis within a few cycles).
+
+backend: particle
+cell_type: cycle
+n_cells: 100
+seed: 89
+width: 2500
+height: 2500
+brownian_d: 0.0
+focal_plane: 0.0
+time_scale: 0.05
+tick_hz: 10
+
+channels:
+  - name: DAPI
+    filter: "SCFP2(434/474)"
+    led: UV
+  - name: mScarlet
+    filter: "mScarlet3(569/582)"
+    led: ORANGE

@@ -1,41 +1,69 @@
-import json
-from openai import OpenAI
-import  logging
+import logging
 import sys
 
-#  logger
-logger = logging.getLogger("Base Agent")
-logger.setLevel(logging.DEBUG)
-logger.addHandler(logging.StreamHandler(sys.stdout))
-logger.setLevel(logging.INFO)
-fh = logging.FileHandler("microscope_toolset.log", encoding="utf-8")
-fh.setFormatter(logging.Formatter(
-    "%(asctime)s [%(levelname)s] %(name)s: %(message)s",
-    datefmt="%Y-%m-%d %H:%M:%S",
-))
-logger.addHandler(fh)
+import anthropic
+
+logger = logging.getLogger("BaseAgent")
+if not logger.handlers:
+    logger.setLevel(logging.INFO)
+    logger.addHandler(logging.StreamHandler(sys.stdout))
+    fh = logging.FileHandler("microscope_toolset.log", encoding="utf-8")
+    fh.setFormatter(
+        logging.Formatter(
+            "%(asctime)s [%(levelname)s] %(name)s: %(message)s",
+            datefmt="%Y-%m-%d %H:%M:%S",
+        )
+    )
+    logger.addHandler(fh)
+
 
 class BaseAgent:
-
-    def __init__(self, client_openai: OpenAI):
-        self.client_openai = client_openai
-
+    def __init__(self, client: anthropic.Anthropic | None):
+        self.client = client
 
     def call_agent(self, model: str, input_user: list, error_string: str, output_format):
-        """
-        This function declare how the agent is called
-        """
+        """Call Claude with tool-use to get a structured response matching output_format."""
+        if self.client is None:
+            return {
+                "intent": "error",
+                "message": "Anthropic API key not configured — set ANTHROPIC_API_KEY in .env",
+            }
         try:
-            response = self.client_openai.responses.parse(
+            # Separate system prompt from the conversation messages
+            system = next((m["content"] for m in input_user if m["role"] == "system"), "")
+            messages = [m for m in input_user if m["role"] != "system"]
+
+            # Build a tool whose input_schema matches the Pydantic model
+            schema = output_format.model_json_schema()
+            # Remove $defs / title noise that Pydantic adds — Claude only needs properties
+            tool_schema = {
+                "type": "object",
+                "properties": schema.get("properties", {}),
+                "required": schema.get("required", []),
+            }
+
+            response = self.client.messages.create(
                 model=model,
-                input=input_user,
-                text_format=output_format
+                max_tokens=4096,
+                system=system,
+                messages=messages,
+                tools=[
+                    {
+                        "name": "structured_output",
+                        "description": "Return the structured result.",
+                        "input_schema": tool_schema,
+                    }
+                ],
+                tool_choice={"type": "tool", "name": "structured_output"},
             )
 
-            # parse json object
-            parsed_response = json.loads(response.output_text)
-            logger.info(parsed_response)
-            return parsed_response
+            for block in response.content:
+                if block.type == "tool_use":
+                    logger.info(block.input)
+                    return block.input
+
+            raise ValueError("No tool_use block in Claude response")
+
         except Exception as e:
             logger.error({"intent": "error", "message": f"{error_string}: {e}"})
             return {"intent": "error", "message": f"{error_string}: {e}"}

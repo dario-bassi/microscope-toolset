@@ -1,0 +1,25 @@
+title: "Cell-cycle fluorescence — DAPI + mScarlet, 100 cells, 1500x1500 µm"
+description: |
+  Cells are distributed across realistic cell-cycle states:
+    ~55% G1/Interphase, ~20% S/Interphase, ~15% G2/Interphase,
+    ~10% mitotic (Prophase → Cytokinesis).
+
+  DAPI shows nucleus/chromatin — intensity and pattern change per state.
+  mScarlet shows the membrane outline.
+
+backend: particle
+cell_type: cycle
+n_cells: 100
+seed: 42
+width: 1500
+height: 1500
+brownian_d: 0.0
+focal_plane: 0.0
+
+channels:
+  - name: DAPI
+    filter: "SCFP2(434/474)"
+    led: UV
+  - name: mScarlet
+    filter: "mScarlet3(569/582)"
+    led: ORANGE

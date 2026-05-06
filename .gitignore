@@ -179,9 +179,19 @@ cython_debug/
 
 # markdown
 *.md
+# Documentation files (always track)
+!microscope_tool.md
+!tracking.md
+!src/CLAUDE.md
+!src/ARCHITECTURE.md
+!src/self-learn/knowledge/**/*.md
+!docs/benchmark_test_authoring.md
+!docs/experiment_workflow_guidelines.md
+!docs/mcp_server_gui.md
 
 # ignore database
 chroma_storage/
+vector-database/
 
 # db sqlt3
 *.sqlite3
@@ -194,8 +204,8 @@ chroma_storage/
 
 # json
 *.json
-
-*.cfg
+# json
+!src/benchmarking/test_*/grading.json
 
 logs
 
@@ -205,9 +215,29 @@ pgvector/
 
 # png files
 *.png
+!docs/ecosystem-png.png
 
 # elastic search
 elasticsearch-7.17.29/
 
 
 
+vector-database/ca151909-59c6-4a6a-ba00-a2e1652f5669/data_level0.bin
+
+# tiff files
+*.tiff
+# csv file
+*.csv
+
+# tif files
+*.tif
+
+# npy
+*.npy
+
+# ipynb
+*.ipynb
+!database_creation.ipynb
+
+# mp4
+*.mp4
