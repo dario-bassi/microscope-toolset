@@ -22,28 +22,18 @@ def _start_server(cmd):
 
 
 def _stop_server(proc):
-
     if not proc:
         return
 
     if sys.platform.startswith("win"):
-        #proc.send_signal(signal.CTRL_BREAK_EVENT)
-        #proc.terminate()
-        #os.kill(proc.pid, signal.CTRL_BREAK_EVENT)
-        #subprocess.call(['taskkill', '/F', '/T', '/PID', str(proc.pid)])
-        import psutil
-        p = psutil.Process(proc.pid)
-        print(p)
-        for child in p.children(recursive=True):
-            if "java" in child.name().lower():
-                es_proc = child
-                break
-        subprocess.call(['taskkill', '/F', '/T', '/PID', str(es_proc.pid)])
-
+        subprocess.call(["taskkill", "/F", "/IM", "java.exe"])
+        logger.info("Stopped Elasticsearch (killed java.exe)")
     else:
-        os.killpg(os.getpgid(proc.pid), signal.SIGTERM)
-
-    proc.wait()
+        try:
+            os.killpg(os.getpgid(proc.pid), signal.SIGTERM)
+            proc.wait(timeout=5)
+        except (ProcessLookupError, subprocess.TimeoutExpired):
+            pass
 
 def wait_for_es(max_wait=60, interval=1):
     es = ElasticSearchDB()
