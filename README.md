@@ -45,7 +45,7 @@ Then set up a Python 3.12 environment using either **conda** or **uv**:
 #### Option A — Conda (Anaconda / Miniconda / Mamba)
 
 ```bash
-conda create -n microscope-toolset python=3.12.11
+conda create -n microscope-toolset python=3.12
 conda activate microscope-toolset
 pip install -r requirements.txt
 pip install -e .

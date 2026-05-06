@@ -3,7 +3,7 @@ name = "microscope-toolset"
 version = "0.1.0"
 description = "Microscope Toolset for napari"
 readme = "README.md"
-requires-python = ">=3.11"
+requires-python = ">=3.12"
 authors = [{ name = "Dario Bassi", email = "dario.bassi111@gmail.com" }]
 dependencies = [
     # Viewer & microscope control
