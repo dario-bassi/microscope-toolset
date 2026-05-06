@@ -28,7 +28,6 @@ cellpose
 transformers
 sentence-transformers
 anthropic
-openai
 
 # Database / search
 elasticsearch
