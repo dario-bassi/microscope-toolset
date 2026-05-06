@@ -330,4 +330,6 @@ python -m src.plugin_napari --review <path_to_conversation.jsonl> --log <path_to
 - [x] Build a chatbox for visualising user-agent conversation, including time, tool calls, ect.
 - [ ] Switch local virtual simulation to virtual simulation from the package virtual_microscope
 - [ ] Add `console_scripts` entry point so the toolset can be launched with `microscope-toolset` instead of `python -m src.plugin_napari` (add `[project.scripts]` to `pyproject.toml` and wrap startup in a `main()` function)
+- [ ] Switch off mcp tool to run python tool and instead use local env from claude
+- [ ] Introduce Claude Sandbox or Sandobx
 
