@@ -32,7 +32,7 @@ class CoreProxyWorker(QObject):
         server_error(msg)  — human-readable error if startup fails
     """
 
-    server_ready = pyqtSignal(str)
+    server_ready = pyqtSignal(str, str)   # (url, cfg_path)
     server_error = pyqtSignal(str)
 
     _POLL_INTERVAL = 0.2   # seconds between health-check attempts
@@ -40,16 +40,21 @@ class CoreProxyWorker(QObject):
 
     def __init__(self, cfg_path: str, host: str = "127.0.0.1", port: int = 5601):
         super().__init__()
-        self._cfg_path = cfg_path
-        self._host = host
-        self._port = port
+        self._cfg_path       = cfg_path
+        self._host           = host
+        self._port           = port
+        self._uvicorn_server = None   # set inside _server_thread before serving
+        self._server_thread  = None
 
     @pyqtSlot()
     def run(self):
         try:
             import urllib.request
             import logging.handlers as _lh
-            from pymmcore_proxy import serve
+            import uvicorn
+            from pymmcore_proxy import ProxyServer
+
+            _t0 = time.perf_counter()
 
             # On Windows, RotatingFileHandler.doRollover() calls os.rename() which
             # fails if another process (e.g. the ipykernel MCP sandbox) has the same
@@ -89,17 +94,27 @@ class CoreProxyWorker(QObject):
                 else:
                     os.environ["PYMM_SIGNALS_BACKEND"] = _old_backend
 
-            logger.info(f"Loading cfg with {type(core).__name__}")
-            core.loadSystemConfiguration(self._cfg_path)
-            logger.info(f"cfg loaded — starting proxy on {self._host}:{self._port}")
+            logger.info("[TIMING] worker:core_created          +%.3fs", time.perf_counter() - _t0)
+            logger.info(f"Starting proxy with empty {type(core).__name__} on {self._host}:{self._port}")
 
-            server_thread = threading.Thread(
-                target=serve,
-                kwargs={"core": core, "host": self._host, "port": self._port},
+            proxy  = ProxyServer(core, port=self._port)
+            config = uvicorn.Config(
+                proxy.app,
+                host=self._host,
+                port=self._port,
+                log_level="warning",
+            )
+            self._uvicorn_server = uvicorn.Server(config)
+            logger.info("[TIMING] worker:proxy_configured       +%.3fs", time.perf_counter() - _t0)
+
+            # Run uvicorn in a daemon thread so stop() can join it from any thread.
+            self._server_thread = threading.Thread(
+                target=self._uvicorn_server.run,
                 daemon=True,
                 name=f"CoreProxy-{self._port}",
             )
-            server_thread.start()
+            self._server_thread.start()
+            logger.info("[TIMING] worker:uvicorn_thread_started +%.3fs", time.perf_counter() - _t0)
 
             url        = f"http://{self._host}:{self._port}"
             health_url = f"{url}/health"
@@ -109,8 +124,9 @@ class CoreProxyWorker(QObject):
                 try:
                     with urllib.request.urlopen(health_url, timeout=0.5) as resp:
                         if resp.status == 200:
+                            logger.info("[TIMING] worker:health_200             +%.3fs", time.perf_counter() - _t0)
                             logger.info(f"Server ready at {url}")
-                            self.server_ready.emit(url)
+                            self.server_ready.emit(url, self._cfg_path)
                             return
                 except Exception:
                     pass
@@ -124,3 +140,19 @@ class CoreProxyWorker(QObject):
         except Exception as e:
             logger.exception(f"CoreProxyWorker error: {e}")
             self.server_error.emit(str(e))
+
+    def stop(self):
+        """Stop the proxy server. Safe to call from any thread.
+
+        Sets force_exit=True so the listen socket is released immediately
+        without waiting for in-flight connections to drain.
+        """
+        server = self._uvicorn_server
+        if server is not None:
+            server.should_exit = True
+            server.force_exit  = True
+        if self._server_thread is not None:
+            self._server_thread.join(timeout=5)
+            self._server_thread = None
+        self._uvicorn_server = None
+        logger.info("CoreProxy stopped on port %d", self._port)

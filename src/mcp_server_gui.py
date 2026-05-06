@@ -27,6 +27,40 @@ from src.utils.cfg_utils import classify_cfg as _classify_cfg
 from src.utils.core_proxy_worker import CoreProxyWorker
 
 logger = logging.getLogger("MCPServer")
+
+
+class StartupTimer:
+    """Phase-by-phase wall-clock timer for one startup sequence.
+
+    Usage::
+        t = StartupTimer()
+        t.mark("phase_a")
+        ...
+        t.mark("phase_b")
+        t.report()   # logs all phases + per-step deltas
+    """
+
+    def __init__(self) -> None:
+        self._t0 = time.perf_counter()
+        self._marks: list[tuple[str, float]] = []
+
+    def mark(self, phase: str) -> float:
+        """Record *phase* and return elapsed seconds since T0."""
+        elapsed = time.perf_counter() - self._t0
+        self._marks.append((phase, elapsed))
+        logger.debug("[TIMING] %-42s  t=%.3fs", phase, elapsed)
+        return elapsed
+
+    def report(self) -> None:
+        """Emit a single INFO-level summary of all phases."""
+        if not self._marks:
+            return
+        lines = ["[TIMING] Startup summary (seconds from T0):"]
+        prev = 0.0
+        for phase, t in self._marks:
+            lines.append(f"  {phase:<42s}  t={t:6.3f}s  (+{t - prev:.3f}s)")
+            prev = t
+        logger.info("\n".join(lines))
 if not logger.handlers:
     logger.setLevel(logging.INFO)
     fh = logging.FileHandler("microscope_toolset.log", encoding="utf-8")
@@ -478,6 +512,7 @@ class MCPServer(QWidget):
 
     def __init__(self, auto_config: str | None = None):
         super().__init__()
+        self._startup_timer = StartupTimer()
         self._auto_config = auto_config
         self.viewer       = napari.current_viewer()
         self._mmc         = None
@@ -758,6 +793,7 @@ class MCPServer(QWidget):
         self._refresh_bench_tests()
 
         # ── Add napari-micromanager on next tick ──────────────────────────
+        self._startup_timer.mark("widget_init_done")
         QTimer.singleShot(500, self._add_napari_micromanager)
         if self._auto_config is not None:
             QTimer.singleShot(1500, self._auto_load_config)
@@ -1153,6 +1189,14 @@ class MCPServer(QWidget):
             finally:
                 self._in_user_load = False
             self._mmc = remote_core
+            # Widgets rebuilt by set_core connect to systemConfigurationLoaded to
+            # populate themselves (channels, presets, shutters, stages, …).  The
+            # remote server already has a config loaded, so that event will never
+            # arrive via WebSocket — emit it manually so they refresh.
+            try:
+                remote_core.events.systemConfigurationLoaded.emit()
+            except Exception:
+                pass
             self._remote_connected = True
             self._remote_url = url
             core_type = self._query_core_type(url)
@@ -1206,17 +1250,31 @@ class MCPServer(QWidget):
 
             from napari_micromanager.main_window import get_main_window
             self._mmwin = get_main_window()
-            self._install_load_hook(self._mmwin.core)
+            logger.info(f"[NMM] MainWindow found: {type(self._mmwin).__name__}, "
+                        f"initial core: {type(self._mmwin.core).__name__}")
 
-            # Patch set_core so the hook survives a CMMCorePlus ↔ UniMMCore swap.
+            # _install_load_hook works only for local cores (CMMCorePlus / UniMMCore).
+            # RemoteMMCore.__getattribute__ checks _RPC_FORWARD_METHODS before the
+            # instance dict, so `core.loadSystemConfiguration = fn` is silently ignored.
+            # This hook therefore only covers the _auto_load_config path (initial core).
+            # The UI Load button is intercepted by _patch_config_widget_load instead.
+            self._install_load_hook(self._mmwin.core)
+            self._patch_config_widget_load()
+
+            # Patch set_core so both hooks survive every CMMCorePlus↔UniMMCore↔Remote swap.
             _orig_set_core = self._mmwin.set_core
 
             def _patched_set_core(core):
+                logger.info(f"[NMM] set_core called with {type(core).__name__}")
                 _orig_set_core(core)
+                logger.info(f"[NMM] set_core complete — reinstalling hooks on "
+                            f"{type(self._mmwin.core).__name__}")
                 self._install_load_hook(self._mmwin.core)
+                self._patch_config_widget_load()
 
             self._mmwin.set_core = _patched_set_core
 
+            self._startup_timer.mark("napari_mm_plugin_added")
             self._set_status("Load a .cfg file to initialize the core")
             logger.info("napari-micromanager plugin added")
 
@@ -1225,49 +1283,171 @@ class MCPServer(QWidget):
             self._set_status(f"Error adding napari-micromanager: {e}")
 
     def _install_load_hook(self, core):
-        """Wrap core.loadSystemConfiguration to intercept user-initiated cfg loads."""
-        _nm_load = core.loadSystemConfiguration
+        """Intercept loadSystemConfiguration on LOCAL cores (CMMCorePlus / UniMMCore).
 
+        This hook only works for local cores.  RemoteMMCore.__getattribute__ checks
+        _RPC_FORWARD_METHODS before the instance dict, so setting an instance
+        attribute is silently ignored — the RPC proxy is always returned instead.
+        The UI Load button is intercepted by _patch_config_widget_load for that case.
+
+        This hook covers _auto_load_config, which calls core.loadSystemConfiguration
+        directly on the initial local CMMCorePlus before any proxy is running.
+        """
         def _capturing_load(path):
-            # Skip if we are already inside a user load (avoids re-entry from
-            # napari-micromanager calling loadSystemConfiguration on the new
-            # remote core during set_core).
+            logger.info(f"[InstallHook] _capturing_load entered: path={path!r}, "
+                        f"_in_user_load={self._in_user_load}")
             if self._in_user_load:
-                _nm_load(path)
+                logger.debug("[InstallHook] re-entry guard — skipping")
                 return
-            # Warn and block when a non-local remote core is active.
-            # Loading a cfg would silently disconnect from the remote and
-            # start a new local proxy — almost certainly not what the user wants.
-            if self._remote_connected and self._is_truly_remote(self._remote_url):
-                QMessageBox.warning(
-                    self,
-                    "Remote core is active",
-                    f"You are connected to a remote core at <b>{self._remote_url}</b>.<br><br>"
-                    "Loading a local .cfg file would disconnect you from the remote "
-                    "and start a new local proxy.<br><br>"
-                    "Disconnect the remote core first if you want to load a local configuration.",
-                )
-                logger.warning("Blocked cfg load: truly-remote core is active (%s)", self._remote_url)
+
+            new_type = _classify_cfg(str(path))
+            logger.info(f"[InstallHook] cfg type={new_type!r}")
+            if new_type == "mixed":
+                logger.error("[InstallHook] Mixed C++/Python cfg not supported")
+                self._set_status("Error: mixed C++/Python (#py) cfg not supported yet")
                 return
-            self._in_user_load = True
-            try:
-                self._last_cfg_path = str(path)
-                cfg_type = _classify_cfg(str(path))
-                logger.info(f"cfg classification: {cfg_type!r} for {path}")
-                if cfg_type == "mixed":
-                    logger.error("Mixed C++/Python cfg not supported")
-                    self._set_status("Error: mixed C++/Python (#py) cfg not supported yet")
-                    return
-                self._start_proxy_worker(str(path))
-            finally:
-                self._in_user_load = False
+
+            current_type = (
+                _classify_cfg(self._last_cfg_path)
+                if self._proxy_worker is not None and self._last_cfg_path
+                else None
+            )
+            logger.info(f"[InstallHook] current_type={current_type!r} → new_type={new_type!r}")
+            self._last_cfg_path = str(path)
+            self._start_proxy_worker(str(path))
 
         core.loadSystemConfiguration = _capturing_load
+        logger.info(f"[InstallHook] Hook installed on {type(core).__name__} (id={id(core):#x})")
+
+    def _patch_config_widget_load(self):
+        """Intercept the ConfigurationWidget Load button by patching _load_cfg.
+
+        Called after every set_core / _rebuild_toolbars to keep the patch current.
+
+        This is the primary interception point for RemoteMMCore: instance-attribute
+        assignments on the core are ignored (see _install_load_hook), but
+        ConfigurationWidget is a plain Python class so method replacement works.
+
+        Decision logic (mirrors _install_load_hook):
+          • Same core type as running proxy → call original _load_cfg (RPC handles
+            unload+load synchronously; WebSocket delivers systemConfigurationLoaded).
+          • Core type change or first load → _start_proxy_worker for a fresh proxy.
+        """
+        try:
+            from pymmcore_widgets import ConfigurationWidget
+        except ImportError:
+            logger.warning("[LoadHook] pymmcore_widgets.ConfigurationWidget not importable")
+            return
+
+        widgets = self._mmwin.findChildren(ConfigurationWidget)
+        if not widgets:
+            logger.warning("[LoadHook] No ConfigurationWidget found in napari-micromanager")
+            return
+
+        for widget in widgets:
+            # Capture the original bound method BEFORE any replacement.
+            # Qt signal connections store a snapshot of the bound method at connect()
+            # time, not a live attribute lookup — so replacing widget._load_cfg
+            # would never be called by the button.  Instead we disconnect the button
+            # from the original handler and reconnect it to our interceptor.
+            orig_load_cfg = widget._load_cfg
+
+            def _intercepted(*, _w=widget, _orig=orig_load_cfg):
+                path = _w.cfg_LineEdit.text().strip()
+                logger.info(f"[LoadHook] Load button clicked — path={path!r}")
+
+                if not path:
+                    logger.debug("[LoadHook] Empty path — passing through to original")
+                    _orig()
+                    return
+
+                if self._remote_connected and self._is_truly_remote(self._remote_url):
+                    QMessageBox.warning(
+                        self,
+                        "Remote core is active",
+                        f"You are connected to a remote core at <b>{self._remote_url}</b>.<br><br>"
+                        "Loading a local .cfg file would disconnect you from the remote "
+                        "and start a new local proxy.<br><br>"
+                        "Disconnect the remote core first if you want to load a local configuration.",
+                    )
+                    logger.warning("[LoadHook] Blocked — truly-remote core active (%s)",
+                                   self._remote_url)
+                    return
+
+                new_type = _classify_cfg(path)
+                logger.info(f"[LoadHook] cfg type={new_type!r}")
+                if new_type == "mixed":
+                    logger.error("[LoadHook] Mixed C++/Python cfg not supported")
+                    self._set_status("Error: mixed C++/Python (#py) cfg not supported yet")
+                    return
+
+                current_type = (
+                    _classify_cfg(self._last_cfg_path)
+                    if self._proxy_worker is not None and self._last_cfg_path
+                    else None
+                )
+                logger.info(f"[LoadHook] current_type={current_type!r}  new_type={new_type!r}  "
+                            f"proxy_running={self._proxy_worker is not None}")
+                self._last_cfg_path = path
+
+                if current_type is not None and current_type == new_type:
+                    logger.info(f"[LoadHook] Same type ({new_type}) — passing to proxy RPC")
+                    _orig()
+                    return
+
+                logger.info(f"[LoadHook] Type change ({current_type!r} → {new_type!r}) "
+                            f"— starting new proxy")
+                self._start_proxy_worker(path)
+
+            try:
+                widget.load_cfg_Button.clicked.disconnect(orig_load_cfg)
+            except Exception as e:
+                logger.warning(f"[LoadHook] Could not disconnect original handler: {e}")
+            widget.load_cfg_Button.clicked.connect(_intercepted)
+            logger.info(f"[LoadHook] Reconnected load_cfg_Button on "
+                        f"ConfigurationWidget (id={id(widget):#x})")
 
     def _start_proxy_worker(self, cfg_path: str):
+        # Start a fresh proxy with the core class required by cfg_path.
+        # Called only when the core type is changing (virtual↔real) or on first load.
+        if self._proxy_worker is not None:
+            self._core_dot.setStyleSheet(_DOT_BUSY)
+            self._clear_core_badge("Switching core…")
+            self._set_status("Switching core — stopping previous proxy…")
+            self._proxy_worker.stop()           # fast: force_exit=True
+            if self._proxy_thread is not None:
+                self._proxy_thread.quit()
+                self._proxy_thread.wait(2000)
+            self._proxy_worker = None
+            self._proxy_thread = None
+
         port_text = self._proxy_port_edit.text().strip()
         proxy_port = int(port_text) if port_text.isdigit() and 1 <= int(port_text) <= 65535 else 5601
         self._settings.setValue("proxy_port", str(proxy_port))
+
+        # Wait for the OS to release the port before binding again.
+        # On Windows TIME_WAIT can hold a port for a few hundred milliseconds
+        # after the socket is closed; polling here prevents WinError 10048.
+        if _port_in_use(proxy_port):
+            import time as _time
+            deadline = _time.monotonic() + 5.0
+            self._set_status(f"Waiting for port {proxy_port} to be released…")
+            while _time.monotonic() < deadline:
+                _time.sleep(0.2)
+                if not _port_in_use(proxy_port):
+                    break
+            else:
+                self._core_dot.setStyleSheet(_DOT_ERROR)
+                self._clear_core_badge(f"Port {proxy_port} still in use")
+                self._set_status(
+                    f"Port {proxy_port} is still bound after 5 s — try a different port"
+                )
+                _log_port_listeners(proxy_port)
+                return
+
+        logger.info(f"[ProxyWorker] Launching CoreProxyWorker: cfg={cfg_path!r} port={proxy_port}")
+        self._startup_timer = StartupTimer()
+        self._startup_timer.mark("proxy_worker_launch")
         self._set_status("Starting microscope proxy server…")
         thread = QThread()
         worker = CoreProxyWorker(cfg_path=cfg_path, port=proxy_port)
@@ -1278,20 +1458,73 @@ class MCPServer(QWidget):
         self._proxy_thread = thread
         self._proxy_worker = worker
         thread.start()
+        self._startup_timer.mark("proxy_worker_thread_started")
 
-    @pyqtSlot(str)
-    def _on_proxy_ready(self, url: str):
+    @pyqtSlot(str, str)
+    def _on_proxy_ready(self, url: str, cfg_path: str):
         from pymmcore_proxy import connect
-        logger.info(f"Proxy ready at {url} — connecting core")
+        logger.info(f"[ProxyReady] Server up at {url}")
+        self._startup_timer.mark("health_passed_signal_received")
         self._set_status("Proxy ready — connecting core…")
+
+        # Close the old RemoteMMCore before handing the new core to napari-micromanager.
+        # Without this, napari-micromanager's cleanup calls isSequenceRunning() on the
+        # dead old proxy, which times out and can raise, corrupting the core swap.
+        if self._mmc is not None:
+            logger.info("[ProxyReady] Closing old remote core")
+            try:
+                self._mmc.close()
+            except Exception as e:
+                logger.debug("[ProxyReady] Old core close raised (expected): %s", e)
+            self._mmc = None
+
+        logger.info(f"[ProxyReady] Calling connect({url})")
         remote_core = connect(url)
+        self._startup_timer.mark("connect_done")
+        logger.info(f"[ProxyReady] Connected — remote_core type: {type(remote_core).__name__}")
+
         self._in_user_load = True
         try:
             if self._mmwin is not None:
-                self._mmwin.set_core(remote_core)
+                logger.info("[ProxyReady] Calling set_core on napari-micromanager")
+                try:
+                    self._mmwin.set_core(remote_core)
+                    logger.info("[ProxyReady] set_core complete")
+                except Exception as e:
+                    # Old-core cleanup inside set_core can raise if the proxy was killed;
+                    # the new core is already set at this point so we log and continue.
+                    logger.warning("[ProxyReady] set_core raised (old proxy cleanup): %s", e)
         finally:
             self._in_user_load = False
         self._mmc = remote_core
+        self._startup_timer.mark("set_core_and_rebuild_done")
+
+        # Load cfg through the raw RPC layer — bypasses _capturing_load and
+        # napari's _auto_detect_load, which both sit on top of the RPC method.
+        # _rpc() is a plain Python method on RemoteMMCore (not in _RPC_FORWARD_METHODS)
+        # so __getattribute__ doesn't intercept it.
+        logger.info(f"[ProxyReady] Loading cfg via RPC: {cfg_path!r}")
+        try:
+            remote_core._rpc("loadSystemConfiguration", cfg_path)
+            logger.info("[ProxyReady] RPC loadSystemConfiguration complete")
+        except Exception as e:
+            logger.warning("[ProxyReady] RPC loadSystemConfiguration failed: %s", e)
+        self._startup_timer.mark("rpc_load_system_cfg_done")
+
+        # Fire systemConfigurationLoaded directly on the client signal bus.
+        # The WebSocket listener starts async in a background thread and may not
+        # be connected yet, so the server's WebSocket broadcast would be lost.
+        # Emitting here reaches all already-connected widgets (ChannelWidget etc.)
+        # synchronously, giving them a fresh RPC call to the now-configured proxy.
+        logger.info("[ProxyReady] Emitting systemConfigurationLoaded on client")
+        try:
+            remote_core.events.systemConfigurationLoaded.emit()
+            logger.info("[ProxyReady] systemConfigurationLoaded emitted")
+        except Exception as e:
+            logger.warning("[ProxyReady] systemConfigurationLoaded emit failed: %s", e)
+        self._startup_timer.mark("system_config_loaded_emitted")
+        self._startup_timer.report()
+
         core_type = self._query_core_type(url)
         from urllib.parse import urlparse
         p = urlparse(url)
@@ -1320,6 +1553,7 @@ class MCPServer(QWidget):
             QTimer.singleShot(500, self._auto_load_config)
             return
         logger.info(f"Auto-loading config: {self._auto_config}")
+        self._startup_timer.mark("auto_load_config_triggered")
         self._set_status(f"Auto-loading {os.path.basename(self._auto_config)}…")
         self._mmwin.core.loadSystemConfiguration(self._auto_config)
 
