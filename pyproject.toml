@@ -37,7 +37,7 @@ dependencies = [
     # Database / search
     "elasticsearch>=9.3.0",
     "pgvector>=0.4.2",
-    "psycopg2>=2.9.0",
+    "psycopg2-binary>=2.9.0",
     # Document processing
     "pymupdf>=1.23.0",
     "pymupdf4llm>=0.0.5",
