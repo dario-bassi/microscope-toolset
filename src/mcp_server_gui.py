@@ -17,7 +17,7 @@ from PyQt6.QtWidgets import (
     QSizePolicy, QFrame, QLineEdit, QGroupBox, QMessageBox, QComboBox,
 )
 from src.mcp_microscopetoolset import get_user_information, create_mcp_server, initialize_agents, NapariViewerMC
-from src.start_subprocess.servers import _start_server, _stop_server, wait_for_es
+from src.databases.es_server import _start_server, _stop_server, wait_for_es
 from src.microscope import MicroscopeEventCache
 from src.benchmarking import BenchmarkLogger
 from src.utils import classify_cfg as _classify_cfg, CoreProxyWorker

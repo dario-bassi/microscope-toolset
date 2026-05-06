@@ -2,7 +2,7 @@ import subprocess
 import os
 import signal
 import sys
-from src.databases.elasticsearch_db import ElasticSearchDB
+from .elasticsearch_db import ElasticSearchDB
 import logging
 import time
 
