@@ -11,9 +11,8 @@ Functions:
     experiment_timeline  -- Chronological event summary
 """
 
-from collections import defaultdict
-
 import numpy as np
+from collections import defaultdict
 
 
 def generate_report(log):
@@ -140,7 +139,7 @@ def format_markdown(report):
 
     # Phases
     if report.get("phases"):
-        lines.append("\n## Phases\n")
+        lines.append(f"\n## Phases\n")
         lines.append(" → ".join(report["phases"]))
 
     # Measurements
@@ -288,14 +287,12 @@ def experiment_timeline(log, max_entries=50):
         else:
             summary = str(data)[:60] if data else etype
 
-        timeline.append(
-            {
-                "elapsed_s": elapsed,
-                "type": etype,
-                "phase": phase,
-                "summary": summary,
-            }
-        )
+        timeline.append({
+            "elapsed_s": elapsed,
+            "type": etype,
+            "phase": phase,
+            "summary": summary,
+        })
 
     return timeline
 

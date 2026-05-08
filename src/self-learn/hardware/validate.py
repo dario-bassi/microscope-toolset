@@ -8,14 +8,14 @@ Catches configuration mismatches early rather than mid-experiment.
 from __future__ import annotations
 
 from dataclasses import dataclass, field
+from typing import Optional
 
-from .config import get_config
+from .config import get_config, MicroscopeConfig
 
 
 @dataclass
 class ValidationResult:
     """Result of a hardware validation check."""
-
     passed: bool = True
     warnings: list[str] = field(default_factory=list)
     errors: list[str] = field(default_factory=list)
@@ -60,7 +60,10 @@ def validate_channels(core, required: list[str]) -> ValidationResult:
     available = set(cfg.available_channels)
     for ch in required:
         if ch not in available:
-            result.add_error(f"Channel '{ch}' not available. " f"Available: {sorted(available)}")
+            result.add_error(
+                f"Channel '{ch}' not available. "
+                f"Available: {sorted(available)}"
+            )
 
     return result
 
@@ -92,7 +95,8 @@ def validate_objectives(core, required_mags: list[int]) -> ValidationResult:
     for mag in required_mags:
         if mag not in available_mags:
             result.add_error(
-                f"Objective {mag}x not available. " f"Available: {sorted(available_mags)}"
+                f"Objective {mag}x not available. "
+                f"Available: {sorted(available_mags)}"
             )
 
     return result
@@ -145,8 +149,8 @@ def validate_z(core) -> ValidationResult:
 
 def validate_experiment(
     core,
-    channels: list[str] | None = None,
-    objectives: list[int] | None = None,
+    channels: Optional[list[str]] = None,
+    objectives: Optional[list[int]] = None,
     needs_slm: bool = False,
     needs_stage: bool = False,
     needs_z: bool = False,

@@ -3,6 +3,17 @@
 Functions for detecting neuron somata, counting synaptic puncta,
 estimating neurite length, and classifying neuron types from
 MAP2/synaptophysin immunostaining.
+
+Note: ``detect_somata`` here uses distance-transform local maxima,
+which works but can over-detect in dense dendritic arbors. For
+position-graded submissions on a sample/scale where you've calibrated
+soma size, prefer the opening-based
+``src.recipes.neuron_puncta.segment_soma_cores`` and the end-to-end
+``src.recipes.neuron_puncta.count_puncta_per_neuron``.
+
+All defaults in this module are pixel-scale; pair with
+``parameter_advisor`` or pass explicit px values when off
+20x / 0.5 µm-per-pixel acquisitions.
 """
 
 import numpy as np
@@ -42,13 +53,11 @@ def detect_somata(map2, sigma=2.0, min_dt=5, filter_size=9):
         if len(idx) == 0:
             continue
         sy, sx = peak_ys[idx[0]], peak_xs[idx[0]]
-        somata.append(
-            {
-                "centroid_px": (int(sx), int(sy)),
-                "soma_radius": float(dist[sy, sx]),
-                "peak_intensity": float(map2[sy, sx]),
-            }
-        )
+        somata.append({
+            'centroid_px': (int(sx), int(sy)),
+            'soma_radius': float(dist[sy, sx]),
+            'peak_intensity': float(map2[sy, sx]),
+        })
     return somata
 
 
@@ -76,19 +85,17 @@ def count_puncta(syn, sigma=2.5, min_area=1, max_area=200):
 
     puncta = []
     for lid in range(1, n_cc + 1):
-        region = labeled == lid
+        region = (labeled == lid)
         area = int(region.sum())
         if min_area <= area <= max_area:
             ys, xs = np.where(region)
             cy, cx = ys.mean(), xs.mean()
             peak = float(syn[region].max())
-            puncta.append(
-                {
-                    "centroid_px": (float(cx), float(cy)),
-                    "area_px": area,
-                    "peak_intensity": peak,
-                }
-            )
+            puncta.append({
+                'centroid_px': (float(cx), float(cy)),
+                'area_px': area,
+                'peak_intensity': peak,
+            })
     return len(puncta), puncta
 
 
@@ -166,14 +173,15 @@ def count_primary_processes(map2, cx, cy, search_radius=20, threshold=15):
     # Handle wrap-around: if first and last are both signal, merge
     if len(process_starts) > 1:
         # Check if the signal wraps from last angle to first
+        first_angle = 0
         py = int(cy + search_radius * np.sin(0))
         px = int(cx + search_radius * np.cos(0))
         last_angle = (n_angles - 1) * (2 * np.pi / n_angles)
         py_last = int(cy + search_radius * np.sin(last_angle))
         px_last = int(cx + search_radius * np.cos(last_angle))
 
-        first_signal = 0 <= py < h and 0 <= px < w and map2[py, px] > threshold
-        last_signal = 0 <= py_last < h and 0 <= px_last < w and map2[py_last, px_last] > threshold
+        first_signal = (0 <= py < h and 0 <= px < w and map2[py, px] > threshold)
+        last_signal = (0 <= py_last < h and 0 <= px_last < w and map2[py_last, px_last] > threshold)
 
         if first_signal and last_signal and process_starts[0] == 0:
             process_starts.pop(0)
@@ -214,21 +222,21 @@ def classify_neuron(map2, cx, cy, soma_radius, search_radius=20, threshold=15):
         if diff > 180:
             diff = 360 - diff
         if 120 <= diff <= 240:
-            return "bipolar", n_processes
+            return 'bipolar', n_processes
 
     # Bipolar: small soma + few processes
     if n_processes <= 2 and soma_radius < 5:
-        return "bipolar", n_processes
+        return 'bipolar', n_processes
 
     # Stellate: many processes radiating out (>= 5)
     if n_processes >= 5:
-        return "stellate", n_processes
+        return 'stellate', n_processes
 
     # Pyramidal: large soma, moderate processes (3-4)
     if soma_radius >= 7 or n_processes <= 4:
-        return "pyramidal", n_processes
+        return 'pyramidal', n_processes
 
-    return "stellate", n_processes
+    return 'stellate', n_processes
 
 
 def count_branch_points(map2, somata=None, sigma=1.0):
@@ -257,8 +265,8 @@ def count_branch_points(map2, somata=None, sigma=1.0):
     """
     try:
         from skimage.morphology import skeletonize
-    except ImportError as err:
-        raise ImportError("scikit-image required for count_branch_points") from err
+    except ImportError:
+        raise ImportError("scikit-image required for count_branch_points")
 
     from scipy.signal import convolve2d
 
@@ -276,7 +284,7 @@ def count_branch_points(map2, somata=None, sigma=1.0):
     # Junction pixels: 3+ skeleton neighbors
     kernel = np.ones((3, 3))
     kernel[1, 1] = 0
-    neighbor_count = convolve2d(skel.astype(int), kernel, mode="same")
+    neighbor_count = convolve2d(skel.astype(int), kernel, mode='same')
     junctions = skel & (neighbor_count >= 3)
     junction_labeled, n_junctions = ndimage.label(junctions)
 
@@ -291,8 +299,8 @@ def count_branch_points(map2, somata=None, sigma=1.0):
     cc_to_soma = {}  # skeleton CC label -> soma_index (first claim)
 
     for si, s in enumerate(somata):
-        cx, cy = s["centroid_px"]
-        r = max(int(s["soma_radius"]) + 3, 5)
+        cx, cy = s['centroid_px']
+        r = max(int(s['soma_radius']) + 3, 5)
         # Check skeleton labels within soma region
         y0, y1 = max(0, cy - r), min(h, cy + r + 1)
         x0, x1 = max(0, cx - r), min(w, cx + r + 1)
@@ -308,10 +316,10 @@ def count_branch_points(map2, somata=None, sigma=1.0):
         if cc_id not in cc_to_soma:
             cc_ys, cc_xs = np.where(skel_labeled == cc_id)
             cc_cx, cc_cy = cc_xs.mean(), cc_ys.mean()
-            best_dist = float("inf")
+            best_dist = float('inf')
             best_si = 0
             for si, s in enumerate(somata):
-                sx, sy = s["centroid_px"]
+                sx, sy = s['centroid_px']
                 d = (sx - cc_cx) ** 2 + (sy - cc_cy) ** 2
                 if d < best_dist:
                     best_dist = d
@@ -338,10 +346,10 @@ def count_branch_points(map2, somata=None, sigma=1.0):
         else:
             # Fallback: assign to nearest soma
             jcx, jcy = float(jxs.mean()), float(jys.mean())
-            best_dist = float("inf")
+            best_dist = float('inf')
             best_si = 0
             for si, s in enumerate(somata):
-                sx, sy = s["centroid_px"]
+                sx, sy = s['centroid_px']
                 d = (sx - jcx) ** 2 + (sy - jcy) ** 2
                 if d < best_dist:
                     best_dist = d
@@ -350,15 +358,13 @@ def count_branch_points(map2, somata=None, sigma=1.0):
 
     results = []
     for i, s in enumerate(somata):
-        results.append(
-            {
-                "centroid_px": s["centroid_px"],
-                "soma_radius": s["soma_radius"],
-                "peak_intensity": s["peak_intensity"],
-                "branch_points": bp_per_soma[i],
-                "skeleton_pixels": skel_per_soma[i],
-            }
-        )
+        results.append({
+            'centroid_px': s['centroid_px'],
+            'soma_radius': s['soma_radius'],
+            'peak_intensity': s['peak_intensity'],
+            'branch_points': bp_per_soma[i],
+            'skeleton_pixels': skel_per_soma[i],
+        })
 
-    results.sort(key=lambda r: -r["branch_points"])
+    results.sort(key=lambda r: -r['branch_points'])
     return results

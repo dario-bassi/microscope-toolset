@@ -10,20 +10,10 @@ Functions:
     conduction_velocity -- Wavefront speed from phase gradient
     detect_pacemaker    -- Find wave origin from activation timing
     activation_map      -- Per-pixel activation time for a single beat
-
-Real microscope note:
-    Simple frame-to-frame analysis is vulnerable to noise and motion
-    artifacts in real optical recordings. Phase gradient calculations
-    can be corrupted by camera noise, focus drift, and tissue movement.
-    For robust real-world analysis:
-    - Apply bandpass filtering (e.g., 2–4 Hz for cardiac) before FFT
-    - Perform motion correction on the stack before activation analysis
-    - Use cross-correlation or optical flow to detect/correct xy shift
-    - Smooth with median filter to reduce salt-and-pepper noise
-    - Validate against known reference pacing protocols
 """
 
 import numpy as np
+from scipy import ndimage
 
 
 def frequency_map(stack, dt=1.0, block_size=16, min_freq=None, max_freq=None):
@@ -61,12 +51,11 @@ def frequency_map(stack, dt=1.0, block_size=16, min_freq=None, max_freq=None):
 
     for bi in range(h_b):
         for bj in range(w_b):
-            region = stack[
-                :, bi * block_size : (bi + 1) * block_size, bj * block_size : (bj + 1) * block_size
-            ]
+            region = stack[:, bi*block_size:(bi+1)*block_size,
+                          bj*block_size:(bj+1)*block_size]
             trace = region.mean(axis=(1, 2))
             trace = trace - np.mean(trace)
-            spec = np.abs(np.fft.rfft(trace)) ** 2
+            spec = np.abs(np.fft.rfft(trace))**2
             spec[:min_bin] = 0
             if max_bin < len(spec):
                 spec[max_bin:] = 0
@@ -80,10 +69,10 @@ def frequency_map(stack, dt=1.0, block_size=16, min_freq=None, max_freq=None):
     mode_freq = float(unique[np.argmax(counts)])
 
     return {
-        "freq_map": fmap,
-        "power_map": pmap,
-        "mode_freq": mode_freq,
-        "block_size": block_size,
+        'freq_map': fmap,
+        'power_map': pmap,
+        'mode_freq': mode_freq,
+        'block_size': block_size,
     }
 
 
@@ -118,23 +107,23 @@ def phase_map(stack, target_freq, dt=1.0, block_size=16):
 
     for bi in range(h_b):
         for bj in range(w_b):
-            region = stack[
-                :, bi * block_size : (bi + 1) * block_size, bj * block_size : (bj + 1) * block_size
-            ]
+            region = stack[:, bi*block_size:(bi+1)*block_size,
+                          bj*block_size:(bj+1)*block_size]
             trace = region.mean(axis=(1, 2))
             trace = trace - np.mean(trace)
             fft_val = np.fft.rfft(trace)[target_bin]
             ph[bi, bj] = np.angle(fft_val)
-            pw[bi, bj] = np.abs(fft_val) ** 2
+            pw[bi, bj] = np.abs(fft_val)**2
 
     return {
-        "phase": ph,
-        "power": pw,
-        "block_size": block_size,
+        'phase': ph,
+        'power': pw,
+        'block_size': block_size,
     }
 
 
-def conduction_velocity(phase_data, block_size=16, power_threshold_pct=25, max_grad=0.1):
+def conduction_velocity(phase_data, block_size=16, power_threshold_pct=25,
+                        max_grad=0.1):
     """Measure wave conduction velocity from phase gradient.
 
     Uses the relationship: velocity = omega / |grad(phase)|
@@ -154,8 +143,8 @@ def conduction_velocity(phase_data, block_size=16, power_threshold_pct=25, max_g
             direction_map: 2D map of propagation direction (radians).
             n_valid: Number of valid measurement blocks.
     """
-    ph = phase_data["phase"]
-    pw = phase_data["power"]
+    ph = phase_data['phase']
+    pw = phase_data['power']
 
     # Phase gradient
     grad_y = np.gradient(ph, block_size, axis=0)
@@ -164,9 +153,8 @@ def conduction_velocity(phase_data, block_size=16, power_threshold_pct=25, max_g
     grad_dir = np.arctan2(grad_y, grad_x)
 
     # Valid blocks: sufficient power, reasonable gradient
-    valid = (
-        (grad_mag > 0.001) & (grad_mag < max_grad) & (pw > np.percentile(pw, power_threshold_pct))
-    )
+    valid = (grad_mag > 0.001) & (grad_mag < max_grad) & (
+        pw > np.percentile(pw, power_threshold_pct))
 
     # Velocity = omega / |grad_phase|
     # We don't know omega here, so return in units that depend on the
@@ -183,12 +171,12 @@ def conduction_velocity(phase_data, block_size=16, power_threshold_pct=25, max_g
         mean_vel = 0.0
 
     return {
-        "velocity_median": round(med_vel, 2),
-        "velocity_mean": round(mean_vel, 2),
-        "velocity_map": velocity_map,
-        "direction_map": grad_dir,
-        "grad_magnitude": grad_mag,
-        "n_valid": int(valid.sum()),
+        'velocity_median': round(med_vel, 2),
+        'velocity_mean': round(mean_vel, 2),
+        'velocity_map': velocity_map,
+        'direction_map': grad_dir,
+        'grad_magnitude': grad_mag,
+        'n_valid': int(valid.sum()),
     }
 
 
@@ -216,10 +204,10 @@ def detect_pacemaker(stack, dt=1.0, corner_size=64, min_distance=3):
     cs = corner_size
 
     corners = {
-        "top-left": stack[:, :cs, :cs],
-        "top-right": stack[:, :cs, w - cs :],
-        "bottom-left": stack[:, h - cs :, :cs],
-        "bottom-right": stack[:, h - cs :, w - cs :],
+        'top-left': stack[:, :cs, :cs],
+        'top-right': stack[:, :cs, w-cs:],
+        'bottom-left': stack[:, h-cs:, :cs],
+        'bottom-right': stack[:, h-cs:, w-cs:],
     }
 
     peak_times = {}
@@ -244,10 +232,10 @@ def detect_pacemaker(stack, dt=1.0, corner_size=64, min_distance=3):
     beat_rate = 1.0 / (np.mean(all_intervals) * dt) if all_intervals else 0.0
 
     return {
-        "source_quadrant": earliest or "unknown",
-        "peak_times": peak_times,
-        "mean_intervals": mean_intervals,
-        "beat_rate_hz": round(beat_rate, 3),
+        'source_quadrant': earliest or 'unknown',
+        'peak_times': peak_times,
+        'mean_intervals': mean_intervals,
+        'beat_rate_hz': round(beat_rate, 3),
     }
 
 
@@ -295,9 +283,103 @@ def activation_map(stack, beat_frame, search_window=4, threshold_frac=0.3):
         earliest_idx = (0, 0)
 
     return {
-        "activation_time": act,
-        "relative_time": relative,
-        "earliest_pixel": earliest_idx,
+        'activation_time': act,
+        'relative_time': relative,
+        'earliest_pixel': earliest_idx,
+    }
+
+
+def fit_radial_velocity(stack, pacemaker_positions, dt=1.0,
+                        threshold_frac=0.5, n_radii=20, max_radius=None):
+    """Measure wave velocity by fitting radial expansion curves.
+
+    For each pacemaker, measures the time at which the wavefront
+    reaches different radii, then fits a linear model (distance vs time)
+    to get velocity. This avoids underestimating velocity from the
+    visible wave front lag (cAMP diffusion, reporter decay).
+
+    Args:
+        stack: 3D array (n_frames, height, width).
+        pacemaker_positions: list of (row, col) tuples.
+        dt: Time between frames (seconds).
+        threshold_frac: Fraction of local max for wavefront detection.
+        n_radii: Number of radii to sample.
+        max_radius: Maximum radius in pixels. Auto-detected if None.
+
+    Returns:
+        dict with:
+            velocities: list of velocity per pacemaker (px/s).
+            mean_velocity: Mean velocity (px/s).
+            fits: list of (slope, intercept, r_squared) per pacemaker.
+            radii: array of sampled radii.
+    """
+    stack = np.asarray(stack, dtype=np.float64)
+    n_frames, h, w = stack.shape
+
+    if max_radius is None:
+        max_radius = min(h, w) // 3
+
+    radii = np.linspace(10, max_radius, n_radii)
+    yy, xx = np.ogrid[:h, :w]
+
+    velocities = []
+    fits = []
+
+    for pace_row, pace_col in pacemaker_positions:
+        dist = np.sqrt((xx - pace_col)**2 + (yy - pace_row)**2)
+        arrival_times = []
+        valid_radii = []
+
+        for r in radii:
+            # Annular ring at radius r (±3px wide)
+            ring_mask = (dist >= r - 3) & (dist <= r + 3)
+            if ring_mask.sum() < 5:
+                continue
+
+            # Extract mean intensity over time in this ring
+            ring_trace = np.array([stack[t][ring_mask].mean() for t in range(n_frames)])
+
+            # Find peak intensity in ring
+            peak_val = ring_trace.max()
+            baseline = np.percentile(ring_trace, 25)
+            thresh = baseline + threshold_frac * (peak_val - baseline)
+
+            # Find first crossing above threshold
+            above = ring_trace > thresh
+            if above.any():
+                first_above = np.where(above)[0][0]
+                arrival_times.append(first_above * dt)
+                valid_radii.append(r)
+
+        if len(valid_radii) >= 3:
+            # Fit linear: radius = velocity * arrival_time + offset
+            valid_radii = np.array(valid_radii)
+            arrival_times = np.array(arrival_times)
+
+            # Linear regression: radius = slope * time + intercept
+            coeffs = np.polyfit(arrival_times, valid_radii, 1)
+            slope = coeffs[0]  # px/s
+            intercept = coeffs[1]
+
+            # R-squared
+            predicted = np.polyval(coeffs, arrival_times)
+            ss_res = ((valid_radii - predicted)**2).sum()
+            ss_tot = ((valid_radii - valid_radii.mean())**2).sum()
+            r_sq = 1 - ss_res / ss_tot if ss_tot > 0 else 0.0
+
+            velocities.append(abs(float(slope)))
+            fits.append((float(slope), float(intercept), float(r_sq)))
+        else:
+            velocities.append(0.0)
+            fits.append((0.0, 0.0, 0.0))
+
+    mean_vel = float(np.mean([v for v in velocities if v > 0])) if any(v > 0 for v in velocities) else 0.0
+
+    return {
+        'velocities': velocities,
+        'mean_velocity': round(mean_vel, 2),
+        'fits': fits,
+        'radii': radii,
     }
 
 
@@ -310,7 +392,7 @@ def _detect_peaks(signal, min_distance=3):
 
     peaks = []
     for i in range(1, n - 1):
-        if signal[i] > signal[i - 1] and signal[i] > signal[i + 1]:
+        if signal[i] > signal[i-1] and signal[i] > signal[i+1]:
             if min_distance <= 1 or not peaks or (i - peaks[-1]) >= min_distance:
                 peaks.append(i)
 

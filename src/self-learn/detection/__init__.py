@@ -10,46 +10,31 @@ Modules:
 """
 
 from .cells import (
-    count_bacteria_bf,
-    count_blobs_log,
-    count_nuclei_adaptive,
-    count_nuclei_fluorescence,
-    count_objects_dt,
-    detect_blobs_log,
-    detect_cells,
-    detect_cells_multichannel,
-    detect_fluorescent_centroids,
-    detect_nuclei_hae,
-    detect_point_source,
-    extract_hematoxylin,
-    find_bright_centroid,
-    merge_nearby_centroids,
-    watershed_split,
+    detect_cells, detect_cells_multichannel, find_bright_centroid,
+    count_blobs_log, detect_blobs_log, count_objects_dt,
+    merge_nearby_centroids, detect_point_source,
+    extract_hematoxylin, detect_nuclei_hae,
+    count_nuclei_fluorescence, count_nuclei_adaptive,
+    count_bacteria_bf, watershed_split,
+    detect_fluorescent_centroids, estimate_min_distance,
 )
-from .consensus import (
-    consensus_count,
-    merge_detections,
-    validate_detections,
-)
+from .tissue import segment_tissue, contact_graph, measure_wound_closure
 from .neurons import (
-    classify_neuron,
-    count_branch_points,
-    count_primary_processes,
-    count_puncta,
-    detect_somata,
-    estimate_neurite_length,
+    detect_somata, count_puncta, estimate_neurite_length,
+    count_primary_processes, classify_neuron, count_branch_points,
 )
 from .segmentation import (
-    adaptive_threshold,
-    segment_by_markers,
-    separate_touching,
-)
-from .segmentation import (
-    watershed_split as watershed_split_advanced,
+    adaptive_threshold, segment_by_markers, separate_touching,
+    expand_labels_voronoi,
 )
 from .threshold import (
-    auto_threshold,
-    detect_with_retry,
-    threshold_sweep,
+    auto_threshold, threshold_sweep, detect_with_retry,
+    estimate_noise_floor,
 )
-from .tissue import contact_graph, measure_wound_closure, segment_tissue
+from .consensus import (
+    consensus_count, merge_detections, validate_detections,
+)
+from .segmentation_backend import (
+    Backend, LabeledMask, segment, register_backend, get_backend,
+    list_backends, available_backends, labels_to_centroid_dicts,
+)

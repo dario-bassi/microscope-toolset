@@ -13,7 +13,7 @@ Functions:
 
 import numpy as np
 from scipy import ndimage
-from skimage import measure
+from skimage import morphology, measure
 
 
 def dna_content_histogram(intensities, n_bins=50):
@@ -39,13 +39,13 @@ def dna_content_histogram(intensities, n_bins=50):
     intensities = np.asarray(intensities, dtype=float)
     if len(intensities) < 5:
         return {
-            "bin_centers": np.array([]),
-            "counts": np.array([]),
-            "frequencies": np.array([]),
-            "g1_peak": 0.0,
-            "g2_peak": 0.0,
-            "g1_g2_ratio": 0.0,
-            "cv_g1": 0.0,
+            'bin_centers': np.array([]),
+            'counts': np.array([]),
+            'frequencies': np.array([]),
+            'g1_peak': 0.0,
+            'g2_peak': 0.0,
+            'g1_g2_ratio': 0.0,
+            'cv_g1': 0.0,
         }
 
     counts, bin_edges = np.histogram(intensities, bins=n_bins)
@@ -79,26 +79,24 @@ def dna_content_histogram(intensities, n_bins=50):
     # Estimate G1 CV
     g1_half_width = (bin_edges[1] - bin_edges[0]) * 3
     g1_cells = intensities[
-        (intensities > g1_peak - g1_half_width) & (intensities < g1_peak + g1_half_width)
+        (intensities > g1_peak - g1_half_width) &
+        (intensities < g1_peak + g1_half_width)
     ]
-    cv_g1 = (
-        float(g1_cells.std() / g1_cells.mean())
-        if len(g1_cells) > 1 and g1_cells.mean() > 0
-        else 0.0
-    )
+    cv_g1 = float(g1_cells.std() / g1_cells.mean()) if len(g1_cells) > 1 and g1_cells.mean() > 0 else 0.0
 
     return {
-        "bin_centers": bin_centers,
-        "counts": counts,
-        "frequencies": frequencies,
-        "g1_peak": round(g1_peak, 2),
-        "g2_peak": round(g2_peak, 2),
-        "g1_g2_ratio": round(g1_g2_ratio, 4),
-        "cv_g1": round(cv_g1, 4),
+        'bin_centers': bin_centers,
+        'counts': counts,
+        'frequencies': frequencies,
+        'g1_peak': round(g1_peak, 2),
+        'g2_peak': round(g2_peak, 2),
+        'g1_g2_ratio': round(g1_g2_ratio, 4),
+        'cv_g1': round(cv_g1, 4),
     }
 
 
-def classify_cycle_phase(intensities, areas, circularities=None, g1_peak=None):
+def classify_cycle_phase(intensities, areas, circularities=None,
+                         g1_peak=None):
     """Classify cells into cell cycle phases.
 
     Uses DNA content (intensity), nuclear area, and optionally
@@ -124,23 +122,23 @@ def classify_cycle_phase(intensities, areas, circularities=None, g1_peak=None):
 
     if n == 0:
         return {
-            "phases": [],
-            "phase_counts": {"G1": 0, "S": 0, "G2": 0, "M": 0},
-            "g1_threshold": 0.0,
-            "g2_threshold": 0.0,
+            'phases': [],
+            'phase_counts': {'G1': 0, 'S': 0, 'G2': 0, 'M': 0},
+            'g1_threshold': 0.0,
+            'g2_threshold': 0.0,
         }
 
     # Auto-detect G1 peak if not provided
     if g1_peak is None:
         hist = dna_content_histogram(intensities)
-        g1_peak = hist["g1_peak"]
+        g1_peak = hist['g1_peak']
 
     if g1_peak <= 0:
         g1_peak = float(np.median(intensities))
 
     # Thresholds based on G1 peak
-    g1_upper = g1_peak * 1.3  # upper bound for G1
-    g2_lower = g1_peak * 1.7  # lower bound for G2/M
+    g1_upper = g1_peak * 1.3   # upper bound for G1
+    g2_lower = g1_peak * 1.7   # lower bound for G2/M
     # S-phase: between g1_upper and g2_lower
     # M-phase: G2-level intensity but low circularity (condensed chromatin)
 
@@ -150,26 +148,26 @@ def classify_cycle_phase(intensities, areas, circularities=None, g1_peak=None):
         area = areas[i]
 
         if inten < g1_upper:
-            phases.append("G1")
+            phases.append('G1')
         elif inten > g2_lower:
             # Check for mitotic features if circularity available
             if circularities is not None and circularities[i] < 0.6:
-                phases.append("M")
+                phases.append('M')
             elif area > np.median(areas) * 1.5:
                 # Large nucleus at G2 level → could be M
-                phases.append("M")
+                phases.append('M')
             else:
-                phases.append("G2")
+                phases.append('G2')
         else:
-            phases.append("S")
+            phases.append('S')
 
-    phase_counts = {p: phases.count(p) for p in ["G1", "S", "G2", "M"]}
+    phase_counts = {p: phases.count(p) for p in ['G1', 'S', 'G2', 'M']}
 
     return {
-        "phases": phases,
-        "phase_counts": phase_counts,
-        "g1_threshold": round(float(g1_upper), 2),
-        "g2_threshold": round(float(g2_lower), 2),
+        'phases': phases,
+        'phase_counts': phase_counts,
+        'g1_threshold': round(float(g1_upper), 2),
+        'g2_threshold': round(float(g2_lower), 2),
     }
 
 
@@ -190,7 +188,7 @@ def mitotic_index(phases=None, n_mitotic=None, n_total=None):
             percentage: float (0-100).
     """
     if phases is not None:
-        n_m = sum(1 for p in phases if p == "M")
+        n_m = sum(1 for p in phases if p == 'M')
         n_t = len(phases)
     elif n_mitotic is not None and n_total is not None:
         n_m = n_mitotic
@@ -201,10 +199,10 @@ def mitotic_index(phases=None, n_mitotic=None, n_total=None):
     mi = n_m / n_t if n_t > 0 else 0.0
 
     return {
-        "mitotic_index": round(mi, 4),
-        "n_mitotic": n_m,
-        "n_total": n_t,
-        "percentage": round(mi * 100, 2),
+        'mitotic_index': round(mi, 4),
+        'n_mitotic': n_m,
+        'n_total': n_t,
+        'percentage': round(mi * 100, 2),
     }
 
 
@@ -227,17 +225,17 @@ def population_index(labels, positive_label):
     """
     labels = list(labels)
     n_t = len(labels)
-    n_p = sum(1 for lbl in labels if lbl == positive_label)
+    n_p = sum(1 for l in labels if l == positive_label)
     idx = n_p / n_t if n_t > 0 else 0.0
     return {
-        "index": round(idx, 4),
-        "n_positive": n_p,
-        "n_total": n_t,
-        "percentage": round(idx * 100, 2),
+        'index': round(idx, 4),
+        'n_positive': n_p,
+        'n_total': n_t,
+        'percentage': round(idx * 100, 2),
     }
 
 
-def proliferation_markers(intensities, threshold=None, threshold_method="otsu"):
+def proliferation_markers(intensities, threshold=None, threshold_method='otsu'):
     """Count cells positive for a proliferation marker (e.g., Ki-67).
 
     Args:
@@ -258,19 +256,16 @@ def proliferation_markers(intensities, threshold=None, threshold_method="otsu"):
 
     if n == 0:
         return {
-            "n_positive": 0,
-            "n_negative": 0,
-            "n_total": 0,
-            "fraction_positive": 0.0,
-            "threshold_used": 0.0,
+            'n_positive': 0, 'n_negative': 0, 'n_total': 0,
+            'fraction_positive': 0.0, 'threshold_used': 0.0,
         }
 
     if threshold is None:
-        if threshold_method == "otsu":
+        if threshold_method == 'otsu':
             # Simple Otsu: minimize intra-class variance
             sorted_vals = np.sort(intensities)
             best_t = float(np.median(intensities))
-            best_var = float("inf")
+            best_var = float('inf')
             for t in np.linspace(sorted_vals[1], sorted_vals[-2], 50):
                 low = intensities[intensities <= t]
                 high = intensities[intensities > t]
@@ -283,9 +278,9 @@ def proliferation_markers(intensities, threshold=None, threshold_method="otsu"):
                     best_var = var
                     best_t = t
             threshold = best_t
-        elif threshold_method == "median":
+        elif threshold_method == 'median':
             threshold = float(np.median(intensities) * 1.5)
-        elif threshold_method == "percentile":
+        elif threshold_method == 'percentile':
             threshold = float(np.percentile(intensities, 75))
         else:
             raise ValueError(f"Unknown threshold method: {threshold_method}")
@@ -294,11 +289,11 @@ def proliferation_markers(intensities, threshold=None, threshold_method="otsu"):
     n_neg = n - n_pos
 
     return {
-        "n_positive": n_pos,
-        "n_negative": n_neg,
-        "n_total": n,
-        "fraction_positive": round(n_pos / n, 4) if n > 0 else 0.0,
-        "threshold_used": round(float(threshold), 4),
+        'n_positive': n_pos,
+        'n_negative': n_neg,
+        'n_total': n,
+        'fraction_positive': round(n_pos / n, 4) if n > 0 else 0.0,
+        'threshold_used': round(float(threshold), 4),
     }
 
 
@@ -325,25 +320,25 @@ def cycle_phase_summary(phases, intensities=None, areas=None):
         areas = np.asarray(areas, dtype=float)
 
     summary = {}
-    for phase in ["G1", "S", "G2", "M"]:
+    for phase in ['G1', 'S', 'G2', 'M']:
         indices = [i for i, p in enumerate(phases) if p == phase]
         count = len(indices)
         entry = {
-            "count": count,
-            "fraction": round(count / n, 4) if n > 0 else 0.0,
+            'count': count,
+            'fraction': round(count / n, 4) if n > 0 else 0.0,
         }
         if intensities is not None and count > 0:
-            entry["mean_intensity"] = round(float(intensities[indices].mean()), 2)
+            entry['mean_intensity'] = round(float(intensities[indices].mean()), 2)
         if areas is not None and count > 0:
-            entry["mean_area"] = round(float(areas[indices].mean()), 2)
+            entry['mean_area'] = round(float(areas[indices].mean()), 2)
         summary[phase] = entry
 
     return summary
 
 
-def classify_fucci(
-    nuc_image, gem_image, sigma=2.0, ratio_threshold=2.5, gem_min=15, min_cell_size=25
-):
+def classify_fucci(nuc_image, gem_image, sigma=2.0,
+                   ratio_threshold=2.5, gem_min=15,
+                   min_cell_size=25):
     """Classify cells into FUCCI phases (G1/S/G2/M) from dual reporter images.
 
     FUCCI reporters:
@@ -368,10 +363,9 @@ def classify_fucci(
             g2m_cells: list of G2/M cell dicts sorted by gem_max descending.
             labeled: 2D array, cell label mask.
     """
-    from scipy import ndimage
-    from skimage import filters
-    from skimage import morphology as morph
+    from skimage import filters, measure, morphology as morph
     from skimage.filters import gaussian as sk_gaussian
+    from scipy import ndimage
 
     nuc = np.asarray(nuc_image, dtype=float)
     gem = np.asarray(gem_image, dtype=float)
@@ -388,7 +382,7 @@ def classify_fucci(
 
     mask = combined > thresh
     mask = ndimage.binary_fill_holes(mask)
-    mask = morph.remove_small_objects(mask, max_size=min_cell_size - 1)
+    mask = morph.remove_small_objects(mask, max_size=min_cell_size)
     labeled, n_cells = ndimage.label(mask)
 
     props = measure.regionprops(labeled)
@@ -401,38 +395,37 @@ def classify_fucci(
         ratio = cell_gem / (cell_nuc + 1e-6)
 
         if ratio > ratio_threshold and cell_gem > gem_min:
-            phase = "G2/M"
+            phase = 'G2/M'
         elif cell_nuc > cell_gem * ratio_threshold:
-            phase = "G1"
+            phase = 'G1'
         else:
-            phase = "S"
+            phase = 'S'
 
-        cells.append(
-            {
-                "x": float(cx),
-                "y": float(cy),
-                "area": int(p.area),
-                "nuc_max": cell_nuc,
-                "gem_max": cell_gem,
-                "ratio": float(ratio),
-                "phase": phase,
-            }
-        )
+        cells.append({
+            'x': float(cx), 'y': float(cy),
+            'area': int(p.area),
+            'nuc_max': cell_nuc,
+            'gem_max': cell_gem,
+            'ratio': float(ratio),
+            'phase': phase,
+        })
 
-    g2m_cells = sorted([c for c in cells if c["phase"] == "G2/M"], key=lambda c: -c["gem_max"])
+    g2m_cells = sorted([c for c in cells if c['phase'] == 'G2/M'],
+                        key=lambda c: -c['gem_max'])
 
     return {
-        "cells": cells,
-        "n_cells": len(cells),
-        "n_G1": sum(1 for c in cells if c["phase"] == "G1"),
-        "n_S": sum(1 for c in cells if c["phase"] == "S"),
-        "n_G2M": len(g2m_cells),
-        "g2m_cells": g2m_cells,
-        "labeled": labeled,
+        'cells': cells,
+        'n_cells': len(cells),
+        'n_G1': sum(1 for c in cells if c['phase'] == 'G1'),
+        'n_S': sum(1 for c in cells if c['phase'] == 'S'),
+        'n_G2M': len(g2m_cells),
+        'g2m_cells': g2m_cells,
+        'labeled': labeled,
     }
 
 
-def detect_geminin_division(frames, brightest_frame=None, roi_radius=50, drop_threshold=0.40):
+def detect_geminin_division(frames, brightest_frame=None, roi_radius=50,
+                             drop_threshold=0.40):
     """Detect cell division from geminin signal drop in timelapse.
 
     During M->G1 transition, Geminin is rapidly degraded, causing signal drop.
@@ -456,11 +449,11 @@ def detect_geminin_division(frames, brightest_frame=None, roi_radius=50, drop_th
 
     if not frames:
         return {
-            "intensities": [],
-            "division_observed": False,
-            "division_frame": None,
-            "roi_center": (256, 256),
-            "roi_mask": np.zeros((512, 512), dtype=bool),
+            'intensities': [],
+            'division_observed': False,
+            'division_frame': None,
+            'roi_center': (256, 256),
+            'roi_mask': np.zeros((512, 512), dtype=bool),
         }
 
     ref_idx = brightest_frame if brightest_frame is not None else 0
@@ -474,7 +467,7 @@ def detect_geminin_division(frames, brightest_frame=None, roi_radius=50, drop_th
     # Build ROI mask
     h, w = ref_frame.shape
     yy, xx = np.ogrid[:h, :w]
-    roi_mask = (yy - yr) ** 2 + (xx - xr) ** 2 <= roi_radius**2
+    roi_mask = (yy - yr)**2 + (xx - xr)**2 <= roi_radius**2
 
     # Compute per-frame intensities
     intensities = []
@@ -493,11 +486,155 @@ def detect_geminin_division(frames, brightest_frame=None, roi_radius=50, drop_th
             break
 
     return {
-        "intensities": intensities,
-        "division_observed": division_frame is not None,
-        "division_frame": division_frame,
-        "roi_center": roi_center,
-        "roi_mask": roi_mask,
+        'intensities': intensities,
+        'division_observed': division_frame is not None,
+        'division_frame': division_frame,
+        'roi_center': roi_center,
+        'roi_mask': roi_mask,
+    }
+
+
+def classify_fucci_phases(gem_img, cdt1_img, cell_mask=None,
+                          m_gem_pct=90, m_cdt1_pct=10,
+                          g1_cdt1_pct=70, g1_gem_pct=20,
+                          min_cell_area=20):
+    """Classify cells into FUCCI cell-cycle phases using both reporter channels.
+
+    Uses ratio-based classification with both Geminin (S/G2/M marker) and
+    Cdt1 (G1 marker) channels. More robust than single-channel thresholds.
+
+    FUCCI phase signatures (normalized intensities):
+        G1:  High Cdt1 (>0.5), Low Geminin (<0.2)  — red only
+        S:   Moderate both                          — yellow (overlap)
+        G2:  Low Cdt1 (<0.3), High Geminin (>0.5)  — green only
+        M:   Very low Cdt1 (<0.1), Very high Gem (>0.8) — bright green
+
+    Classification uses population percentiles for robustness:
+        M-phase:  gem > m_gem_pct AND cdt1 < m_cdt1_pct
+        G1-phase: cdt1 > g1_cdt1_pct AND gem < g1_gem_pct
+        G2-phase: gem > 50th pct AND cdt1 < 50th pct (excluding M)
+        S-phase:  everything else (both intermediate)
+
+    Args:
+        gem_img: 2D array — Geminin channel (GFP, green; high in S/G2/M).
+        cdt1_img: 2D array — Cdt1 channel (mCherry, red; high in G1).
+        cell_mask: 2D bool or labeled array — cell regions. If None, detected
+            from gem+cdt1 combined signal via threshold.
+        m_gem_pct: Percentile for M-phase geminin cutoff (default 90).
+        m_cdt1_pct: Percentile for M-phase cdt1 cutoff (default 10).
+        g1_cdt1_pct: Percentile for G1 cdt1 cutoff (default 70).
+        g1_gem_pct: Percentile for G1 geminin cutoff (default 20).
+        min_cell_area: Minimum cell region area (pixels).
+
+    Returns:
+        dict with:
+            phases: list of str — phase label per cell ('G1','S','G2','M').
+            centroids: list of (row, col) — centroid per cell.
+            gem_intensities: list of float — mean geminin per cell.
+            cdt1_intensities: list of float — mean cdt1 per cell.
+            ratios: list of float — gem/cdt1 ratio per cell.
+            phase_counts: dict — {phase: count}.
+            mitotic_index: float — fraction of cells in M phase.
+            n_cells: int — total cells analyzed.
+    """
+    gem = np.asarray(gem_img, dtype=np.float64)
+    cdt1 = np.asarray(cdt1_img, dtype=np.float64)
+
+    # Detect cell regions if no mask provided
+    if cell_mask is None:
+        combined = gem + cdt1
+        if combined.max() == 0:
+            return {
+                'phases': [], 'centroids': [], 'gem_intensities': [],
+                'cdt1_intensities': [], 'ratios': [],
+                'phase_counts': {'G1': 0, 'S': 0, 'G2': 0, 'M': 0},
+                'mitotic_index': 0.0, 'n_cells': 0,
+            }
+        from skimage.filters import threshold_otsu
+        try:
+            thresh = threshold_otsu(combined)
+        except ValueError:
+            thresh = combined.max() * 0.1
+        cell_mask = combined > thresh
+        cell_mask = morphology.remove_small_objects(cell_mask, max_size=min_cell_area)
+        cell_mask = ndimage.binary_fill_holes(cell_mask)
+
+    # Label cells
+    if cell_mask.dtype == bool:
+        labeled = measure.label(cell_mask)
+    else:
+        labeled = cell_mask
+    props = measure.regionprops(labeled)
+
+    # Collect per-cell intensities
+    gem_vals = []
+    cdt1_vals = []
+    centroids = []
+    for p in props:
+        if p.area < min_cell_area:
+            continue
+        coords = p.coords
+        gem_mean = float(gem[coords[:, 0], coords[:, 1]].mean())
+        cdt1_mean = float(cdt1[coords[:, 0], coords[:, 1]].mean())
+        gem_vals.append(gem_mean)
+        cdt1_vals.append(cdt1_mean)
+        centroids.append((float(p.centroid[0]), float(p.centroid[1])))
+
+    n_cells = len(gem_vals)
+    if n_cells == 0:
+        return {
+            'phases': [], 'centroids': [], 'gem_intensities': [],
+            'cdt1_intensities': [], 'ratios': [],
+            'phase_counts': {'G1': 0, 'S': 0, 'G2': 0, 'M': 0},
+            'mitotic_index': 0.0, 'n_cells': 0,
+        }
+
+    gem_arr = np.array(gem_vals)
+    cdt1_arr = np.array(cdt1_vals)
+    ratios = gem_arr / np.maximum(cdt1_arr, 1.0)
+
+    # Compute percentile thresholds from the population
+    gem_m_thresh = np.percentile(gem_arr, m_gem_pct)
+    cdt1_m_thresh = np.percentile(cdt1_arr, m_cdt1_pct)
+    cdt1_g1_thresh = np.percentile(cdt1_arr, g1_cdt1_pct)
+    gem_g1_thresh = np.percentile(gem_arr, g1_gem_pct)
+    gem_median = np.median(gem_arr)
+    cdt1_median = np.median(cdt1_arr)
+
+    # Classify
+    phases = []
+    for i in range(n_cells):
+        g = gem_arr[i]
+        c = cdt1_arr[i]
+
+        # M-phase: extreme geminin high + cdt1 low (ratio must be > 1)
+        if g >= gem_m_thresh and c <= cdt1_m_thresh and ratios[i] > 1.0:
+            phases.append('M')
+        # G1: high cdt1 + low geminin
+        elif c >= cdt1_g1_thresh and g <= gem_g1_thresh:
+            phases.append('G1')
+        # G2: high geminin + low cdt1 (but not as extreme as M)
+        elif g >= gem_median and c <= cdt1_median:
+            phases.append('G2')
+        # S: both moderate (overlap region)
+        else:
+            phases.append('S')
+
+    phase_counts = {'G1': 0, 'S': 0, 'G2': 0, 'M': 0}
+    for p in phases:
+        phase_counts[p] += 1
+
+    mi = phase_counts['M'] / n_cells if n_cells > 0 else 0.0
+
+    return {
+        'phases': phases,
+        'centroids': centroids,
+        'gem_intensities': gem_vals,
+        'cdt1_intensities': cdt1_vals,
+        'ratios': ratios.tolist(),
+        'phase_counts': phase_counts,
+        'mitotic_index': float(mi),
+        'n_cells': n_cells,
     }
 
 
@@ -534,7 +671,7 @@ def detect_fucci_g2m(gem_img, threshold=0.65, nuc_img=None, ratio_min=None):
             intensities: list of max gem intensity per cell
             ratios: list of gem/nuc intensity ratio per cell (empty if nuc_img=None)
     """
-    from scipy.ndimage import center_of_mass, label
+    from scipy.ndimage import label, center_of_mass
 
     gem_norm = gem_img / (gem_img.max() + 1e-6)
     binary = gem_norm > threshold
@@ -550,8 +687,8 @@ def detect_fucci_g2m(gem_img, threshold=0.65, nuc_img=None, ratio_min=None):
         for i, (row, col) in enumerate(coms):
             r, c = int(row), int(col)
             win = 4
-            r_lo, r_hi = max(0, r - win), min(gem_img.shape[0], r + win + 1)
-            c_lo, c_hi = max(0, c - win), min(gem_img.shape[1], c + win + 1)
+            r_lo, r_hi = max(0, r-win), min(gem_img.shape[0], r+win+1)
+            c_lo, c_hi = max(0, c-win), min(gem_img.shape[1], c+win+1)
             gem_val = float(gem_img[r_lo:r_hi, c_lo:c_hi].max())
 
             # Optional ratio filter with nucleus channel
@@ -576,18 +713,17 @@ def detect_fucci_g2m(gem_img, threshold=0.65, nuc_img=None, ratio_min=None):
         binary = new_labeled > 0
 
     return {
-        "n_G2M": len(positions),
-        "positions": positions,
-        "labels": labeled,
-        "binary": binary,
-        "intensities": intensities,
-        "ratios": ratios,
+        'n_G2M': len(positions),
+        'positions': positions,
+        'labels': labeled,
+        'binary': binary,
+        'intensities': intensities,
+        'ratios': ratios,
     }
 
 
-def detect_fucci_division(
-    timelapse, baseline_frames=3, drop_threshold=0.4, sudden_drop_fraction=0.30
-):
+def detect_fucci_division(timelapse, baseline_frames=3, drop_threshold=0.4,
+                          sudden_drop_fraction=0.30):
     """Detect cell division from geminin-GFP timelapse.
 
     Division is signaled by a sharp drop in Geminin signal (degrades M→G1).
@@ -622,12 +758,12 @@ def detect_fucci_division(
     """
     if not timelapse:
         return {
-            "division_observed": False,
-            "division_frame": None,
-            "division_mode": None,
-            "baseline_mean": 0.0,
-            "frame_means": [],
-            "drop_fraction": 0.0,
+            'division_observed': False,
+            'division_frame': None,
+            'division_mode': None,
+            'baseline_mean': 0.0,
+            'frame_means': [],
+            'drop_fraction': 0.0,
         }
 
     frame_means = [f.mean() for f in timelapse]
@@ -646,7 +782,7 @@ def detect_fucci_division(
         if v < baseline_mean * drop_threshold:
             division_frame = i + 1
             division_observed = True
-            division_mode = "absolute"
+            division_mode = 'absolute'
             break
 
         # Mode 2: sudden single-frame drop
@@ -657,7 +793,7 @@ def detect_fucci_division(
                 if frame_drop > sudden_drop_fraction:
                     division_frame = i + 1
                     division_observed = True
-                    division_mode = "sudden"
+                    division_mode = 'sudden'
                     break
 
     last3 = frame_means[-3:] if len(frame_means) >= 3 else frame_means
@@ -665,18 +801,17 @@ def detect_fucci_division(
     drop_fraction = 1.0 - final_mean / max(baseline_mean, 1e-6)
 
     return {
-        "division_observed": division_observed,
-        "division_frame": division_frame,
-        "division_mode": division_mode,
-        "baseline_mean": baseline_mean,
-        "frame_means": frame_means,
-        "drop_fraction": drop_fraction,
+        'division_observed': division_observed,
+        'division_frame': division_frame,
+        'division_mode': division_mode,
+        'baseline_mean': baseline_mean,
+        'frame_means': frame_means,
+        'drop_fraction': drop_fraction,
     }
 
 
-def detect_fucci_division_v2(
-    timelapse, baseline_frames=5, drop_threshold=0.40, sudden_drop_fraction=0.25, slope_pvalue=0.05
-):
+def detect_fucci_division_v2(timelapse, baseline_frames=5, drop_threshold=0.40,
+                              sudden_drop_fraction=0.25, slope_pvalue=0.05):
     """Enhanced Geminin division detection with three modes + confidence score.
 
     Improvements over v1:
@@ -684,7 +819,7 @@ def detect_fucci_division_v2(
     - More sensitive sudden-drop (0.25 vs 0.30)
     - Mode 3: slope detection — sustained negative linear trend over post-baseline
     - Returns confidence_score (0-1): how confident we are in the division call
-    - Handles borderline cases that v1 missed (ch538: 44% drop just above 50% threshold)
+    - Handles borderline cases v1 missed (e.g. ~44% drops just above a 50% threshold)
 
     Modes:
         1. Absolute: mean of last 3 frames < drop_threshold × baseline
@@ -706,13 +841,9 @@ def detect_fucci_division_v2(
     """
     if not timelapse:
         return {
-            "division_observed": False,
-            "division_frame": None,
-            "division_mode": None,
-            "baseline_mean": 0.0,
-            "frame_means": [],
-            "drop_fraction": 0.0,
-            "confidence_score": 0.0,
+            'division_observed': False, 'division_frame': None,
+            'division_mode': None, 'baseline_mean': 0.0,
+            'frame_means': [], 'drop_fraction': 0.0, 'confidence_score': 0.0,
         }
 
     frame_means = [float(f.mean()) for f in timelapse]
@@ -732,7 +863,7 @@ def detect_fucci_division_v2(
         if v < baseline_mean * drop_threshold:
             division_frame = i + 1
             division_observed = True
-            division_mode = "absolute"
+            division_mode = 'absolute'
             # Confidence proportional to how far below threshold
             ratio = v / max(baseline_mean, 1e-6)
             confidence_score = min(1.0, 1.0 - ratio / drop_threshold)
@@ -745,14 +876,13 @@ def detect_fucci_division_v2(
                 if frame_drop > sudden_drop_fraction:
                     division_frame = i + 1
                     division_observed = True
-                    division_mode = "sudden"
+                    division_mode = 'sudden'
                     confidence_score = min(1.0, frame_drop / sudden_drop_fraction * 0.8)
                     break
 
     # Mode 3: slope detection over post-baseline frames (if not already detected)
     if not division_observed and len(frame_means) > n_base + 3:
         from scipy.stats import linregress
-
         post_frames = frame_means[n_base:]
         xs = np.arange(len(post_frames), dtype=float)
         slope, intercept, r_value, p_value, _ = linregress(xs, post_frames)
@@ -767,7 +897,7 @@ def detect_fucci_division_v2(
             else:
                 division_frame = n_base + 1
             division_observed = True
-            division_mode = "slope"
+            division_mode = 'slope'
             confidence_score = min(0.7, (1 - p_value) * total_drop)
 
     last3 = frame_means[-3:] if len(frame_means) >= 3 else frame_means
@@ -775,11 +905,11 @@ def detect_fucci_division_v2(
     drop_fraction = 1.0 - final_mean / max(baseline_mean, 1e-6)
 
     return {
-        "division_observed": division_observed,
-        "division_frame": division_frame,
-        "division_mode": division_mode,
-        "baseline_mean": baseline_mean,
-        "frame_means": frame_means,
-        "drop_fraction": drop_fraction,
-        "confidence_score": float(confidence_score),
+        'division_observed': division_observed,
+        'division_frame': division_frame,
+        'division_mode': division_mode,
+        'baseline_mean': baseline_mean,
+        'frame_means': frame_means,
+        'drop_fraction': drop_fraction,
+        'confidence_score': float(confidence_score),
     }

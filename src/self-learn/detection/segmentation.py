@@ -5,19 +5,26 @@ for use when cells are touching, illumination is uneven, or membrane
 channels can guide nuclear segmentation.
 
 Functions:
-    watershed_split    -- Split touching cells using watershed
-    adaptive_threshold -- Local thresholding for uneven illumination
-    segment_by_markers -- Marker-controlled watershed (membrane-guided)
-    separate_touching  -- Detect and split touching/overlapping cells
+    watershed_split      -- Split touching cells using watershed
+    adaptive_threshold   -- Local thresholding for uneven illumination
+    segment_by_markers   -- Marker-controlled watershed (membrane-guided)
+    separate_touching    -- Detect and split touching/overlapping cells
+    expand_labels_voronoi -- Grow nuclear labels into Voronoi cell territories
 """
 
 import numpy as np
 from scipy import ndimage
-from skimage import filters, measure, morphology, segmentation
+from skimage import filters, morphology, measure, segmentation, feature
 
 
 def watershed_split(binary_mask, min_distance=7):
     """Split touching cells in a binary mask using watershed.
+
+    Delegates to :func:`~src.core.detection.cells.watershed_split` which has
+    the full implementation (``dt_threshold``, ``fill_holes``, ``'auto'``
+    min_distance).  This wrapper remaps return keys for backward
+    compatibility: ``n_cells`` instead of ``n_objects``, centroids as
+    ``(y, x)`` instead of ``(cx, cy)``.
 
     Args:
         binary_mask: 2D boolean array where True = cell pixels.
@@ -30,53 +37,20 @@ def watershed_split(binary_mask, min_distance=7):
             n_cells: Number of separated cells.
             centroids: List of (y, x) centroid tuples.
     """
-    binary = np.asarray(binary_mask, dtype=bool)
+    from .cells import watershed_split as _ws_cells
 
-    if not binary.any():
-        return {
-            "labeled": np.zeros_like(binary, dtype=int),
-            "n_cells": 0,
-            "centroids": [],
-        }
-
-    # Distance transform — peaks at cell centers
-    dist = ndimage.distance_transform_edt(binary)
-
-    # Find local maxima as markers
-    from skimage.feature import peak_local_max
-
-    coords = peak_local_max(dist, min_distance=min_distance, labels=binary)
-
-    if len(coords) == 0:
-        # No peaks found — treat as single object
-        labeled = measure.label(binary)
-        props = measure.regionprops(labeled)
-        centroids = [(p.centroid[0], p.centroid[1]) for p in props]
-        return {
-            "labeled": labeled,
-            "n_cells": len(props),
-            "centroids": centroids,
-        }
-
-    # Create markers from peaks
-    markers = np.zeros_like(binary, dtype=int)
-    for i, (y, x) in enumerate(coords, start=1):
-        markers[y, x] = i
-
-    # Watershed
-    labeled = segmentation.watershed(-dist, markers, mask=binary)
-
-    props = measure.regionprops(labeled)
-    centroids = [(p.centroid[0], p.centroid[1]) for p in props]
-
+    result = _ws_cells(binary_mask, min_distance=min_distance)
+    # Remap keys: cells.py returns (cx, cy) = (x, y); this API returns (y, x)
+    centroids_yx = [(cy, cx) for cx, cy in result['centroids']]
     return {
-        "labeled": labeled,
-        "n_cells": len(props),
-        "centroids": centroids,
+        'labeled': result['labeled'],
+        'n_cells': result['n_objects'],
+        'centroids': centroids_yx,
     }
 
 
-def adaptive_threshold(image, block_size=51, offset=0, method="gaussian", min_area=20):
+def adaptive_threshold(image, block_size=51, offset=0, method='gaussian',
+                       min_area=20):
     """Local adaptive thresholding for uneven illumination.
 
     Args:
@@ -94,10 +68,12 @@ def adaptive_threshold(image, block_size=51, offset=0, method="gaussian", min_ar
     """
     img = np.asarray(image, dtype=np.float64)
 
-    if method == "gaussian":
-        thresh = filters.threshold_local(img, block_size, method="gaussian", offset=offset)
-    elif method == "mean":
-        thresh = filters.threshold_local(img, block_size, method="mean", offset=offset)
+    if method == 'gaussian':
+        thresh = filters.threshold_local(img, block_size,
+                                         method='gaussian', offset=offset)
+    elif method == 'mean':
+        thresh = filters.threshold_local(img, block_size,
+                                         method='mean', offset=offset)
     else:
         raise ValueError(f"method must be 'gaussian' or 'mean', got '{method}'")
 
@@ -110,13 +86,14 @@ def adaptive_threshold(image, block_size=51, offset=0, method="gaussian", min_ar
     n_objects = labeled.max()
 
     return {
-        "binary": binary,
-        "labeled": labeled,
-        "n_objects": n_objects,
+        'binary': binary,
+        'labeled': labeled,
+        'n_objects': n_objects,
     }
 
 
-def segment_by_markers(intensity_image, marker_image, threshold=None, min_area=20):
+def segment_by_markers(intensity_image, marker_image, threshold=None,
+                       min_area=20):
     """Marker-controlled watershed using a second channel.
 
     Use membrane/boundary channel to define cell boundaries, and
@@ -151,9 +128,9 @@ def segment_by_markers(intensity_image, marker_image, threshold=None, min_area=2
 
     if markers.max() == 0:
         return {
-            "labeled": np.zeros_like(intensity, dtype=int),
-            "n_cells": 0,
-            "centroids": [],
+            'labeled': np.zeros_like(intensity, dtype=int),
+            'n_cells': 0,
+            'centroids': [],
         }
 
     # Use intensity image gradient as watershed landscape
@@ -164,9 +141,9 @@ def segment_by_markers(intensity_image, marker_image, threshold=None, min_area=2
     centroids = [(p.centroid[0], p.centroid[1]) for p in props]
 
     return {
-        "labeled": labeled,
-        "n_cells": len(props),
-        "centroids": centroids,
+        'labeled': labeled,
+        'n_cells': len(props),
+        'centroids': centroids,
     }
 
 
@@ -191,9 +168,9 @@ def separate_touching(binary_mask, erosion_radius=2, min_area=20):
 
     if not binary.any():
         return {
-            "labeled": np.zeros_like(binary, dtype=int),
-            "n_cells": 0,
-            "centroids": [],
+            'labeled': np.zeros_like(binary, dtype=int),
+            'n_cells': 0,
+            'centroids': [],
         }
 
     # Erode to separate touching cells
@@ -219,7 +196,35 @@ def separate_touching(binary_mask, erosion_radius=2, min_area=20):
     centroids = [(p.centroid[0], p.centroid[1]) for p in props]
 
     return {
-        "labeled": labeled,
-        "n_cells": len(props),
-        "centroids": centroids,
+        'labeled': labeled,
+        'n_cells': len(props),
+        'centroids': centroids,
     }
+
+
+def expand_labels_voronoi(labels, distance=None):
+    """Grow nuclear labels into Voronoi cell territories covering the FOV.
+
+    For each pixel not already labeled, assigns the label of the nearest
+    seed region. With ``distance=None`` (default) the expansion fills
+    the entire FOV — equivalent to a Voronoi tessellation from the
+    labeled seeds. Useful for assigning sub-cellular objects (puncta,
+    droplets) to their parent cell when only nuclear markers are
+    segmented reliably.
+
+    Args:
+        labels: 2D int array. Seeds should be labeled 1..N (0 = background).
+        distance: Max distance (px) to grow. If None, uses image diagonal
+            so labels fill the entire FOV.
+
+    Returns:
+        2D int array of the same shape, fully tessellated (no zeros
+        remain unless the input ``labels`` was all zero).
+    """
+    labels = np.asarray(labels)
+    if labels.max() == 0:
+        return labels.copy()
+    if distance is None:
+        # Fill FOV: a distance equal to the image diagonal reaches every pixel.
+        distance = int(np.ceil(np.hypot(*labels.shape)))
+    return segmentation.expand_labels(labels, distance=distance)

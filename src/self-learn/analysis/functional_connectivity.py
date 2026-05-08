@@ -15,7 +15,7 @@ Functions:
 import numpy as np
 
 
-def correlation_matrix(traces, method="pearson"):
+def correlation_matrix(traces, method='pearson'):
     """Compute pairwise correlation matrix between calcium traces.
 
     Args:
@@ -38,7 +38,7 @@ def correlation_matrix(traces, method="pearson"):
     n = mat.shape[0]
     corr = np.zeros((n, n))
 
-    if method == "spearman":
+    if method == 'spearman':
         # Rank-transform each trace
         ranked = np.zeros_like(mat)
         for i in range(n):
@@ -62,9 +62,9 @@ def correlation_matrix(traces, method="pearson"):
     mean_corr = float(np.mean(corr[mask])) if n > 1 else 0.0
 
     return {
-        "matrix": corr,
-        "labels": labels,
-        "mean_correlation": round(mean_corr, 4),
+        'matrix': corr,
+        'labels': labels,
+        'mean_correlation': round(mean_corr, 4),
     }
 
 
@@ -116,11 +116,11 @@ def lagged_correlation(traces, max_lag=10):
             for lag in range(-max_lag, max_lag + 1):
                 # Positive lag: shift j forward (i leads j)
                 if lag >= 0:
-                    seg_i = xi[: T - lag] if lag > 0 else xi
+                    seg_i = xi[:T - lag] if lag > 0 else xi
                     seg_j = xj[lag:] if lag > 0 else xj
                 else:
                     seg_i = xi[-lag:]
-                    seg_j = xj[: T + lag]
+                    seg_j = xj[:T + lag]
 
                 if len(seg_i) < 3:
                     continue
@@ -143,24 +143,22 @@ def lagged_correlation(traces, max_lag=10):
     for i in range(n):
         for j in range(n):
             if i != j and opt_lag[i, j] > 0 and peak_corr[i, j] > 0.3:
-                directed.append(
-                    (
-                        labels[i],
-                        labels[j],
-                        int(opt_lag[i, j]),
-                        round(float(peak_corr[i, j]), 4),
-                    )
-                )
+                directed.append((
+                    labels[i], labels[j],
+                    int(opt_lag[i, j]),
+                    round(float(peak_corr[i, j]), 4),
+                ))
 
     return {
-        "optimal_lag": opt_lag,
-        "peak_correlation": peak_corr,
-        "labels": labels,
-        "directed_pairs": directed,
+        'optimal_lag': opt_lag,
+        'peak_correlation': peak_corr,
+        'labels': labels,
+        'directed_pairs': directed,
     }
 
 
-def build_adjacency(correlation_matrix_result, threshold=0.5, method="absolute"):
+def build_adjacency(correlation_matrix_result, threshold=0.5,
+                     method='absolute'):
     """Convert correlation matrix to binary adjacency matrix.
 
     Args:
@@ -176,11 +174,11 @@ def build_adjacency(correlation_matrix_result, threshold=0.5, method="absolute")
             labels: list of neuron IDs.
             edge_list: list of (source, target, weight) tuples.
     """
-    corr = correlation_matrix_result["matrix"]
-    labels = correlation_matrix_result["labels"]
+    corr = correlation_matrix_result['matrix']
+    labels = correlation_matrix_result['labels']
     n = corr.shape[0]
 
-    if method == "percentile":
+    if method == 'percentile':
         mask = np.triu_indices(n, k=1)
         vals = np.abs(corr[mask])
         if len(vals) > 0:
@@ -188,7 +186,7 @@ def build_adjacency(correlation_matrix_result, threshold=0.5, method="absolute")
         else:
             cutoff = 1.0
         adj = (np.abs(corr) >= cutoff).astype(int)
-    elif method == "positive":
+    elif method == 'positive':
         adj = (corr > threshold).astype(int)
     else:  # absolute
         adj = (np.abs(corr) > threshold).astype(int)
@@ -202,16 +200,15 @@ def build_adjacency(correlation_matrix_result, threshold=0.5, method="absolute")
                 edge_list.append((labels[i], labels[j], round(float(corr[i, j]), 4)))
 
     return {
-        "adjacency": adj,
-        "n_edges": int(adj.sum()),
-        "labels": labels,
-        "edge_list": edge_list,
+        'adjacency': adj,
+        'n_edges': int(adj.sum()),
+        'labels': labels,
+        'edge_list': edge_list,
     }
 
 
-def cascade_connectivity(
-    traces, stim_neuron, baseline_frames=None, threshold_dff=0.5, synaptic_delay=1
-):
+def cascade_connectivity(traces, stim_neuron, baseline_frames=None,
+                          threshold_dff=0.5, synaptic_delay=1):
     """Infer directed connectivity from a stimulation cascade.
 
     After stimulating one neuron, observe which others fire and when.
@@ -310,11 +307,11 @@ def cascade_connectivity(
                     break  # Only first re-stimulation
 
     return {
-        "first_fire": first_fire,
-        "layers": {k: sorted(v) for k, v in layers.items()},
-        "cascade_tree": cascade_tree,
-        "re_stimulations": re_stims,
-        "n_responding": len(first_fire),
+        'first_fire': first_fire,
+        'layers': {k: sorted(v) for k, v in layers.items()},
+        'cascade_tree': cascade_tree,
+        're_stimulations': re_stims,
+        'n_responding': len(first_fire),
     }
 
 
@@ -414,22 +411,20 @@ def graph_metrics(adjacency, directed=True):
                     neighbor_edges += 1
 
         max_neighbor_edges = k * (k - 1)
-        clustering[node] = (
-            round(neighbor_edges / max_neighbor_edges, 4) if max_neighbor_edges > 0 else 0.0
-        )
+        clustering[node] = round(neighbor_edges / max_neighbor_edges, 4) if max_neighbor_edges > 0 else 0.0
 
     mean_clustering = float(np.mean(list(clustering.values()))) if clustering else 0.0
 
     return {
-        "n_nodes": n,
-        "n_edges": n_edges,
-        "in_degree": in_deg,
-        "out_degree": out_deg,
-        "total_degree": total_deg,
-        "hub": hub,
-        "hub_degree": hub_degree,
-        "density": round(density, 4),
-        "reciprocity": round(reciprocity, 4),
-        "clustering": clustering,
-        "mean_clustering": round(mean_clustering, 4),
+        'n_nodes': n,
+        'n_edges': n_edges,
+        'in_degree': in_deg,
+        'out_degree': out_deg,
+        'total_degree': total_deg,
+        'hub': hub,
+        'hub_degree': hub_degree,
+        'density': round(density, 4),
+        'reciprocity': round(reciprocity, 4),
+        'clustering': clustering,
+        'mean_clustering': round(mean_clustering, 4),
     }

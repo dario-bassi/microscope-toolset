@@ -13,6 +13,7 @@ Functions:
 """
 
 import numpy as np
+from scipy import stats as scipy_stats
 
 
 def read_plate(data, n_rows=8, n_cols=12, wavelengths=None):
@@ -43,7 +44,8 @@ def read_plate(data, n_rows=8, n_cols=12, wavelengths=None):
             arr = np.asarray(v, dtype=float)
             if arr.shape != (n_rows, n_cols):
                 raise ValueError(
-                    f"Wavelength {k}: expected shape ({n_rows}, {n_cols}), " f"got {arr.shape}"
+                    f"Wavelength {k}: expected shape ({n_rows}, {n_cols}), "
+                    f"got {arr.shape}"
                 )
             parsed[str(k)] = arr
         wl_labels = list(parsed.keys())
@@ -51,13 +53,17 @@ def read_plate(data, n_rows=8, n_cols=12, wavelengths=None):
         arr = np.asarray(data, dtype=float)
         if arr.ndim == 2:
             if arr.shape != (n_rows, n_cols):
-                raise ValueError(f"Expected shape ({n_rows}, {n_cols}), got {arr.shape}")
-            wl_labels = [wavelengths[0] if wavelengths else "1"]
+                raise ValueError(
+                    f"Expected shape ({n_rows}, {n_cols}), got {arr.shape}"
+                )
+            wl_labels = [wavelengths[0] if wavelengths else '1']
             parsed = {wl_labels[0]: arr}
         elif arr.ndim == 3:
             n_wl = arr.shape[0]
             if arr.shape[1:] != (n_rows, n_cols):
-                raise ValueError(f"Expected shape (N, {n_rows}, {n_cols}), got {arr.shape}")
+                raise ValueError(
+                    f"Expected shape (N, {n_rows}, {n_cols}), got {arr.shape}"
+                )
             if wavelengths is None:
                 wl_labels = [str(i + 1) for i in range(n_wl)]
             else:
@@ -67,16 +73,15 @@ def read_plate(data, n_rows=8, n_cols=12, wavelengths=None):
             raise ValueError(f"Expected 2D or 3D array, got {arr.ndim}D")
 
     return {
-        "data": parsed,
-        "n_rows": n_rows,
-        "n_cols": n_cols,
-        "wavelengths": wl_labels,
+        'data': parsed,
+        'n_rows': n_rows,
+        'n_cols': n_cols,
+        'wavelengths': wl_labels,
     }
 
 
-def background_correct(
-    plate_data, method="blank", blank_wells=None, reference_wavelength=None, scale=1.0
-):
+def background_correct(plate_data, method='blank', blank_wells=None,
+                       reference_wavelength=None, scale=1.0):
     """Apply background correction to plate reader data.
 
     Args:
@@ -97,24 +102,25 @@ def background_correct(
     if isinstance(plate_data, np.ndarray):
         plate_data = read_plate(plate_data)
 
-    data = plate_data["data"]
+    data = plate_data['data']
     corrected = {}
     backgrounds = {}
 
-    if method == "blank":
+    if method == 'blank':
         if blank_wells is None:
             raise ValueError("blank_wells required for method='blank'")
         for wl, arr in data.items():
-            bg_values = [
-                arr[r, c] for r, c in blank_wells if 0 <= r < arr.shape[0] and 0 <= c < arr.shape[1]
-            ]
+            bg_values = [arr[r, c] for r, c in blank_wells
+                         if 0 <= r < arr.shape[0] and 0 <= c < arr.shape[1]]
             bg = np.mean(bg_values) if bg_values else 0
             corrected[wl] = (arr - bg) / scale
             backgrounds[wl] = bg
 
-    elif method == "reference":
+    elif method == 'reference':
         if reference_wavelength is None:
-            raise ValueError("reference_wavelength required for method='reference'")
+            raise ValueError(
+                "reference_wavelength required for method='reference'"
+            )
         ref_key = str(reference_wavelength)
         if ref_key not in data:
             raise ValueError(f"Reference wavelength '{ref_key}' not found")
@@ -125,7 +131,7 @@ def background_correct(
             corrected[wl] = (arr - ref) / scale
             backgrounds[wl] = float(ref.mean())
 
-    elif method == "median":
+    elif method == 'median':
         for wl, arr in data.items():
             bg = float(np.median(arr))
             corrected[wl] = (arr - bg) / scale
@@ -135,8 +141,8 @@ def background_correct(
         raise ValueError(f"Unknown method: {method}")
 
     return {
-        "corrected": corrected,
-        "background": backgrounds,
+        'corrected': corrected,
+        'background': backgrounds,
     }
 
 
@@ -192,17 +198,17 @@ def detect_outliers(plate, layout=None, z_threshold=2.0):
         z_scores[mask] = group_z[mask]
         outlier_mask[mask] = np.abs(group_z[mask]) > z_threshold
 
-    positions = list(zip(*np.where(outlier_mask), strict=False)) if outlier_mask.any() else []
+    positions = list(zip(*np.where(outlier_mask))) if outlier_mask.any() else []
 
     return {
-        "outlier_mask": outlier_mask,
-        "n_outliers": int(outlier_mask.sum()),
-        "outlier_positions": positions,
-        "z_scores": z_scores,
+        'outlier_mask': outlier_mask,
+        'n_outliers': int(outlier_mask.sum()),
+        'outlier_positions': positions,
+        'z_scores': z_scores,
     }
 
 
-def edge_correction(plate, method="multiplicative"):
+def edge_correction(plate, method='multiplicative'):
     """Correct systematic edge effects in plate reader data.
 
     Edge wells often show higher/lower signal due to evaporation
@@ -243,18 +249,19 @@ def edge_correction(plate, method="multiplicative"):
     # Additive decomposition: pattern = row_effect + col_effect - global
     correction_map = row_medians + col_medians - global_median
 
-    if method == "multiplicative":
-        safe_map = np.where(np.abs(correction_map) > 1e-10, correction_map, 1e-10)
+    if method == 'multiplicative':
+        safe_map = np.where(np.abs(correction_map) > 1e-10,
+                            correction_map, 1e-10)
         corrected = plate * (global_median / safe_map)
-    elif method == "additive":
+    elif method == 'additive':
         corrected = plate - correction_map + global_median
     else:
         raise ValueError(f"Unknown method: {method}")
 
     return {
-        "corrected": corrected,
-        "correction_map": correction_map,
-        "edge_ratio": float(edge_ratio),
+        'corrected': corrected,
+        'correction_map': correction_map,
+        'edge_ratio': float(edge_ratio),
     }
 
 
@@ -282,7 +289,7 @@ def well_statistics(plate, layout, exclude_outliers=True, z_threshold=2.0):
 
     if exclude_outliers:
         outlier_info = detect_outliers(plate, layout, z_threshold)
-        outlier_mask = outlier_info["outlier_mask"]
+        outlier_mask = outlier_info['outlier_mask']
     else:
         outlier_mask = np.zeros_like(plate, dtype=bool)
 
@@ -294,19 +301,14 @@ def well_statistics(plate, layout, exclude_outliers=True, z_threshold=2.0):
             continue  # skip empty
 
         mask = (layout == g) & (~outlier_mask)
-        positions = list(zip(*np.where(layout == g), strict=False))
+        positions = list(zip(*np.where(layout == g)))
         values = plate[mask].tolist()
         n = len(values)
 
         if n == 0:
             stats_dict[float(g)] = {
-                "mean": 0.0,
-                "std": 0.0,
-                "sem": 0.0,
-                "cv": 0.0,
-                "n": 0,
-                "values": [],
-                "positions": positions,
+                'mean': 0.0, 'std': 0.0, 'sem': 0.0, 'cv': 0.0,
+                'n': 0, 'values': [], 'positions': positions,
             }
             continue
 
@@ -316,13 +318,13 @@ def well_statistics(plate, layout, exclude_outliers=True, z_threshold=2.0):
         cv_val = std_val / abs(mean_val) if abs(mean_val) > 1e-10 else 0.0
 
         stats_dict[float(g)] = {
-            "mean": round(mean_val, 6),
-            "std": round(std_val, 6),
-            "sem": round(sem_val, 6),
-            "cv": round(cv_val, 4),
-            "n": n,
-            "values": values,
-            "positions": positions,
+            'mean': round(mean_val, 6),
+            'std': round(std_val, 6),
+            'sem': round(sem_val, 6),
+            'cv': round(cv_val, 4),
+            'n': n,
+            'values': values,
+            'positions': positions,
         }
 
     return stats_dict

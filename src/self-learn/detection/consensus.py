@@ -11,6 +11,7 @@ Functions:
 """
 
 import numpy as np
+from scipy.spatial.distance import cdist
 
 
 def consensus_count(image, methods, weights=None):
@@ -35,12 +36,9 @@ def consensus_count(image, methods, weights=None):
     """
     if not methods:
         return {
-            "consensus_count": 0,
-            "counts": [],
-            "mean_count": 0.0,
-            "std_count": 0.0,
-            "agreement": 0.0,
-            "best_method_idx": 0,
+            'consensus_count': 0, 'counts': [],
+            'mean_count': 0.0, 'std_count': 0.0,
+            'agreement': 0.0, 'best_method_idx': 0,
         }
 
     counts = []
@@ -66,7 +64,8 @@ def consensus_count(image, methods, weights=None):
     consensus = int(counts_arr[sorted_idx[median_idx]])
 
     mean_count = float(np.average(counts_arr, weights=weights))
-    std_count = float(np.sqrt(np.average((counts_arr - mean_count) ** 2, weights=weights)))
+    std_count = float(np.sqrt(np.average((counts_arr - mean_count)**2,
+                                          weights=weights)))
 
     # Agreement: fraction of methods within 20% of consensus
     if consensus > 0:
@@ -80,12 +79,12 @@ def consensus_count(image, methods, weights=None):
     best_idx = int(np.argmin(diffs))
 
     return {
-        "consensus_count": consensus,
-        "counts": counts,
-        "mean_count": round(mean_count, 1),
-        "std_count": round(std_count, 1),
-        "agreement": round(agreement, 3),
-        "best_method_idx": best_idx,
+        'consensus_count': consensus,
+        'counts': counts,
+        'mean_count': round(mean_count, 1),
+        'std_count': round(std_count, 1),
+        'agreement': round(agreement, 3),
+        'best_method_idx': best_idx,
     }
 
 
@@ -113,7 +112,7 @@ def merge_detections(detection_lists, merge_radius=10):
     for method_idx, detections in enumerate(detection_lists):
         for det in detections:
             if isinstance(det, dict):
-                x, y = det.get("cx", det.get("x", 0)), det.get("cy", det.get("y", 0))
+                x, y = det.get('cx', det.get('x', 0)), det.get('cy', det.get('y', 0))
             else:
                 x, y = float(det[0]), float(det[1])
             all_points.append((x, y))
@@ -123,7 +122,7 @@ def merge_detections(detection_lists, merge_radius=10):
     n_methods = len(detection_lists)
 
     if n_input == 0:
-        return {"merged": [], "n_merged": 0, "n_input": 0}
+        return {'merged': [], 'n_merged': 0, 'n_input': 0}
 
     points = np.array(all_points)
     methods = np.array(all_method_ids)
@@ -134,7 +133,7 @@ def merge_detections(detection_lists, merge_radius=10):
 
     # Sort by distance to center of mass (process center first)
     center = points.mean(axis=0)
-    dist_to_center = np.sqrt(np.sum((points - center) ** 2, axis=1))
+    dist_to_center = np.sqrt(np.sum((points - center)**2, axis=1))
     order = np.argsort(dist_to_center)
 
     for idx in order:
@@ -142,7 +141,7 @@ def merge_detections(detection_lists, merge_radius=10):
             continue
 
         # Find all unmerged points within radius
-        dists = np.sqrt(np.sum((points - points[idx]) ** 2, axis=1))
+        dists = np.sqrt(np.sum((points - points[idx])**2, axis=1))
         nearby = np.where((dists < merge_radius) & ~used)[0]
 
         # Mark as used
@@ -156,23 +155,22 @@ def merge_detections(detection_lists, merge_radius=10):
         cy = float(group_points[:, 1].mean())
         confidence = len(group_methods) / n_methods
 
-        merged.append(
-            {
-                "cx": round(cx, 2),
-                "cy": round(cy, 2),
-                "confidence": round(confidence, 3),
-                "n_detections": len(nearby),
-            }
-        )
+        merged.append({
+            'cx': round(cx, 2),
+            'cy': round(cy, 2),
+            'confidence': round(confidence, 3),
+            'n_detections': len(nearby),
+        })
 
     return {
-        "merged": merged,
-        "n_merged": len(merged),
-        "n_input": n_input,
+        'merged': merged,
+        'n_merged': len(merged),
+        'n_input': n_input,
     }
 
 
-def validate_detections(detections, validation_image, validation_fn, match_radius=10):
+def validate_detections(detections, validation_image, validation_fn,
+                        match_radius=10):
     """Cross-validate detections against a second channel or method.
 
     For each detection, check if validation_fn confirms an object
@@ -199,8 +197,8 @@ def validate_detections(detections, validation_image, validation_fn, match_radiu
 
     for det in detections:
         if isinstance(det, dict):
-            cx = det.get("cx", det.get("x", 0))
-            cy = det.get("cy", det.get("y", 0))
+            cx = det.get('cx', det.get('x', 0))
+            cy = det.get('cy', det.get('y', 0))
         else:
             cx, cy = float(det[0]), float(det[1])
 
@@ -228,7 +226,7 @@ def validate_detections(detections, validation_image, validation_fn, match_radiu
     rate = len(validated) / total if total > 0 else 0.0
 
     return {
-        "validated": validated,
-        "rejected": rejected,
-        "validation_rate": round(rate, 3),
+        'validated': validated,
+        'rejected': rejected,
+        'validation_rate': round(rate, 3),
     }

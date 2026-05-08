@@ -18,9 +18,8 @@ from scipy import ndimage
 from skimage import filters, measure, morphology
 
 
-def live_dead_count(
-    live_channel, dead_channel, min_area=20, live_threshold=None, dead_threshold=None
-):
+def live_dead_count(live_channel, dead_channel, min_area=20,
+                    live_threshold=None, dead_threshold=None):
     """Count live and dead cells from dual fluorescence channels.
 
     Typical stains: Calcein-AM (live, green) / Ethidium homodimer (dead, red)
@@ -58,9 +57,11 @@ def live_dead_count(
 
     # Remove small objects
     if live_mask.any():
-        live_mask = morphology.remove_small_objects(live_mask, max_size=min_area - 1)
+        live_mask = morphology.remove_small_objects(
+            live_mask, max_size=min_area)
     if dead_mask.any():
-        dead_mask = morphology.remove_small_objects(dead_mask, max_size=min_area - 1)
+        dead_mask = morphology.remove_small_objects(
+            dead_mask, max_size=min_area)
 
     # Remove overlap: if both channels positive, classify by stronger signal
     overlap = live_mask & dead_mask
@@ -83,16 +84,16 @@ def live_dead_count(
     viability = n_live / n_total if n_total > 0 else 0.0
 
     return {
-        "n_live": n_live,
-        "n_dead": n_dead,
-        "n_total": n_total,
-        "viability": round(viability, 4),
-        "live_mask": live_mask,
-        "dead_mask": dead_mask,
+        'n_live': n_live,
+        'n_dead': n_dead,
+        'n_total': n_total,
+        'viability': round(viability, 4),
+        'live_mask': live_mask,
+        'dead_mask': dead_mask,
     }
 
 
-def viability_index(n_live, n_dead, method="fraction"):
+def viability_index(n_live, n_dead, method='fraction'):
     """Compute viability index from cell counts.
 
     Args:
@@ -113,25 +114,26 @@ def viability_index(n_live, n_dead, method="fraction"):
     """
     n_total = n_live + n_dead
 
-    if method == "fraction":
+    if method == 'fraction':
         viability = n_live / n_total if n_total > 0 else 0.0
-    elif method == "ratio":
+    elif method == 'ratio':
         viability = n_live / max(n_dead, 1)
-    elif method == "percent":
+    elif method == 'percent':
         viability = 100 * n_live / n_total if n_total > 0 else 0.0
     else:
         raise ValueError(f"Unknown method: {method}")
 
     return {
-        "viability": round(float(viability), 4),
-        "n_live": n_live,
-        "n_dead": n_dead,
-        "n_total": n_total,
-        "method": method,
+        'viability': round(float(viability), 4),
+        'n_live': n_live,
+        'n_dead': n_dead,
+        'n_total': n_total,
+        'method': method,
     }
 
 
-def trypan_blue_count(image, cell_min_area=50, cell_max_area=5000, blue_threshold=None):
+def trypan_blue_count(image, cell_min_area=50, cell_max_area=5000,
+                      blue_threshold=None):
     """Count viable and non-viable cells in trypan blue exclusion.
 
     Dead cells take up trypan blue (appear dark blue), live cells
@@ -159,21 +161,23 @@ def trypan_blue_count(image, cell_min_area=50, cell_max_area=5000, blue_threshol
     cell_mask = np.abs(image - bg) > max(np.std(image) * 0.5, 5)
     cell_mask = ndimage.binary_fill_holes(cell_mask)
     if cell_mask.any():
-        cell_mask = morphology.remove_small_objects(cell_mask, max_size=cell_min_area - 1)
+        cell_mask = morphology.remove_small_objects(
+            cell_mask, max_size=cell_min_area)
 
     labeled = measure.label(cell_mask)
     props = measure.regionprops(labeled, intensity_image=image)
 
     # Filter by size
-    valid_props = [p for p in props if cell_min_area <= p.area <= cell_max_area]
+    valid_props = [p for p in props
+                   if cell_min_area <= p.area <= cell_max_area]
 
     if not valid_props:
         return {
-            "n_viable": 0,
-            "n_nonviable": 0,
-            "n_total": 0,
-            "viability": 0.0,
-            "cell_props": [],
+            'n_viable': 0,
+            'n_nonviable': 0,
+            'n_total': 0,
+            'viability': 0.0,
+            'cell_props': [],
         }
 
     # Classify each cell
@@ -195,11 +199,11 @@ def trypan_blue_count(image, cell_min_area=50, cell_max_area=5000, blue_threshol
     viability = n_viable / n_total if n_total > 0 else 0.0
 
     return {
-        "n_viable": n_viable,
-        "n_nonviable": n_nonviable,
-        "n_total": n_total,
-        "viability": round(viability, 4),
-        "cell_props": valid_props,
+        'n_viable': n_viable,
+        'n_nonviable': n_nonviable,
+        'n_total': n_total,
+        'viability': round(viability, 4),
+        'cell_props': valid_props,
     }
 
 
@@ -227,12 +231,12 @@ def morphology_viability(props, circularity_thresh=0.6, area_cv_thresh=0.8):
     """
     if not props:
         return {
-            "n_normal": 0,
-            "n_abnormal": 0,
-            "n_total": 0,
-            "morphology_score": 0.0,
-            "area_cv": 0.0,
-            "mean_circularity": 0.0,
+            'n_normal': 0,
+            'n_abnormal': 0,
+            'n_total': 0,
+            'morphology_score': 0.0,
+            'area_cv': 0.0,
+            'mean_circularity': 0.0,
         }
 
     circularities = []
@@ -243,7 +247,7 @@ def morphology_viability(props, circularity_thresh=0.6, area_cv_thresh=0.8):
     for p in props:
         area = p.area
         perim = p.perimeter
-        circ = 4 * np.pi * area / (perim**2) if perim > 0 else 0
+        circ = 4 * np.pi * area / (perim ** 2) if perim > 0 else 0
         circularities.append(circ)
         areas.append(area)
 
@@ -259,12 +263,12 @@ def morphology_viability(props, circularity_thresh=0.6, area_cv_thresh=0.8):
     score = n_normal / n_total if n_total > 0 else 0.0
 
     return {
-        "n_normal": n_normal,
-        "n_abnormal": n_abnormal,
-        "n_total": n_total,
-        "morphology_score": round(score, 4),
-        "area_cv": round(area_cv, 4),
-        "mean_circularity": round(float(np.mean(circularities)), 4),
+        'n_normal': n_normal,
+        'n_abnormal': n_abnormal,
+        'n_total': n_total,
+        'morphology_score': round(score, 4),
+        'area_cv': round(area_cv, 4),
+        'mean_circularity': round(float(np.mean(circularities)), 4),
     }
 
 
@@ -322,15 +326,15 @@ def pixel_viability(live_channel, dead_channel, background_threshold=None):
     fraction_background = 1.0 - n_fg / n_total
 
     return {
-        "pixel_map": pixel_map,
-        "fraction_live": round(fraction_live, 4),
-        "fraction_dead": round(fraction_dead, 4),
-        "fraction_background": round(fraction_background, 4),
-        "pixel_viability": round(fraction_live, 4),
+        'pixel_map': pixel_map,
+        'fraction_live': round(fraction_live, 4),
+        'fraction_dead': round(fraction_dead, 4),
+        'fraction_background': round(fraction_background, 4),
+        'pixel_viability': round(fraction_live, 4),
     }
 
 
-def volume_corrected_viability(dead_fraction_2d, geometry="spherical"):
+def volume_corrected_viability(dead_fraction_2d, geometry='spherical'):
     """Correct 2D slice dead-fraction to 3D volumetric dead fraction.
 
     When imaging a spheroid/organoid at its equatorial plane, the 2D
@@ -361,14 +365,13 @@ def volume_corrected_viability(dead_fraction_2d, geometry="spherical"):
     """
     f2d = np.clip(np.asarray(dead_fraction_2d, dtype=float), 0.0, 1.0)
 
-    if geometry == "spherical":
-        f3d = f2d**1.5
-    elif geometry in ("cylindrical", "flat"):
+    if geometry == 'spherical':
+        f3d = f2d ** 1.5
+    elif geometry in ('cylindrical', 'flat'):
         f3d = f2d
     else:
-        raise ValueError(
-            f"Unknown geometry: {geometry!r}. " "Use 'spherical', 'cylindrical', or 'flat'."
-        )
+        raise ValueError(f"Unknown geometry: {geometry!r}. "
+                         "Use 'spherical', 'cylindrical', or 'flat'.")
 
     scalar = f2d.ndim == 0
     f2d_out = float(f2d) if scalar else f2d.tolist()
@@ -376,10 +379,10 @@ def volume_corrected_viability(dead_fraction_2d, geometry="spherical"):
     live_out = float(1 - f3d) if scalar else (1 - f3d).tolist()
 
     return {
-        "dead_fraction_2d": f2d_out,
-        "dead_fraction_3d": round(f3d_out, 6) if scalar else f3d_out,
-        "live_fraction_3d": round(live_out, 6) if scalar else live_out,
-        "geometry": geometry,
+        'dead_fraction_2d': f2d_out,
+        'dead_fraction_3d': round(f3d_out, 6) if scalar else f3d_out,
+        'live_fraction_3d': round(live_out, 6) if scalar else live_out,
+        'geometry': geometry,
     }
 
 
@@ -409,12 +412,12 @@ def viability_timecourse(timepoints, viabilities):
 
     if len(v) < 2:
         return {
-            "initial_viability": float(v[0]) if len(v) > 0 else 0,
-            "final_viability": float(v[-1]) if len(v) > 0 else 0,
-            "change": 0.0,
-            "rate": 0.0,
-            "half_death_time": None,
-            "pattern": "stable",
+            'initial_viability': float(v[0]) if len(v) > 0 else 0,
+            'final_viability': float(v[-1]) if len(v) > 0 else 0,
+            'change': 0.0,
+            'rate': 0.0,
+            'half_death_time': None,
+            'pattern': 'stable',
         }
 
     initial = float(v[0])
@@ -435,7 +438,8 @@ def viability_timecourse(timepoints, viabilities):
                 t0, t1 = t[idx - 1], t[idx]
                 v0, v1 = v[idx - 1], v[idx]
                 if v0 != v1:
-                    half_death_time = float(t0 + (target - v0) / (v1 - v0) * (t1 - t0))
+                    half_death_time = float(
+                        t0 + (target - v0) / (v1 - v0) * (t1 - t0))
                 else:
                     half_death_time = float(t0)
             else:
@@ -445,21 +449,21 @@ def viability_timecourse(timepoints, viabilities):
     if abs(change) < 0.05:
         # Check for variability
         if np.std(v) > 0.1:
-            pattern = "variable"
+            pattern = 'variable'
         else:
-            pattern = "stable"
+            pattern = 'stable'
     elif change < -0.1:
-        pattern = "declining"
+        pattern = 'declining'
     elif change > 0.1:
-        pattern = "recovering"
+        pattern = 'recovering'
     else:
-        pattern = "stable"
+        pattern = 'stable'
 
     return {
-        "initial_viability": round(initial, 4),
-        "final_viability": round(final, 4),
-        "change": round(change, 4),
-        "rate": round(rate, 6),
-        "half_death_time": round(half_death_time, 4) if half_death_time is not None else None,
-        "pattern": pattern,
+        'initial_viability': round(initial, 4),
+        'final_viability': round(final, 4),
+        'change': round(change, 4),
+        'rate': round(rate, 6),
+        'half_death_time': round(half_death_time, 4) if half_death_time is not None else None,
+        'pattern': pattern,
     }

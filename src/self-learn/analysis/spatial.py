@@ -37,25 +37,25 @@ def nearest_neighbor_distances(centroids):
 
     if n < 2:
         return {
-            "distances": np.array([]),
-            "mean": 0.0,
-            "std": 0.0,
-            "indices": np.array([], dtype=int),
+            'distances': np.array([]),
+            'mean': 0.0,
+            'std': 0.0,
+            'indices': np.array([], dtype=int),
         }
 
     # Pairwise distance matrix
     diff = pts[:, None, :] - pts[None, :, :]
-    dists = np.sqrt((diff**2).sum(axis=2))
+    dists = np.sqrt((diff ** 2).sum(axis=2))
     np.fill_diagonal(dists, np.inf)
 
     nn_idx = dists.argmin(axis=1)
     nn_dist = dists[np.arange(n), nn_idx]
 
     return {
-        "distances": nn_dist,
-        "mean": float(nn_dist.mean()),
-        "std": float(nn_dist.std()),
-        "indices": nn_idx,
+        'distances': nn_dist,
+        'mean': float(nn_dist.mean()),
+        'std': float(nn_dist.std()),
+        'indices': nn_idx,
     }
 
 
@@ -83,16 +83,12 @@ def clark_evans_index(centroids, area=None):
 
     if n < 2:
         return {
-            "R": 1.0,
-            "observed_mean": 0.0,
-            "expected_mean": 0.0,
-            "n": n,
-            "density": 0.0,
-            "interpretation": "insufficient_data",
+            'R': 1.0, 'observed_mean': 0.0, 'expected_mean': 0.0,
+            'n': n, 'density': 0.0, 'interpretation': 'insufficient_data',
         }
 
     nn = nearest_neighbor_distances(pts)
-    obs_mean = nn["mean"]
+    obs_mean = nn['mean']
 
     if area is None:
         mins = pts.min(axis=0)
@@ -109,19 +105,19 @@ def clark_evans_index(centroids, area=None):
     R = obs_mean / expected_mean if expected_mean > 0 else 1.0
 
     if R < 0.8:
-        interp = "clustered"
+        interp = 'clustered'
     elif R > 1.2:
-        interp = "dispersed"
+        interp = 'dispersed'
     else:
-        interp = "random"
+        interp = 'random'
 
     return {
-        "R": float(R),
-        "observed_mean": float(obs_mean),
-        "expected_mean": float(expected_mean),
-        "n": n,
-        "density": float(density),
-        "interpretation": interp,
+        'R': float(R),
+        'observed_mean': float(obs_mean),
+        'expected_mean': float(expected_mean),
+        'n': n,
+        'density': float(density),
+        'interpretation': interp,
     }
 
 
@@ -146,14 +142,14 @@ def ripleys_k(centroids, radii, area=None):
     radii = np.asarray(radii, dtype=np.float64)
     n = pts.shape[0]
 
-    K_csr = np.pi * radii**2
+    K_csr = np.pi * radii ** 2
 
     if n < 2:
         return {
-            "radii": radii,
-            "K": np.zeros_like(radii),
-            "K_csr": K_csr,
-            "n": n,
+            'radii': radii,
+            'K': np.zeros_like(radii),
+            'K_csr': K_csr,
+            'n': n,
         }
 
     if area is None:
@@ -167,7 +163,7 @@ def ripleys_k(centroids, radii, area=None):
 
     # Pairwise distances
     diff = pts[:, None, :] - pts[None, :, :]
-    dists = np.sqrt((diff**2).sum(axis=2))
+    dists = np.sqrt((diff ** 2).sum(axis=2))
 
     K_vals = np.zeros_like(radii)
     for i, r in enumerate(radii):
@@ -176,10 +172,10 @@ def ripleys_k(centroids, radii, area=None):
         K_vals[i] = area * count / (n * (n - 1)) if n > 1 else 0
 
     return {
-        "radii": radii,
-        "K": K_vals,
-        "K_csr": K_csr,
-        "n": n,
+        'radii': radii,
+        'K': K_vals,
+        'K_csr': K_csr,
+        'n': n,
     }
 
 
@@ -200,14 +196,14 @@ def ripleys_l(centroids, radii, area=None):
             L_minus_r: 1D array of L(r) - r (positive = clustered).
     """
     K_result = ripleys_k(centroids, radii, area)
-    K = K_result["K"]
+    K = K_result['K']
     L = np.sqrt(K / np.pi)
-    r = K_result["radii"]
+    r = K_result['radii']
 
     return {
-        "radii": r,
-        "L": L,
-        "L_minus_r": L - r,
+        'radii': r,
+        'L': L,
+        'L_minus_r': L - r,
     }
 
 
@@ -234,25 +230,22 @@ def voronoi_areas(centroids, bounds=None):
     n = pts.shape[0]
 
     if n == 0:
-        return {"areas": np.array([]), "cv": 0.0, "mean": 0.0, "std": 0.0}
+        return {'areas': np.array([]), 'cv': 0.0, 'mean': 0.0, 'std': 0.0}
 
     if n == 1:
         if bounds is not None:
             total = (bounds[2] - bounds[0]) * (bounds[3] - bounds[1])
         else:
             total = 1.0
-        return {"areas": np.array([total]), "cv": 0.0, "mean": total, "std": 0.0}
+        return {'areas': np.array([total]), 'cv': 0.0,
+                'mean': total, 'std': 0.0}
 
     if bounds is None:
         mins = pts.min(axis=0)
         maxs = pts.max(axis=0)
         margin = (maxs - mins) * 0.1
-        bounds = (
-            mins[0] - margin[0],
-            mins[1] - margin[1],
-            maxs[0] + margin[0],
-            maxs[1] + margin[1],
-        )
+        bounds = (mins[0] - margin[0], mins[1] - margin[1],
+                  maxs[0] + margin[0], maxs[1] + margin[1])
 
     # Grid resolution: ~200 cells per side for efficiency
     width = bounds[2] - bounds[0]
@@ -271,7 +264,7 @@ def voronoi_areas(centroids, bounds=None):
 
     # Assign each grid point to nearest centroid
     diff = grid_pts[:, None, :] - pts[None, :, :]
-    dists = (diff**2).sum(axis=2)
+    dists = (diff ** 2).sum(axis=2)
     labels = dists.argmin(axis=1)
 
     pixel_area = (width / nx) * (height / ny)
@@ -283,10 +276,10 @@ def voronoi_areas(centroids, bounds=None):
     std = float(areas.std())
 
     return {
-        "areas": areas,
-        "cv": std / mean if mean > 0 else 0.0,
-        "mean": mean,
-        "std": std,
+        'areas': areas,
+        'cv': std / mean if mean > 0 else 0.0,
+        'mean': mean,
+        'std': std,
     }
 
 
@@ -315,12 +308,8 @@ def quadrat_count(centroids, grid_size, bounds=None):
         else:
             mins = pts.min(axis=0)
             maxs = pts.max(axis=0)
-            bounds = (
-                float(mins[0]),
-                float(mins[1]),
-                float(maxs[0] + grid_size),
-                float(maxs[1] + grid_size),
-            )
+            bounds = (float(mins[0]), float(mins[1]),
+                      float(maxs[0] + grid_size), float(maxs[1] + grid_size))
 
     nx = max(int(np.ceil((bounds[2] - bounds[0]) / grid_size)), 1)
     ny = max(int(np.ceil((bounds[3] - bounds[1]) / grid_size)), 1)
@@ -357,11 +346,11 @@ def quadrat_count(centroids, grid_size, bounds=None):
     VMR = float(var_count / mean_count) if mean_count > 0 else 0.0
 
     return {
-        "counts": counts,
-        "chi2": chi2,
-        "p_uniform": p_val,
-        "VMR": VMR,
-        "n_quadrats": n_quadrats,
+        'counts': counts,
+        'chi2': chi2,
+        'p_uniform': p_val,
+        'VMR': VMR,
+        'n_quadrats': n_quadrats,
     }
 
 
@@ -419,14 +408,15 @@ def density_map(positions, field_size=512, sigma=20, resolution=None):
     smoothed = gaussian_filter(raw, sigma=max(sigma_scaled, 0.5))
 
     return {
-        "map": smoothed,
-        "peak_density": float(smoothed.max()),
-        "total_mass": float(smoothed.sum()),
-        "field_size": (h, w),
+        'map': smoothed,
+        'peak_density': float(smoothed.max()),
+        'total_mass': float(smoothed.sum()),
+        'field_size': (h, w),
     }
 
 
-def detect_density_peaks(dmap, min_distance=50, threshold_percentile=90, min_peak_value=None):
+def detect_density_peaks(dmap, min_distance=50, threshold_percentile=90,
+                          min_peak_value=None):
     """Find significant accumulation regions (peaks) in a density map.
 
     Use with density_map() output or any 2D density/intensity array.
@@ -452,28 +442,30 @@ def detect_density_peaks(dmap, min_distance=50, threshold_percentile=90, min_pea
 
     if dmap.size == 0 or dmap.max() == 0:
         return {
-            "peaks": np.zeros((0, 2)),
-            "n_peaks": 0,
-            "peak_values": [],
-            "threshold": 0.0,
+            'peaks': np.zeros((0, 2)),
+            'n_peaks': 0,
+            'peak_values': [],
+            'threshold': 0.0,
         }
 
     if min_peak_value is None:
         min_peak_value = float(np.percentile(dmap, threshold_percentile))
 
-    peaks = peak_local_max(dmap, min_distance=min_distance, threshold_abs=min_peak_value)
+    peaks = peak_local_max(dmap, min_distance=min_distance,
+                           threshold_abs=min_peak_value)
 
     peak_values = [float(dmap[p[0], p[1]]) for p in peaks]
 
     return {
-        "peaks": peaks if len(peaks) > 0 else np.zeros((0, 2)),
-        "n_peaks": len(peaks),
-        "peak_values": peak_values,
-        "threshold": float(min_peak_value),
+        'peaks': peaks if len(peaks) > 0 else np.zeros((0, 2)),
+        'n_peaks': len(peaks),
+        'peak_values': peak_values,
+        'threshold': float(min_peak_value),
     }
 
 
-def classify_trapped(cell_positions, trap_positions, trap_radius=5.0, position_axis=0):
+def classify_trapped(cell_positions, trap_positions, trap_radius=5.0,
+                     position_axis=0):
     """Classify cells as trapped or free based on proximity to trap positions.
 
     In microfluidic devices, traps are at fixed positions (typically X coordinates).
@@ -500,17 +492,14 @@ def classify_trapped(cell_positions, trap_positions, trap_radius=5.0, position_a
     traps = np.asarray(trap_positions, dtype=float)
 
     if cells.ndim != 2 or cells.shape[0] == 0:
-        return {"trapped": [], "free": [], "n_trapped": 0, "n_free": 0, "distances": np.array([])}
+        return {'trapped': [], 'free': [], 'n_trapped': 0, 'n_free': 0,
+                'distances': np.array([])}
 
     if traps.size == 0:
         idx = list(range(len(cells)))
-        return {
-            "trapped": [],
-            "free": idx,
-            "n_trapped": 0,
-            "n_free": len(idx),
-            "distances": np.full(len(cells), np.inf),
-        }
+        return {'trapped': [], 'free': idx, 'n_trapped': 0,
+                'n_free': len(idx),
+                'distances': np.full(len(cells), np.inf)}
 
     # 1D trap positions: compare along one axis
     if traps.ndim == 1:
@@ -521,7 +510,6 @@ def classify_trapped(cell_positions, trap_positions, trap_radius=5.0, position_a
     else:
         # 2D trap positions: Euclidean distance
         from scipy.spatial.distance import cdist
-
         d = cdist(cells[:, :2], traps[:, :2])
         min_dists = np.min(d, axis=1)
 
@@ -529,9 +517,9 @@ def classify_trapped(cell_positions, trap_positions, trap_radius=5.0, position_a
     free = [int(i) for i in range(len(cells)) if min_dists[i] > trap_radius]
 
     return {
-        "trapped": trapped,
-        "free": free,
-        "n_trapped": len(trapped),
-        "n_free": len(free),
-        "distances": min_dists,
+        'trapped': trapped,
+        'free': free,
+        'n_trapped': len(trapped),
+        'n_free': len(free),
+        'distances': min_dists,
     }

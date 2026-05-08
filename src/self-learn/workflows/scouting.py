@@ -9,17 +9,17 @@ to an analysis strategy. Prevents common errors:
 """
 
 import numpy as np
-from useq import MDAEvent
+from useq import MDASequence, MDAEvent
 
-from ..hardware.config import get_config
-from ..hardware.core import get_position, move_to, run_events, snap
+from ..hardware.core import snap, move_to, set_objective, get_position, run_events
+from ..hardware.config import get_config, resolve_brightfield_channel
 
 
 def channel_scout(core, channels=None):
     """Snap each available channel and characterize the signal.
 
     Call this BEFORE choosing which channel to analyze. Prevents the
-    costly error of analyzing the wrong channel (ch421 pattern).
+    costly error of analyzing a channel with no real sample signal.
 
     Args:
         core: Connected microscope core.
@@ -42,19 +42,20 @@ def channel_scout(core, channels=None):
         if cfg.channel_group:
             channels = list(core.getAvailableConfigs(cfg.channel_group))
         else:
-            channels = ["brightfield"]
+            channels = ['brightfield']
 
     # Acquire all channels via MDA events
-    events = [MDAEvent(channel={"config": ch}, exposure=50.0) for ch in channels]
+    events = [MDAEvent(channel={'config': ch}, exposure=50.0)
+              for ch in channels]
     frames = run_events(core, events)
 
     results = {}
-    for (img, _event), ch in zip(frames, channels, strict=False):
+    for (img, _event), ch in zip(frames, channels):
         img_f = img.astype(np.float64)
 
         # Noise floor: median of bottom 50% of pixels
         sorted_vals = np.sort(img_f.ravel())
-        noise_floor = float(np.median(sorted_vals[: len(sorted_vals) // 2]))
+        noise_floor = float(np.median(sorted_vals[:len(sorted_vals) // 2]))
 
         # Signal characterization
         mx = int(img.max())
@@ -67,25 +68,25 @@ def channel_scout(core, channels=None):
 
         # SNR estimate
         signal = mean_bright - noise_floor
-        noise = float(np.std(sorted_vals[: len(sorted_vals) // 2])) + 1e-6
+        noise = float(np.std(sorted_vals[:len(sorted_vals) // 2])) + 1e-6
         snr = signal / noise
 
         # Has signal: max is significantly above noise
         has_signal = mx > noise_floor * 3 + 10
 
         results[ch] = {
-            "has_signal": has_signal,
-            "max": mx,
-            "mean": round(mn, 1),
-            "mean_bright": round(mean_bright, 1),
-            "snr": round(snr, 1),
-            "noise_floor": round(noise_floor, 1),
+            'has_signal': has_signal,
+            'max': mx,
+            'mean': round(mn, 1),
+            'mean_bright': round(mean_bright, 1),
+            'snr': round(snr, 1),
+            'noise_floor': round(noise_floor, 1),
         }
 
     return results
 
 
-def sample_survey(core, channel="brightfield", n_tiles=5, tile_spacing=None):
+def sample_survey(core, channel=None, n_tiles=5, tile_spacing=None):
     """Survey the sample area to find the extent and plan FOV positions.
 
     Snaps images at the origin and surrounding positions to find where
@@ -109,6 +110,7 @@ def sample_survey(core, channel="brightfield", n_tiles=5, tile_spacing=None):
             'images': dict mapping (x, y) -> image array
     """
     cfg = get_config(core)
+    channel = resolve_brightfield_channel(core, channel) or 'brightfield'
     fov = cfg.image_width * cfg.pixel_size_um if cfg.pixel_size_um > 0 else 512
 
     if tile_spacing is None:
@@ -125,10 +127,9 @@ def sample_survey(core, channel="brightfield", n_tiles=5, tile_spacing=None):
             grid_positions.append((x, y))
 
     # Acquire all positions via MDA events
-    events = [
-        MDAEvent(x_pos=float(x), y_pos=float(y), channel={"config": channel}, exposure=50.0)
-        for x, y in grid_positions
-    ]
+    events = [MDAEvent(x_pos=float(x), y_pos=float(y),
+                       channel={'config': channel}, exposure=50.0)
+              for x, y in grid_positions]
     frames = run_events(core, events)
 
     images = {}
@@ -136,8 +137,7 @@ def sample_survey(core, channel="brightfield", n_tiles=5, tile_spacing=None):
     empty_positions = []
 
     from scipy.ndimage import uniform_filter
-
-    for (img, _event), (x, y) in zip(frames, grid_positions, strict=False):
+    for (img, _event), (x, y) in zip(frames, grid_positions):
         images[(x, y)] = img
 
         # Detect if sample is present: high variance regions
@@ -157,7 +157,8 @@ def sample_survey(core, channel="brightfield", n_tiles=5, tile_spacing=None):
     if sample_positions:
         xs = [p[0] for p in sample_positions]
         ys = [p[1] for p in sample_positions]
-        bbox = (min(xs) - fov / 2, min(ys) - fov / 2, max(xs) + fov / 2, max(ys) + fov / 2)
+        bbox = (min(xs) - fov / 2, min(ys) - fov / 2,
+                max(xs) + fov / 2, max(ys) + fov / 2)
         center = (np.mean(xs), np.mean(ys))
     else:
         # No sample found — return origin
@@ -168,23 +169,17 @@ def sample_survey(core, channel="brightfield", n_tiles=5, tile_spacing=None):
     move_to(core, cx, cy)
 
     return {
-        "positions": sample_positions,
-        "empty_positions": empty_positions,
-        "sample_bbox": bbox,
-        "center": center,
-        "images": images,
+        'positions': sample_positions,
+        'empty_positions': empty_positions,
+        'sample_bbox': bbox,
+        'center': center,
+        'images': images,
     }
 
 
-def find_sample(
-    core,
-    channel="brightfield",
-    detect_fn=None,
-    search_range=2048,
-    step=None,
-    start=None,
-    stop_on_first=True,
-):
+def find_sample(core, channel=None, detect_fn=None,
+                search_range=2048, step=None, start=None,
+                stop_on_first=True):
     """Search the world for sample material with an expanding spiral.
 
     Useful when the sample location is unknown and you need to search a
@@ -220,6 +215,7 @@ def find_sample(
                 position in 'positions'
     """
     cfg = get_config(core)
+    channel = resolve_brightfield_channel(core, channel) or 'brightfield'
     fov = cfg.image_width * cfg.pixel_size_um if cfg.pixel_size_um > 0 else 512
 
     if step is None:
@@ -269,7 +265,7 @@ def find_sample(
 
     # Sort by signal strength (strongest first)
     if found_positions:
-        pairs = sorted(zip(signal_strengths, found_positions, strict=False), reverse=True)
+        pairs = sorted(zip(signal_strengths, found_positions), reverse=True)
         signal_strengths = [s for s, _ in pairs]
         found_positions = [p for _, p in pairs]
         best = found_positions[0]
@@ -277,15 +273,15 @@ def find_sample(
         best = None
 
     return {
-        "found": len(found_positions) > 0,
-        "positions": found_positions,
-        "best_position": best,
-        "positions_checked": positions_checked,
-        "signal_strengths": signal_strengths,
+        'found': len(found_positions) > 0,
+        'positions': found_positions,
+        'best_position': best,
+        'positions_checked': positions_checked,
+        'signal_strengths': signal_strengths,
     }
 
 
-def _default_sample_detect(image, channel="brightfield"):
+def _default_sample_detect(image, channel='brightfield'):
     """Default sample detection heuristic.
 
     For brightfield: sample is dark against bright background.
@@ -298,7 +294,8 @@ def _default_sample_detect(image, channel="brightfield"):
         (has_sample: bool, strength: float)
     """
     img = image.astype(np.float64)
-    is_bf = "bright" in channel.lower() or channel.lower() in ("bf", "brightfield")
+    ch_low = (channel or '').lower()
+    is_bf = ('bright' in ch_low) or (ch_low in ('bf', 'brightfield', 'phase', 'dic'))
 
     if is_bf:
         bg = float(np.percentile(img, 90))
@@ -314,9 +311,85 @@ def _default_sample_detect(image, channel="brightfield"):
         return bool(ratio > 3.0 and mx > 20), ratio
 
 
-def experiment_protocol(
-    core, conditions, measure_fn, settle_time=1.0, n_repeats=1, baseline_condition=None
-):
+def find_sample_events(positions, channel=None, exposure=50.0,
+                       detect_fn=None, stop_on_first=True):
+    """MDA-native sample search with early-stop support.
+
+    Yields MDAEvents for each position in order. The on_frame callback
+    detects whether sample is present and can signal the generator to stop
+    early (if stop_on_first=True).
+
+    Usage::
+
+        # Build spiral positions
+        positions = [(x, y) for x, y, _ in sorted(grid, key=lambda g: g[2])]
+        gen, on_frame, state = find_sample_events(positions)
+        results = run_events(core, gen(), on_frame=on_frame)
+        if state['found']:
+            print(f"Sample at {state['best_position']}")
+
+    Args:
+        positions: List of (x, y) world positions to check (in order).
+        channel: Channel config name.
+        exposure: Exposure time in ms.
+        detect_fn: Optional callable(image) -> bool. If None, uses
+            built-in heuristic (brightfield contrast or fluorescence SNR).
+        stop_on_first: If True, stops after first sample detection.
+
+    Returns:
+        Tuple of (event_generator_factory, on_frame_callback, shared_state).
+    """
+    shared = {
+        'found': False,
+        'positions': [],
+        'signal_strengths': [],
+        'best_position': None,
+        'positions_checked': 0,
+        '_stop': False,
+    }
+
+    def on_frame(image, event, meta=None):
+        shared['positions_checked'] += 1
+        x = event.x_pos if event.x_pos is not None else 0.0
+        y = event.y_pos if event.y_pos is not None else 0.0
+
+        if detect_fn is not None:
+            has_sample = detect_fn(image)
+            strength = 1.0 if has_sample else 0.0
+        else:
+            has_sample, strength = _default_sample_detect(image, channel)
+
+        if has_sample:
+            shared['found'] = True
+            shared['positions'].append((x, y))
+            shared['signal_strengths'].append(strength)
+            if stop_on_first:
+                shared['_stop'] = True
+
+    def event_generator():
+        for x, y in positions:
+            if shared['_stop']:
+                break
+            yield MDAEvent(
+                x_pos=float(x), y_pos=float(y),
+                channel={'config': channel} if channel else None,
+                exposure=exposure,
+                metadata={'search_position': True},
+            )
+
+        # Sort results by signal strength
+        if shared['positions']:
+            pairs = sorted(zip(shared['signal_strengths'],
+                               shared['positions']), reverse=True)
+            shared['signal_strengths'] = [s for s, _ in pairs]
+            shared['positions'] = [p for _, p in pairs]
+            shared['best_position'] = shared['positions'][0]
+
+    return event_generator, on_frame, shared
+
+
+def experiment_protocol(core, conditions, measure_fn, settle_time=1.0,
+                        n_repeats=1, baseline_condition=None):
     """Run a multi-condition experiment systematically.
 
     Sets each condition (device state), waits for settling, runs the
@@ -350,10 +423,10 @@ def experiment_protocol(
 
     for cond in conditions:
         # Set device state
-        device = cond["device"]
-        state = cond["state"]
-        label = cond.get("label", f"{device}={state}")
-        wait = cond.get("settle_time", settle_time)
+        device = cond['device']
+        state = cond['state']
+        label = cond.get('label', f'{device}={state}')
+        wait = cond.get('settle_time', settle_time)
 
         core.setState(device, state)
         time.sleep(wait)
@@ -372,22 +445,20 @@ def experiment_protocol(
                 if vals:
                     mean_values[key] = float(np.mean(vals))
 
-        results.append(
-            {
-                "label": label,
-                "condition": cond,
-                "measurements": measurements,
-                "mean": mean_values,
-            }
-        )
+        results.append({
+            'label': label,
+            'condition': cond,
+            'measurements': measurements,
+            'mean': mean_values,
+        })
 
     # Normalize to baseline if requested
     if baseline_condition is not None and 0 <= baseline_condition < len(results):
-        baseline = results[baseline_condition]["mean"]
+        baseline = results[baseline_condition]['mean']
         for r in results:
-            r["normalized"] = {}
-            for key, val in r["mean"].items():
+            r['normalized'] = {}
+            for key, val in r['mean'].items():
                 if key in baseline and baseline[key] != 0:
-                    r["normalized"][key] = val / baseline[key]
+                    r['normalized'][key] = val / baseline[key]
 
     return results

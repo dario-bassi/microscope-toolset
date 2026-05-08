@@ -12,12 +12,11 @@ Functions:
 """
 
 import numpy as np
-from scipy import signal
+from scipy import signal, ndimage
 
 
-def detect_action_potentials(
-    trace, dt=1.0, min_height=None, min_distance=None, threshold_sigma=3.0
-):
+def detect_action_potentials(trace, dt=1.0, min_height=None,
+                             min_distance=None, threshold_sigma=3.0):
     """Detect action potentials / calcium transients in a trace.
 
     Uses peak detection with adaptive thresholding based on
@@ -46,11 +45,11 @@ def detect_action_potentials(
 
     if n < 5:
         return {
-            "peak_indices": np.array([], dtype=int),
-            "peak_times": np.array([]),
-            "peak_values": np.array([]),
-            "n_peaks": 0,
-            "threshold": 0.0,
+            'peak_indices': np.array([], dtype=int),
+            'peak_times': np.array([]),
+            'peak_values': np.array([]),
+            'n_peaks': 0,
+            'threshold': 0.0,
         }
 
     # Estimate baseline and noise from lower percentiles
@@ -66,21 +65,22 @@ def detect_action_potentials(
     if min_distance is None:
         min_distance = max(3, n // 50)
 
-    peaks, properties = signal.find_peaks(trace, height=min_height, distance=min_distance)
+    peaks, properties = signal.find_peaks(
+        trace, height=min_height, distance=min_distance)
 
     peak_times = peaks.astype(float) * dt
     peak_values = trace[peaks]
 
     return {
-        "peak_indices": peaks,
-        "peak_times": peak_times,
-        "peak_values": peak_values,
-        "n_peaks": len(peaks),
-        "threshold": round(float(min_height), 4),
+        'peak_indices': peaks,
+        'peak_times': peak_times,
+        'peak_values': peak_values,
+        'n_peaks': len(peaks),
+        'threshold': round(float(min_height), 4),
     }
 
 
-def firing_rate(peak_times, window=None, method="mean"):
+def firing_rate(peak_times, window=None, method='mean'):
     """Compute firing rate from detected peak times.
 
     Args:
@@ -102,21 +102,21 @@ def firing_rate(peak_times, window=None, method="mean"):
 
     if len(times) < 2:
         return {
-            "mean_rate_hz": 0.0,
-            "mean_rate_bpm": 0.0,
-            "instantaneous_rates": np.array([]),
-            "n_peaks": len(times),
-            "duration": 0.0,
+            'mean_rate_hz': 0.0,
+            'mean_rate_bpm': 0.0,
+            'instantaneous_rates': np.array([]),
+            'n_peaks': len(times),
+            'duration': 0.0,
         }
 
     duration = times[-1] - times[0]
     if duration <= 0:
         return {
-            "mean_rate_hz": 0.0,
-            "mean_rate_bpm": 0.0,
-            "instantaneous_rates": np.array([]),
-            "n_peaks": len(times),
-            "duration": 0.0,
+            'mean_rate_hz': 0.0,
+            'mean_rate_bpm': 0.0,
+            'instantaneous_rates': np.array([]),
+            'n_peaks': len(times),
+            'duration': 0.0,
         }
 
     # Mean rate
@@ -130,11 +130,11 @@ def firing_rate(peak_times, window=None, method="mean"):
     inst_rates[valid] = 1.0 / intervals[valid]
 
     return {
-        "mean_rate_hz": round(float(mean_rate), 4),
-        "mean_rate_bpm": round(float(mean_rate * 60), 2),
-        "instantaneous_rates": inst_rates,
-        "n_peaks": len(times),
-        "duration": round(float(duration), 4),
+        'mean_rate_hz': round(float(mean_rate), 4),
+        'mean_rate_bpm': round(float(mean_rate * 60), 2),
+        'instantaneous_rates': inst_rates,
+        'n_peaks': len(times),
+        'duration': round(float(duration), 4),
     }
 
 
@@ -158,13 +158,13 @@ def interspike_intervals(peak_times):
 
     if len(times) < 2:
         return {
-            "intervals": np.array([]),
-            "mean_isi": 0.0,
-            "std_isi": 0.0,
-            "cv_isi": 0.0,
-            "min_isi": 0.0,
-            "max_isi": 0.0,
-            "n_intervals": 0,
+            'intervals': np.array([]),
+            'mean_isi': 0.0,
+            'std_isi': 0.0,
+            'cv_isi': 0.0,
+            'min_isi': 0.0,
+            'max_isi': 0.0,
+            'n_intervals': 0,
         }
 
     intervals = np.diff(times)
@@ -172,17 +172,18 @@ def interspike_intervals(peak_times):
     std_isi = float(intervals.std())
 
     return {
-        "intervals": intervals,
-        "mean_isi": round(mean_isi, 6),
-        "std_isi": round(std_isi, 6),
-        "cv_isi": round(std_isi / mean_isi, 4) if mean_isi > 0 else 0.0,
-        "min_isi": round(float(intervals.min()), 6),
-        "max_isi": round(float(intervals.max()), 6),
-        "n_intervals": len(intervals),
+        'intervals': intervals,
+        'mean_isi': round(mean_isi, 6),
+        'std_isi': round(std_isi, 6),
+        'cv_isi': round(std_isi / mean_isi, 4) if mean_isi > 0 else 0.0,
+        'min_isi': round(float(intervals.min()), 6),
+        'max_isi': round(float(intervals.max()), 6),
+        'n_intervals': len(intervals),
     }
 
 
-def action_potential_shape(trace, peak_indices, dt=1.0, window_before=10, window_after=20):
+def action_potential_shape(trace, peak_indices, dt=1.0,
+                           window_before=10, window_after=20):
     """Characterize action potential waveform morphology.
 
     Extracts and averages AP waveforms around detected peaks.
@@ -218,13 +219,13 @@ def action_potential_shape(trace, peak_indices, dt=1.0, window_before=10, window
     if not waveforms:
         wl = window_before + window_after
         return {
-            "mean_waveform": np.zeros(wl),
-            "waveform_time": np.arange(wl) * dt - window_before * dt,
-            "amplitude": 0.0,
-            "rise_time": 0.0,
-            "decay_time": 0.0,
-            "half_width": 0.0,
-            "n_averaged": 0,
+            'mean_waveform': np.zeros(wl),
+            'waveform_time': np.arange(wl) * dt - window_before * dt,
+            'amplitude': 0.0,
+            'rise_time': 0.0,
+            'decay_time': 0.0,
+            'half_width': 0.0,
+            'n_averaged': 0,
         }
 
     waveforms = np.array(waveforms)
@@ -233,7 +234,8 @@ def action_potential_shape(trace, peak_indices, dt=1.0, window_before=10, window
 
     # Amplitude
     peak_val = mean_wf[window_before]
-    baseline_val = min(mean_wf[:window_before].min(), mean_wf[-window_after // 2 :].min())
+    baseline_val = min(mean_wf[:window_before].min(),
+                       mean_wf[-window_after // 2:].min())
     amplitude = peak_val - baseline_val
 
     # Rise/decay times
@@ -243,7 +245,7 @@ def action_potential_shape(trace, peak_indices, dt=1.0, window_before=10, window
         threshold_50 = baseline_val + 0.5 * amplitude
 
         # Rise: before peak
-        rise_portion = mean_wf[: window_before + 1]
+        rise_portion = mean_wf[:window_before + 1]
         t10_idx = np.where(rise_portion >= threshold_10)[0]
         t90_idx = np.where(rise_portion >= threshold_90)[0]
         rise_time = (t90_idx[0] - t10_idx[0]) * dt if len(t10_idx) > 0 and len(t90_idx) > 0 else 0
@@ -267,13 +269,13 @@ def action_potential_shape(trace, peak_indices, dt=1.0, window_before=10, window
         half_width = 0.0
 
     return {
-        "mean_waveform": mean_wf,
-        "waveform_time": wf_time,
-        "amplitude": round(float(amplitude), 4),
-        "rise_time": round(float(rise_time), 6),
-        "decay_time": round(float(decay_time), 6),
-        "half_width": round(float(half_width), 6),
-        "n_averaged": len(waveforms),
+        'mean_waveform': mean_wf,
+        'waveform_time': wf_time,
+        'amplitude': round(float(amplitude), 4),
+        'rise_time': round(float(rise_time), 6),
+        'decay_time': round(float(decay_time), 6),
+        'half_width': round(float(half_width), 6),
+        'n_averaged': len(waveforms),
     }
 
 
@@ -300,12 +302,12 @@ def burst_detection(peak_times, max_isi=0.1, min_spikes=3):
 
     if len(times) < min_spikes:
         return {
-            "n_bursts": 0,
-            "burst_starts": [],
-            "burst_durations": [],
-            "spikes_per_burst": [],
-            "burst_fraction": 0.0,
-            "interburst_intervals": [],
+            'n_bursts': 0,
+            'burst_starts': [],
+            'burst_durations': [],
+            'spikes_per_burst': [],
+            'burst_fraction': 0.0,
+            'interburst_intervals': [],
         }
 
     # Find burst boundaries
@@ -339,10 +341,10 @@ def burst_detection(peak_times, max_isi=0.1, min_spikes=3):
         ibi.append(float(times[bursts[i][0]] - times[bursts[i - 1][-1]]))
 
     return {
-        "n_bursts": len(bursts),
-        "burst_starts": [round(s, 6) for s in burst_starts],
-        "burst_durations": [round(d, 6) for d in burst_durations],
-        "spikes_per_burst": spikes_per_burst,
-        "burst_fraction": round(float(burst_fraction), 4),
-        "interburst_intervals": [round(i, 6) for i in ibi],
+        'n_bursts': len(bursts),
+        'burst_starts': [round(s, 6) for s in burst_starts],
+        'burst_durations': [round(d, 6) for d in burst_durations],
+        'spikes_per_burst': spikes_per_burst,
+        'burst_fraction': round(float(burst_fraction), 4),
+        'interburst_intervals': [round(i, 6) for i in ibi],
     }

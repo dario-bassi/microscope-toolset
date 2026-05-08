@@ -49,14 +49,9 @@ def fit_exponential_decay(times, intensities, p0=None):
         # Fallback: log-linear regression
         pos = y > 0
         if np.sum(pos) < 2:
-            return {
-                "I0": float(y[0]),
-                "k": 0.0,
-                "half_life": float("inf"),
-                "total_loss_pct": 0.0,
-                "residual_std": 0.0,
-                "fit_values": y.tolist(),
-            }
+            return {'I0': float(y[0]), 'k': 0.0, 'half_life': float('inf'),
+                    'total_loss_pct': 0.0, 'residual_std': 0.0,
+                    'fit_values': y.tolist()}
         log_y = np.log(y[pos])
         coeffs = np.polyfit(t[pos], log_y, 1)
         k = float(-coeffs[0])
@@ -64,16 +59,16 @@ def fit_exponential_decay(times, intensities, p0=None):
         fit_vals = exp_decay(t, I0, k)
         resid = float(np.std(y - fit_vals))
 
-    half_life = float(np.log(2) / k) if k > 0 else float("inf")
+    half_life = float(np.log(2) / k) if k > 0 else float('inf')
     loss = (1 - y[-1] / y[0]) * 100 if y[0] > 0 else 0.0
 
     return {
-        "I0": round(I0, 3),
-        "k": round(k, 6),
-        "half_life": round(half_life, 2),
-        "total_loss_pct": round(float(loss), 2),
-        "residual_std": round(resid, 3),
-        "fit_values": [round(float(v), 3) for v in fit_vals],
+        'I0': round(I0, 3),
+        'k': round(k, 6),
+        'half_life': round(half_life, 2),
+        'total_loss_pct': round(float(loss), 2),
+        'residual_std': round(resid, 3),
+        'fit_values': [round(float(v), 3) for v in fit_vals],
     }
 
 
@@ -108,7 +103,8 @@ def fit_exponential_recovery(times, intensities, p0=None, max_plateau=None):
                 min(p0[1], max_plateau),
                 p0[2],
             ]
-            popt, pcov = curve_fit(exp_recovery, t, y, p0=p0_clamped, bounds=bounds, maxfev=10000)
+            popt, pcov = curve_fit(exp_recovery, t, y, p0=p0_clamped,
+                                   bounds=bounds, maxfev=10000)
         else:
             popt, pcov = curve_fit(exp_recovery, t, y, p0=p0, maxfev=10000)
         I0, I_inf, k = [float(v) for v in popt]
@@ -119,17 +115,17 @@ def fit_exponential_recovery(times, intensities, p0=None, max_plateau=None):
         fit_vals = y.copy()
         resid = 0.0
 
-    half_life = float(np.log(2) / k) if k > 0 else float("inf")
+    half_life = float(np.log(2) / k) if k > 0 else float('inf')
     recovery_pct = (y[-1] - y[0]) / (I_inf - I0) * 100 if I_inf != I0 else 100.0
 
     return {
-        "I0": round(I0, 3),
-        "I_inf": round(I_inf, 3),
-        "k": round(k, 6),
-        "half_life": round(half_life, 2),
-        "recovery_pct": round(float(recovery_pct), 2),
-        "residual_std": round(resid, 3),
-        "fit_values": [round(float(v), 3) for v in fit_vals],
+        'I0': round(I0, 3),
+        'I_inf': round(I_inf, 3),
+        'k': round(k, 6),
+        'half_life': round(half_life, 2),
+        'recovery_pct': round(float(recovery_pct), 2),
+        'residual_std': round(resid, 3),
+        'fit_values': [round(float(v), 3) for v in fit_vals],
     }
 
 
@@ -162,12 +158,8 @@ def fit_michaelis_menten(substrate_conc, rates, p0=None):
 
     try:
         popt, pcov = curve_fit(
-            michaelis_menten,
-            s,
-            v,
-            p0=p0,
-            bounds=([0, 0], [np.inf, np.inf]),
-            maxfev=10000,
+            michaelis_menten, s, v, p0=p0,
+            bounds=([0, 0], [np.inf, np.inf]), maxfev=10000,
         )
         Vmax, Km = float(popt[0]), float(popt[1])
         fit_vals = michaelis_menten(s, Vmax, Km)
@@ -176,13 +168,8 @@ def fit_michaelis_menten(substrate_conc, rates, p0=None):
         # Fallback: Lineweaver-Burk (1/v vs 1/s)
         pos = (s > 0) & (v > 0)
         if np.sum(pos) < 2:
-            return {
-                "Vmax": float(np.max(v)),
-                "Km": 0.0,
-                "Vmax_half": float(np.max(v)) / 2,
-                "residual_std": 0.0,
-                "fit_values": v.tolist(),
-            }
+            return {'Vmax': float(np.max(v)), 'Km': 0.0, 'Vmax_half': float(np.max(v)) / 2,
+                    'residual_std': 0.0, 'fit_values': v.tolist()}
         inv_s = 1.0 / s[pos]
         inv_v = 1.0 / v[pos]
         coeffs = np.polyfit(inv_s, inv_v, 1)
@@ -193,11 +180,11 @@ def fit_michaelis_menten(substrate_conc, rates, p0=None):
         resid = float(np.std(v - fit_vals))
 
     return {
-        "Vmax": round(Vmax, 4),
-        "Km": round(Km, 4),
-        "Vmax_half": round(Vmax / 2, 4),
-        "residual_std": round(resid, 4),
-        "fit_values": [round(float(fv), 4) for fv in fit_vals],
+        'Vmax': round(Vmax, 4),
+        'Km': round(Km, 4),
+        'Vmax_half': round(Vmax / 2, 4),
+        'residual_std': round(resid, 4),
+        'fit_values': [round(float(fv), 4) for fv in fit_vals],
     }
 
 
@@ -231,11 +218,11 @@ def fit_beer_lambert(concentrations, absorbances):
         return (abs_arr - intercept) / slope if slope != 0 else abs_arr * 0
 
     return {
-        "slope": round(slope, 6),
-        "intercept": round(intercept, 6),
-        "r_squared": round(r_squared, 6),
-        "predict": predict,
-        "fit_values": [round(float(v), 6) for v in fit_vals],
+        'slope': round(slope, 6),
+        'intercept': round(intercept, 6),
+        'r_squared': round(r_squared, 6),
+        'predict': predict,
+        'fit_values': [round(float(v), 6) for v in fit_vals],
     }
 
 
@@ -290,12 +277,13 @@ def fit_hill(doses, responses, p0=None, top=None, bottom=None):
         if p0 is None:
             p0 = [float(np.median(doses)), 1.5]
         bounds_2p = ([1e-10, 0.1], [doses.max() * 100, 10.0])
-        popt, pcov = curve_fit(hill_2p, doses, responses, p0=p0, bounds=bounds_2p, maxfev=10000)
+        popt, pcov = curve_fit(hill_2p, doses, responses, p0=p0,
+                               bounds=bounds_2p, maxfev=10000)
         ic50_val, n_val = popt
         popt_full = (top_val, bottom_val, ic50_val, n_val)
-
-        def predict_fn(x, _t=top_val, _b=bottom_val, _ic=ic50_val, _n=n_val):
-            return _b + (_t - _b) / (1 + (np.asarray(x, dtype=float) / _ic) ** _n)
+        predict_fn = lambda x, _t=top_val, _b=bottom_val, _ic=ic50_val, _n=n_val: (
+            _b + (_t - _b) / (1 + (np.asarray(x, dtype=float) / _ic) ** _n)
+        )
     elif fixed_top:
         # 3-parameter fit: bottom, IC50, n
         top_val = float(top)
@@ -306,12 +294,11 @@ def fit_hill(doses, responses, p0=None, top=None, bottom=None):
         if p0 is None:
             p0 = [float(np.min(responses)), float(np.median(doses)), 1.5]
         bounds_3p = ([-0.5, 1e-10, 0.1], [1.5, doses.max() * 100, 10.0])
-        popt, pcov = curve_fit(hill_3p_top, doses, responses, p0=p0, bounds=bounds_3p, maxfev=10000)
+        popt, pcov = curve_fit(hill_3p_top, doses, responses, p0=p0,
+                               bounds=bounds_3p, maxfev=10000)
         bottom_val, ic50_val, n_val = popt
         popt_full = (top_val, bottom_val, ic50_val, n_val)
-
-        def predict_fn(x, _p=popt_full):
-            return hill_4p(np.asarray(x, dtype=float), *_p)
+        predict_fn = lambda x, _p=popt_full: hill_4p(np.asarray(x, dtype=float), *_p)
     elif fixed_bottom:
         # 3-parameter fit: top, IC50, n
         bottom_val = float(bottom)
@@ -322,14 +309,11 @@ def fit_hill(doses, responses, p0=None, top=None, bottom=None):
         if p0 is None:
             p0 = [float(np.max(responses)), float(np.median(doses)), 1.5]
         bounds_3p = ([0.0, 1e-10, 0.1], [2.0, doses.max() * 100, 10.0])
-        popt, pcov = curve_fit(
-            hill_3p_bottom, doses, responses, p0=p0, bounds=bounds_3p, maxfev=10000
-        )
+        popt, pcov = curve_fit(hill_3p_bottom, doses, responses, p0=p0,
+                               bounds=bounds_3p, maxfev=10000)
         top_val, ic50_val, n_val = popt
         popt_full = (top_val, bottom_val, ic50_val, n_val)
-
-        def predict_fn(x, _p=popt_full):
-            return hill_4p(np.asarray(x, dtype=float), *_p)
+        predict_fn = lambda x, _p=popt_full: hill_4p(np.asarray(x, dtype=float), *_p)
     else:
         # Full 4-parameter fit (original behavior)
         if p0 is None:
@@ -340,12 +324,11 @@ def fit_hill(doses, responses, p0=None, top=None, bottom=None):
                 1.5,
             ]
         bounds = ([0.0, -0.5, 1e-10, 0.1], [2.0, 1.5, doses.max() * 100, 10.0])
-        popt, pcov = curve_fit(hill_4p, doses, responses, p0=p0, bounds=bounds, maxfev=10000)
+        popt, pcov = curve_fit(hill_4p, doses, responses, p0=p0,
+                               bounds=bounds, maxfev=10000)
         top_val, bottom_val, ic50_val, n_val = popt
         popt_full = tuple(float(p) for p in popt)
-
-        def predict_fn(x, _p=popt_full):
-            return hill_4p(np.asarray(x, dtype=float), *_p)
+        predict_fn = lambda x, _p=popt_full: hill_4p(np.asarray(x, dtype=float), *_p)
 
     y_pred = predict_fn(doses)
     ss_res = float(np.sum((responses - y_pred) ** 2))
@@ -355,14 +338,89 @@ def fit_hill(doses, responses, p0=None, top=None, bottom=None):
     max_effect = 100.0 * (1.0 - float(bottom_val) / float(top_val)) if float(top_val) > 0 else 0.0
 
     return {
-        "IC50": round(float(ic50_val), 6),
-        "hill_n": round(float(n_val), 4),
-        "top": round(float(top_val), 4),
-        "bottom": round(float(bottom_val), 4),
-        "max_effect_pct": round(max_effect, 1),
-        "r_squared": round(r_squared, 6),
-        "params": tuple(float(p) for p in popt_full),
-        "predict": predict_fn,
+        'IC50': round(float(ic50_val), 6),
+        'hill_n': round(float(n_val), 4),
+        'top': round(float(top_val), 4),
+        'bottom': round(float(bottom_val), 4),
+        'max_effect_pct': round(max_effect, 1),
+        'r_squared': round(r_squared, 6),
+        'params': tuple(float(p) for p in popt_full),
+        'predict': predict_fn,
+    }
+
+
+def fit_hill_agonist(doses, responses, top=None, bottom=None, p0=None):
+    """Fit agonist Hill equation to dose-response data (response rises with dose).
+
+    ``y = bottom + (top - bottom) * x^n / (EC50^n + x^n)``
+
+    Use this for dose-response where MORE drug → MORE effect (agonists,
+    activators, disease-inducing doses). For inhibitors (more drug → less
+    effect) use :func:`fit_hill` which reports IC50.
+
+    Args:
+        doses: array of concentrations. ``dose = 0`` is handled safely.
+        responses: array of normalized responses (e.g. steatotic fraction).
+        top: optional fixed maximum response.
+        bottom: optional fixed minimum response.
+        p0: optional initial [top, bottom, EC50, n] guess; auto-estimated
+            if None.
+
+    Returns:
+        dict with keys:
+            EC50, hill_n, top, bottom, r_squared, params (tuple), predict
+            (callable predict(doses) -> responses).
+
+    Example::
+
+        r = fit_hill_agonist(
+            [0, 0.3, 1, 3, 10],
+            [0.05, 0.06, 0.33, 0.72, 0.83],
+        )
+        print(f"EC50 = {r['EC50']:.2f}, n = {r['hill_n']:.2f}")
+    """
+    doses = np.asarray(doses, dtype=float)
+    responses = np.asarray(responses, dtype=float)
+
+    def _hill_agonist(x, top_p, bottom_p, ec50, n):
+        x = np.asarray(x, dtype=float)
+        xn = np.where(x > 0, np.power(np.maximum(x, 1e-12), n), 0.0)
+        return bottom_p + (top_p - bottom_p) * xn / (ec50 ** n + xn + 1e-12)
+
+    if p0 is None:
+        positive = doses[doses > 0]
+        ec50_guess = float(np.median(positive)) if positive.size else 1.0
+        top_guess = float(np.max(responses)) if top is None else float(top)
+        bottom_guess = float(np.min(responses)) if bottom is None else float(bottom)
+        p0 = [top_guess, bottom_guess, ec50_guess, 1.5]
+
+    lo_top = 0.0 if top is None else max(0.0, float(top) - 1e-6)
+    hi_top = 2.0 if top is None else float(top) + 1e-6
+    lo_bot = 0.0 if bottom is None else max(0.0, float(bottom) - 1e-6)
+    hi_bot = 2.0 if bottom is None else float(bottom) + 1e-6
+
+    bounds = ([lo_top, lo_bot, 1e-6, 0.1],
+              [hi_top, hi_bot, doses.max() * 100 + 1, 10.0])
+
+    popt, _ = curve_fit(_hill_agonist, doses, responses,
+                        p0=p0, bounds=bounds, maxfev=20000)
+    top_val, bottom_val, ec50_val, n_val = (float(x) for x in popt)
+
+    predict = _hill_agonist(doses, *popt)
+    ss_res = float(((responses - predict) ** 2).sum())
+    ss_tot = float(((responses - responses.mean()) ** 2).sum())
+    r2 = 1 - ss_res / ss_tot if ss_tot > 0 else 0.0
+
+    predict_fn = lambda x, _p=popt: _hill_agonist(np.asarray(x, dtype=float), *_p)
+
+    return {
+        'EC50': round(ec50_val, 6),
+        'hill_n': round(n_val, 4),
+        'top': round(top_val, 4),
+        'bottom': round(bottom_val, 4),
+        'r_squared': round(r2, 6),
+        'params': (top_val, bottom_val, ec50_val, n_val),
+        'predict': predict_fn,
     }
 
 
@@ -392,14 +450,10 @@ def fit_q10(temperatures, rates, ref_temp=None):
     rates_arr = np.asarray(rates, dtype=float)
 
     if len(temps) < 2:
-        return {
-            "Q10": 1.0,
-            "ref_temp": float(temps[0]) if len(temps) else 0.0,
-            "ref_rate": float(rates_arr[0]) if len(rates_arr) else 0.0,
-            "optimal_temp": float(temps[0]) if len(temps) else 0.0,
-            "r_squared": 0.0,
-            "predicted": rates_arr.tolist(),
-        }
+        return {'Q10': 1.0, 'ref_temp': float(temps[0]) if len(temps) else 0.0,
+                'ref_rate': float(rates_arr[0]) if len(rates_arr) else 0.0,
+                'optimal_temp': float(temps[0]) if len(temps) else 0.0,
+                'r_squared': 0.0, 'predicted': rates_arr.tolist()}
 
     optimal_idx = int(np.argmax(rates_arr))
     optimal_temp = float(temps[optimal_idx])
@@ -410,14 +464,10 @@ def fit_q10(temperatures, rates, ref_temp=None):
     # Only fit positive rates (exclude cold arrest / heat shock)
     positive = rates_arr > 0
     if positive.sum() < 2:
-        return {
-            "Q10": 1.0,
-            "ref_temp": ref_temp,
-            "ref_rate": float(rates_arr[optimal_idx]),
-            "optimal_temp": optimal_temp,
-            "r_squared": 0.0,
-            "predicted": rates_arr.tolist(),
-        }
+        return {'Q10': 1.0, 'ref_temp': ref_temp,
+                'ref_rate': float(rates_arr[optimal_idx]),
+                'optimal_temp': optimal_temp,
+                'r_squared': 0.0, 'predicted': rates_arr.tolist()}
 
     t_pos = temps[positive]
     r_pos = rates_arr[positive]
@@ -443,16 +493,16 @@ def fit_q10(temperatures, rates, ref_temp=None):
     )
 
     return {
-        "Q10": round(q10, 4),
-        "ref_temp": round(ref_temp, 1),
-        "ref_rate": round(ref_rate_pred, 6),
-        "optimal_temp": round(optimal_temp, 1),
-        "r_squared": round(r_squared, 4),
-        "predicted": [round(float(v), 6) for v in predicted_all],
+        'Q10': round(q10, 4),
+        'ref_temp': round(ref_temp, 1),
+        'ref_rate': round(ref_rate_pred, 6),
+        'optimal_temp': round(optimal_temp, 1),
+        'r_squared': round(r_squared, 4),
+        'predicted': [round(float(v), 6) for v in predicted_all],
     }
 
 
-def measure_bleaching_trajectory(frames, cells, labels, method="region"):
+def measure_bleaching_trajectory(frames, cells, labels, method='region'):
     """Measure mean intensity trajectory across frames for a cell population.
 
     Args:
@@ -469,37 +519,37 @@ def measure_bleaching_trajectory(frames, cells, labels, method="region"):
     h, w = frames[0].shape
 
     # Build masks
-    if method == "signal":
+    if method == 'signal':
         f0 = frames[0].astype(float)
         masks = {}
         for c in cells:
-            region = labels == c["label"]
+            region = (labels == c['label'])
             pix = f0[region]
             thresh = float(np.mean(pix) + np.std(pix))
             sig = region & (f0 > thresh)
             if np.count_nonzero(sig) < 10:
                 sig = region
-            masks[c["label"]] = sig
+            masks[c['label']] = sig
     else:
-        masks = {c["label"]: (labels == c["label"]) for c in cells}
+        masks = {c['label']: (labels == c['label']) for c in cells}
 
     # Measure trajectories
     global_traj = []
-    per_cell = {c["label"]: [] for c in cells}
+    per_cell = {c['label']: [] for c in cells}
 
     for f_idx in range(n_frames):
         frame_f = frames[f_idx].astype(float)
         vals = []
         for c in cells:
-            m = masks[c["label"]]
+            m = masks[c['label']]
             v = float(np.mean(frame_f[m]))
-            per_cell[c["label"]].append(v)
+            per_cell[c['label']].append(v)
             vals.append(v)
         global_traj.append(float(np.mean(vals)))
 
     return {
-        "trajectory": global_traj,
-        "per_cell": per_cell,
+        'trajectory': global_traj,
+        'per_cell': per_cell,
     }
 
 
@@ -523,7 +573,7 @@ def rank_by_bleach_rate(per_cell_trajectories, times=None, descending=True):
             t = np.asarray(times, dtype=float)
 
         fit = fit_exponential_decay(t, y)
-        results.append((label, fit["k"]))
+        results.append((label, fit['k']))
 
     results.sort(key=lambda x: x[1], reverse=descending)
     return results
@@ -593,16 +643,16 @@ def fit_q10_with_ci(temperatures, rates, ref_temp=None, n_bootstrap=500, ci=0.95
         ci_hi = float(np.percentile(q10_arr, 100 * (1 - alpha / 2)))
         q10_std = float(np.std(q10_arr))
     else:
-        ci_lo = ci_hi = base_result["Q10"]
+        ci_lo = ci_hi = base_result['Q10']
         q10_std = 0.0
 
     return {
         **base_result,
-        "Q10_ci_lo": round(ci_lo, 4),
-        "Q10_ci_hi": round(ci_hi, 4),
-        "Q10_std": round(q10_std, 4),
-        "n_bootstrap": n_bootstrap,
-        "ci_level": ci,
+        'Q10_ci_lo': round(ci_lo, 4),
+        'Q10_ci_hi': round(ci_hi, 4),
+        'Q10_std': round(q10_std, 4),
+        'n_bootstrap': n_bootstrap,
+        'ci_level': ci,
     }
 
 
@@ -647,12 +697,12 @@ def measure_growth_rate_series(counts, frames=None):
     valid = counts_arr > 0
     if valid.sum() < 3:
         return {
-            "rate_per_frame": 0.0,
-            "doubling_time_frames": float("inf"),
-            "r_squared": 0.0,
-            "n_start": float(counts_arr[0]) if len(counts_arr) > 0 else 0.0,
-            "n_end": float(counts_arr[-1]) if len(counts_arr) > 0 else 0.0,
-            "method": "insufficient_data",
+            'rate_per_frame': 0.0,
+            'doubling_time_frames': float('inf'),
+            'r_squared': 0.0,
+            'n_start': float(counts_arr[0]) if len(counts_arr) > 0 else 0.0,
+            'n_end': float(counts_arr[-1]) if len(counts_arr) > 0 else 0.0,
+            'method': 'insufficient_data',
         }
 
     t = frames_arr[valid]
@@ -668,16 +718,16 @@ def measure_growth_rate_series(counts, frames=None):
     r_squared = 1.0 - ss_res / ss_tot if ss_tot > 0 else 0.0
 
     rate = max(slope, 0.0)  # growth rate cannot be negative in a growth experiment
-    dt = float(np.log(2) / rate) if rate > 0 else float("inf")
+    dt = float(np.log(2) / rate) if rate > 0 else float('inf')
 
     n_start = float(np.exp(np.polyval(coeffs, frames_arr[0])))
     n_end = float(np.exp(np.polyval(coeffs, frames_arr[-1])))
 
     return {
-        "rate_per_frame": round(rate, 6),
-        "doubling_time_frames": round(dt, 2) if dt != float("inf") else float("inf"),
-        "r_squared": round(r_squared, 4),
-        "n_start": round(n_start, 1),
-        "n_end": round(n_end, 1),
-        "method": "log_linear_regression",
+        'rate_per_frame': round(rate, 6),
+        'doubling_time_frames': round(dt, 2) if dt != float('inf') else float('inf'),
+        'r_squared': round(r_squared, 4),
+        'n_start': round(n_start, 1),
+        'n_end': round(n_end, 1),
+        'method': 'log_linear_regression',
     }

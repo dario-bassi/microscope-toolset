@@ -4,16 +4,17 @@ Provides smart threshold selection based on image characteristics,
 with quality-checked detection retry when initial parameters fail.
 
 Key functions:
-    auto_threshold   -- Analyze image and select best threshold value
-    threshold_sweep  -- Try multiple thresholds, evaluate each
-    detect_with_retry -- Run detection, validate, retry if poor quality
+    auto_threshold      -- Analyze image and select best threshold value
+    threshold_sweep     -- Try multiple thresholds, evaluate each
+    detect_with_retry   -- Run detection, validate, retry if poor quality
+    estimate_noise_floor -- Measure background noise for fluorescence images
 """
 
 import numpy as np
-from skimage.filters import threshold_li, threshold_otsu, threshold_triangle
+from skimage.filters import threshold_otsu, threshold_triangle, threshold_li
 
 
-def auto_threshold(image, method="auto", background_fraction=0.5):
+def auto_threshold(image, method='auto', background_fraction=0.5):
     """Select an appropriate threshold for a microscopy image.
 
     Analyzes the image histogram to determine whether Otsu, triangle,
@@ -35,50 +36,53 @@ def auto_threshold(image, method="auto", background_fraction=0.5):
     """
     img = np.asarray(image, dtype=np.float64)
     if img.size == 0:
-        return {"threshold": 0.0, "method": "empty", "image_stats": {}}
+        return {'threshold': 0.0, 'method': 'empty', 'image_stats': {}}
 
     stats = {
-        "mean": float(img.mean()),
-        "std": float(img.std()),
-        "min": float(img.min()),
-        "max": float(img.max()),
-        "p5": float(np.percentile(img, 5)),
-        "p95": float(np.percentile(img, 95)),
-        "dynamic_range": float(img.max() - img.min()),
+        'mean': float(img.mean()),
+        'std': float(img.std()),
+        'min': float(img.min()),
+        'max': float(img.max()),
+        'p5': float(np.percentile(img, 5)),
+        'p95': float(np.percentile(img, 95)),
+        'dynamic_range': float(img.max() - img.min()),
     }
 
-    if method == "otsu":
+    if method == 'otsu':
         thresh = float(threshold_otsu(img))
-        return {"threshold": thresh, "method": "otsu", "image_stats": stats}
+        return {'threshold': thresh, 'method': 'otsu', 'image_stats': stats}
 
-    elif method == "triangle":
+    elif method == 'triangle':
         thresh = float(threshold_triangle(img))
-        return {"threshold": thresh, "method": "triangle", "image_stats": stats}
+        return {'threshold': thresh, 'method': 'triangle', 'image_stats': stats}
 
-    elif method == "li":
+    elif method == 'li':
         thresh = float(threshold_li(img))
-        return {"threshold": thresh, "method": "li", "image_stats": stats}
+        return {'threshold': thresh, 'method': 'li', 'image_stats': stats}
 
-    elif method == "percentile":
+    elif method == 'percentile':
         # Objects are bright outliers above background
         thresh = float(np.percentile(img, 95))
-        return {"threshold": thresh, "method": "percentile_95", "image_stats": stats}
+        return {'threshold': thresh, 'method': 'percentile_95',
+                'image_stats': stats}
 
-    elif method == "background":
+    elif method == 'background':
         # Estimate background from the majority of pixels
         sorted_vals = np.sort(img.ravel())
         n_bg = int(len(sorted_vals) * background_fraction)
         bg = sorted_vals[:n_bg]
         thresh = float(bg.mean() + 3 * bg.std())
-        stats["bg_mean"] = float(bg.mean())
-        stats["bg_std"] = float(bg.std())
-        return {"threshold": thresh, "method": "background_3sigma", "image_stats": stats}
+        stats['bg_mean'] = float(bg.mean())
+        stats['bg_std'] = float(bg.std())
+        return {'threshold': thresh, 'method': 'background_3sigma',
+                'image_stats': stats}
 
     # Auto mode: analyze histogram to pick best method
-    if stats["dynamic_range"] < 10:
+    if stats['dynamic_range'] < 10:
         # Very low contrast — use percentile
         thresh = float(np.percentile(img, 97))
-        return {"threshold": thresh, "method": "percentile_97_low_contrast", "image_stats": stats}
+        return {'threshold': thresh, 'method': 'percentile_97_low_contrast',
+                'image_stats': stats}
 
     # Check if bimodal (objects vs background)
     try:
@@ -87,7 +91,8 @@ def auto_threshold(image, method="auto", background_fraction=0.5):
         above = float((img > otsu_val).sum()) / img.size
         if 0.05 < above < 0.7:
             # Good bimodal split
-            return {"threshold": otsu_val, "method": "otsu", "image_stats": stats}
+            return {'threshold': otsu_val, 'method': 'otsu',
+                    'image_stats': stats}
     except ValueError:
         pass
 
@@ -96,9 +101,10 @@ def auto_threshold(image, method="auto", background_fraction=0.5):
     n_bg = int(len(sorted_vals) * background_fraction)
     bg = sorted_vals[:n_bg]
     thresh = float(bg.mean() + 3 * bg.std())
-    stats["bg_mean"] = float(bg.mean())
-    stats["bg_std"] = float(bg.std())
-    return {"threshold": thresh, "method": "background_3sigma", "image_stats": stats}
+    stats['bg_mean'] = float(bg.mean())
+    stats['bg_std'] = float(bg.std())
+    return {'threshold': thresh, 'method': 'background_3sigma',
+            'image_stats': stats}
 
 
 def threshold_sweep(image, thresholds, count_fn=None, min_area=5):
@@ -153,14 +159,15 @@ def threshold_sweep(image, thresholds, count_fn=None, min_area=5):
         best_threshold = float(thresholds_arr[0]) if len(thresholds_arr) > 0 else 0
 
     return {
-        "thresholds": list(thresholds),
-        "counts": counts.tolist(),
-        "areas_median": areas_median,
-        "best_threshold": best_threshold,
+        'thresholds': list(thresholds),
+        'counts': counts.tolist(),
+        'areas_median': areas_median,
+        'best_threshold': best_threshold,
     }
 
 
-def detect_with_retry(image, detect_fn, quality_fn=None, max_retries=3, threshold_range=None):
+def detect_with_retry(image, detect_fn, quality_fn=None, max_retries=3,
+                      threshold_range=None):
     """Run detection with automatic retry on quality failure.
 
     If the initial detection fails quality checks, adjusts the threshold
@@ -186,7 +193,7 @@ def detect_with_retry(image, detect_fn, quality_fn=None, max_retries=3, threshol
     """
     # Initial threshold
     auto = auto_threshold(image)
-    initial_thresh = auto["threshold"]
+    initial_thresh = auto['threshold']
 
     if threshold_range is None:
         low = initial_thresh * 0.5
@@ -211,19 +218,19 @@ def detect_with_retry(image, detect_fn, quality_fn=None, max_retries=3, threshol
         if quality_fn is not None:
             q = quality_fn(det)
             quality_results.append(q)
-            if q.get("status") == "ok":
+            if q.get('status') == 'ok':
                 return {
-                    "result": det,
-                    "attempts": len(results),
-                    "thresholds_tried": thresholds_to_try[: len(results)],
-                    "quality_results": quality_results,
+                    'result': det,
+                    'attempts': len(results),
+                    'thresholds_tried': thresholds_to_try[:len(results)],
+                    'quality_results': quality_results,
                 }
         else:
             return {
-                "result": det,
-                "attempts": 1,
-                "thresholds_tried": [t],
-                "quality_results": [],
+                'result': det,
+                'attempts': 1,
+                'thresholds_tried': [t],
+                'quality_results': [],
             }
 
     # No threshold passed quality — return best (most 'ok'-like)
@@ -231,19 +238,71 @@ def detect_with_retry(image, detect_fn, quality_fn=None, max_retries=3, threshol
         # Prefer 'ok', then lowest count difference from expected
         best_idx = 0
         for i, q in enumerate(quality_results):
-            if q.get("status") == "ok":
+            if q.get('status') == 'ok':
                 best_idx = i
                 break
         return {
-            "result": results[best_idx],
-            "attempts": len(results),
-            "thresholds_tried": thresholds_to_try[: len(results)],
-            "quality_results": quality_results,
+            'result': results[best_idx],
+            'attempts': len(results),
+            'thresholds_tried': thresholds_to_try[:len(results)],
+            'quality_results': quality_results,
         }
 
     return {
-        "result": results[0] if results else {},
-        "attempts": len(results),
-        "thresholds_tried": thresholds_to_try[: len(results)],
-        "quality_results": quality_results,
+        'result': results[0] if results else {},
+        'attempts': len(results),
+        'thresholds_tried': thresholds_to_try[:len(results)],
+        'quality_results': quality_results,
+    }
+
+
+def estimate_noise_floor(image, bg_fraction=0.5):
+    """Estimate background noise floor from a fluorescence image.
+
+    Sorts pixel intensities and treats the lower ``bg_fraction`` as
+    background.  Returns background statistics and a signal threshold.
+
+    This is the recommended way to set detection thresholds for
+    fluorescence microscopy — use ``bg_mean + k * bg_std`` instead of
+    arbitrary multipliers or percentiles.
+
+    Common ``k`` values:
+        - k=1.3 : sensitive (stress granules, faint foci)
+        - k=2.0 : standard (bright foci, nuclei)
+        - k=3.0 : conservative (only strong signals)
+
+    Args:
+        image: 2D grayscale image.
+        bg_fraction: Fraction of pixels assumed to be background
+            (default 0.5).  Set higher for sparse samples.
+
+    Returns:
+        dict with:
+            bg_mean: Mean intensity of background pixels.
+            bg_std: Standard deviation of background pixels.
+            threshold_1_3sigma: bg_mean + 1.3 * bg_std (sensitive).
+            threshold_2sigma: bg_mean + 2.0 * bg_std (standard).
+            threshold_3sigma: bg_mean + 3.0 * bg_std (conservative).
+    """
+    img = np.asarray(image, dtype=np.float64)
+    if img.size == 0:
+        return {
+            'bg_mean': 0.0, 'bg_std': 0.0,
+            'threshold_1_3sigma': 0.0,
+            'threshold_2sigma': 0.0,
+            'threshold_3sigma': 0.0,
+        }
+
+    sorted_vals = np.sort(img.ravel())
+    n_bg = max(1, int(len(sorted_vals) * bg_fraction))
+    bg = sorted_vals[:n_bg]
+    bg_mean = float(bg.mean())
+    bg_std = float(bg.std())
+
+    return {
+        'bg_mean': bg_mean,
+        'bg_std': bg_std,
+        'threshold_1_3sigma': bg_mean + 1.3 * bg_std,
+        'threshold_2sigma': bg_mean + 2.0 * bg_std,
+        'threshold_3sigma': bg_mean + 3.0 * bg_std,
     }

@@ -13,10 +13,10 @@ Functions:
 """
 
 import numpy as np
-from scipy import stats
+from scipy import stats, optimize
 
 
-def size_stats(sizes, unit="px"):
+def size_stats(sizes, unit='px'):
     """Compute basic statistics for a size distribution.
 
     Args:
@@ -40,17 +40,9 @@ def size_stats(sizes, unit="px"):
     sizes = np.asarray(sizes, dtype=float)
     if len(sizes) == 0:
         return {
-            "n": 0,
-            "mean": 0,
-            "median": 0,
-            "std": 0,
-            "cv": 0,
-            "min": 0,
-            "max": 0,
-            "range": 0,
-            "iqr": 0,
-            "skewness": 0,
-            "unit": unit,
+            'n': 0, 'mean': 0, 'median': 0, 'std': 0, 'cv': 0,
+            'min': 0, 'max': 0, 'range': 0, 'iqr': 0, 'skewness': 0,
+            'unit': unit,
         }
 
     q25 = float(np.percentile(sizes, 25))
@@ -58,17 +50,17 @@ def size_stats(sizes, unit="px"):
     mean_val = float(sizes.mean())
 
     return {
-        "n": len(sizes),
-        "mean": round(mean_val, 4),
-        "median": round(float(np.median(sizes)), 4),
-        "std": round(float(sizes.std()), 4),
-        "cv": round(float(sizes.std() / mean_val), 4) if mean_val > 0 else 0,
-        "min": round(float(sizes.min()), 4),
-        "max": round(float(sizes.max()), 4),
-        "range": round(float(sizes.max() - sizes.min()), 4),
-        "iqr": round(q75 - q25, 4),
-        "skewness": round(float(stats.skew(sizes)), 4) if sizes.std() > 0 else 0.0,
-        "unit": unit,
+        'n': len(sizes),
+        'mean': round(mean_val, 4),
+        'median': round(float(np.median(sizes)), 4),
+        'std': round(float(sizes.std()), 4),
+        'cv': round(float(sizes.std() / mean_val), 4) if mean_val > 0 else 0,
+        'min': round(float(sizes.min()), 4),
+        'max': round(float(sizes.max()), 4),
+        'range': round(float(sizes.max() - sizes.min()), 4),
+        'iqr': round(q75 - q25, 4),
+        'skewness': round(float(stats.skew(sizes)), 4) if sizes.std() > 0 else 0.0,
+        'unit': unit,
     }
 
 
@@ -90,24 +82,24 @@ def size_percentiles(sizes, percentiles=None):
         percentiles = [10, 25, 50, 75, 90, 95, 99]
 
     if len(sizes) == 0:
-        result = {f"D{p}": 0.0 for p in percentiles}
-        result["span"] = 0.0
+        result = {f'D{p}': 0.0 for p in percentiles}
+        result['span'] = 0.0
         return result
 
     result = {}
     for p in percentiles:
-        result[f"D{p}"] = round(float(np.percentile(sizes, p)), 4)
+        result[f'D{p}'] = round(float(np.percentile(sizes, p)), 4)
 
     # Span = (D90 - D10) / D50
-    d10 = result.get("D10", np.percentile(sizes, 10))
-    d50 = result.get("D50", np.percentile(sizes, 50))
-    d90 = result.get("D90", np.percentile(sizes, 90))
-    result["span"] = round((d90 - d10) / d50, 4) if d50 > 0 else 0.0
+    d10 = result.get('D10', np.percentile(sizes, 10))
+    d50 = result.get('D50', np.percentile(sizes, 50))
+    d90 = result.get('D90', np.percentile(sizes, 90))
+    result['span'] = round((d90 - d10) / d50, 4) if d50 > 0 else 0.0
 
     return result
 
 
-def fit_distribution(sizes, model="lognormal"):
+def fit_distribution(sizes, model='lognormal'):
     """Fit a parametric distribution to size data.
 
     Args:
@@ -129,46 +121,47 @@ def fit_distribution(sizes, model="lognormal"):
 
     if len(sizes) < 3:
         return {
-            "model": model,
-            "params": {},
-            "ks_statistic": 1.0,
-            "p_value": 0.0,
-            "aic": np.inf,
+            'model': model,
+            'params': {},
+            'ks_statistic': 1.0,
+            'p_value': 0.0,
+            'aic': np.inf,
         }
 
-    if model == "normal":
+    if model == 'normal':
         mu, sigma = float(sizes.mean()), float(sizes.std())
-        ks_stat, p_val = stats.kstest(sizes, "norm", args=(mu, sigma))
+        ks_stat, p_val = stats.kstest(sizes, 'norm', args=(mu, sigma))
         # AIC = 2k - 2ln(L)
         log_l = np.sum(stats.norm.logpdf(sizes, mu, sigma))
         aic = 4 - 2 * log_l
-        params = {"mu": round(mu, 4), "sigma": round(sigma, 4)}
+        params = {'mu': round(mu, 4), 'sigma': round(sigma, 4)}
 
-    elif model == "lognormal":
+    elif model == 'lognormal':
         log_sizes = np.log(sizes)
         mu_log = float(log_sizes.mean())
         sigma_log = float(log_sizes.std())
         # scipy lognorm: shape=sigma, scale=exp(mu)
         shape = sigma_log
         scale = np.exp(mu_log)
-        ks_stat, p_val = stats.kstest(sizes, "lognorm", args=(shape, 0, scale))
+        ks_stat, p_val = stats.kstest(sizes, 'lognorm',
+                                       args=(shape, 0, scale))
         log_l = np.sum(stats.lognorm.logpdf(sizes, shape, 0, scale))
         aic = 4 - 2 * log_l
         params = {
-            "mu_log": round(mu_log, 4),
-            "sigma_log": round(sigma_log, 4),
-            "geometric_mean": round(float(np.exp(mu_log)), 4),
+            'mu_log': round(mu_log, 4),
+            'sigma_log': round(sigma_log, 4),
+            'geometric_mean': round(float(np.exp(mu_log)), 4),
         }
 
     else:
         raise ValueError(f"Unknown model: {model}")
 
     return {
-        "model": model,
-        "params": params,
-        "ks_statistic": round(float(ks_stat), 4),
-        "p_value": round(float(p_val), 4),
-        "aic": round(float(aic), 2),
+        'model': model,
+        'params': params,
+        'ks_statistic': round(float(ks_stat), 4),
+        'p_value': round(float(p_val), 4),
+        'aic': round(float(aic), 2),
     }
 
 
@@ -194,10 +187,10 @@ def detect_subpopulations(sizes, n_bins=50, min_separation=0.2):
 
     if len(sizes) < 5:
         return {
-            "n_modes": 1 if len(sizes) > 0 else 0,
-            "modes": [float(np.median(sizes))] if len(sizes) > 0 else [],
-            "mode_counts": [len(sizes)] if len(sizes) > 0 else [],
-            "is_multimodal": False,
+            'n_modes': 1 if len(sizes) > 0 else 0,
+            'modes': [float(np.median(sizes))] if len(sizes) > 0 else [],
+            'mode_counts': [len(sizes)] if len(sizes) > 0 else [],
+            'is_multimodal': False,
         }
 
     # Histogram-based peak detection
@@ -206,7 +199,6 @@ def detect_subpopulations(sizes, n_bins=50, min_separation=0.2):
 
     # Smooth histogram
     from scipy.ndimage import gaussian_filter1d
-
     smoothed = gaussian_filter1d(counts.astype(float), sigma=2)
 
     # Find peaks: points higher than both neighbors
@@ -227,7 +219,7 @@ def detect_subpopulations(sizes, n_bins=50, min_separation=0.2):
     if data_range > 0 and len(modes) > 1:
         filtered_modes = [modes[0]]
         filtered_counts = [mode_counts[0]]
-        for m, c in zip(modes[1:], mode_counts[1:], strict=False):
+        for m, c in zip(modes[1:], mode_counts[1:]):
             if abs(m - filtered_modes[-1]) / data_range > min_separation:
                 filtered_modes.append(m)
                 filtered_counts.append(c)
@@ -235,14 +227,15 @@ def detect_subpopulations(sizes, n_bins=50, min_separation=0.2):
         mode_counts = filtered_counts
 
     return {
-        "n_modes": len(modes),
-        "modes": modes,
-        "mode_counts": mode_counts,
-        "is_multimodal": len(modes) > 1,
+        'n_modes': len(modes),
+        'modes': modes,
+        'mode_counts': mode_counts,
+        'is_multimodal': len(modes) > 1,
     }
 
 
-def size_filter(sizes, labels=None, min_size=None, max_size=None, percentile_range=None):
+def size_filter(sizes, labels=None, min_size=None, max_size=None,
+                percentile_range=None):
     """Filter objects by size criteria.
 
     Args:
@@ -275,14 +268,14 @@ def size_filter(sizes, labels=None, min_size=None, max_size=None, percentile_ran
         mask &= (sizes >= plo) & (sizes <= phi)
 
     result = {
-        "mask": mask,
-        "n_kept": int(mask.sum()),
-        "n_removed": int((~mask).sum()),
-        "kept_sizes": sizes[mask],
+        'mask': mask,
+        'n_kept': int(mask.sum()),
+        'n_removed': int((~mask).sum()),
+        'kept_sizes': sizes[mask],
     }
 
     if labels is not None:
         labels = np.asarray(labels)
-        result["kept_labels"] = labels[mask]
+        result['kept_labels'] = labels[mask]
 
     return result

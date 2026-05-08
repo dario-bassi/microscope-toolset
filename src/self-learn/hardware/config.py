@@ -14,12 +14,14 @@ Key classes:
 from __future__ import annotations
 
 import re
+import warnings
 from dataclasses import dataclass, field
+from typing import Optional
+
 
 # ---------------------------------------------------------------------------
 # MicroscopeConfig
 # ---------------------------------------------------------------------------
-
 
 @dataclass(frozen=True)
 class MicroscopeConfig:
@@ -40,20 +42,23 @@ class MicroscopeConfig:
         objective_device: Objective/state device name, or None.
         objective_labels: Mapping of state index to label string.
         slm_device: SLM device name, or None.
+        dm_device: Deformable-mirror state device name, or None. Detected
+            by name match ("DeformableMirror" / "DM") on loaded state
+            devices — gates the sensorless-AO recipe.
     """
-
     image_width: int
     image_height: int
     pixel_size_um: float
     n_components: int = 1
 
-    channel_group: str | None = None
+    channel_group: Optional[str] = None
     available_channels: tuple = field(default_factory=tuple)
-    xy_device: str | None = None
-    z_device: str | None = None
-    objective_device: str | None = None
+    xy_device: Optional[str] = None
+    z_device: Optional[str] = None
+    objective_device: Optional[str] = None
     objective_labels: tuple = field(default_factory=tuple)  # ((idx, label), ...)
-    slm_device: str | None = None
+    slm_device: Optional[str] = None
+    dm_device: Optional[str] = None
 
     # ------------------------------------------------------------------
     # Derived properties
@@ -78,14 +83,14 @@ class MicroscopeConfig:
         """Field of view height in micrometers."""
         return self.image_height * self.pixel_size_um
 
-    def magnification_for_label(self, label: str) -> int | None:
+    def magnification_for_label(self, label: str) -> Optional[int]:
         """Parse magnification from an objective label string.
 
         Handles formats like "10x", "Plan 40x ELWD", "Nikon 100x Oil", etc.
         """
         return _parse_mag_from_label(label)
 
-    def state_for_mag(self, mag: int) -> int | None:
+    def state_for_mag(self, mag: int) -> Optional[int]:
         """Find the objective state index for a given magnification."""
         for idx, label in self.objective_labels:
             parsed = _parse_mag_from_label(label)
@@ -93,7 +98,7 @@ class MicroscopeConfig:
                 return idx
         return None
 
-    def current_magnification(self, core) -> int | None:
+    def current_magnification(self, core) -> Optional[int]:
         """Get current objective magnification by reading core state."""
         if self.objective_device is None:
             return None
@@ -121,7 +126,7 @@ class MicroscopeConfig:
     # ------------------------------------------------------------------
 
     @classmethod
-    def from_core(cls, core, pixel_size_um: float | None = None) -> MicroscopeConfig:
+    def from_core(cls, core, pixel_size_um: Optional[float] = None) -> MicroscopeConfig:
         """Discover microscope configuration from a live core instance.
 
         Args:
@@ -194,13 +199,18 @@ class MicroscopeConfig:
 
                     # If state labels are generic ("State-0"), try Label
                     # property which some proxies expose with real names
-                    if all(_parse_mag_from_label(lbl) is None for _, lbl in objective_labels):
+                    if all(_parse_mag_from_label(lbl) is None
+                           for _, lbl in objective_labels):
                         try:
-                            allowed = list(core.getAllowedPropertyValues(obj_name, "Label"))
-                            if len(allowed) == len(objective_labels) and any(
-                                _parse_mag_from_label(a) for a in allowed
-                            ):
-                                objective_labels = [(i, allowed[i]) for i in range(len(allowed))]
+                            allowed = list(core.getAllowedPropertyValues(
+                                obj_name, "Label"))
+                            if (len(allowed) == len(objective_labels)
+                                    and any(_parse_mag_from_label(a)
+                                            for a in allowed)):
+                                objective_labels = [
+                                    (i, allowed[i])
+                                    for i in range(len(allowed))
+                                ]
                         except Exception:
                             pass
                     break
@@ -216,14 +226,30 @@ class MicroscopeConfig:
         except Exception:
             pass
 
+        # Deformable-mirror state device — match by name. Probed across
+        # the loaded device list; the sim exposes it as a state device
+        # whose labels encode Zernike-axis ± corrections (see
+        # ``src/recipes/sensorless_ao.py``).
+        dm_device = None
+        try:
+            for dev in core.getLoadedDevices():
+                name = str(dev)
+                if name in ("DeformableMirror", "DM") or name.startswith("DM"):
+                    try:
+                        if int(core.getNumberOfStates(name)) > 0:
+                            dm_device = name
+                            break
+                    except Exception:
+                        continue
+        except Exception:
+            pass
+
         # Pixel size
         if pixel_size_um is not None:
             px_size = float(pixel_size_um)
         else:
             px_size = _discover_pixel_size(
-                core,
-                objective_labels,
-                width,
+                core, objective_labels, width,
                 objective_device=objective_device,
             )
 
@@ -239,6 +265,7 @@ class MicroscopeConfig:
             objective_device=objective_device,
             objective_labels=tuple(objective_labels),
             slm_device=slm_device,
+            dm_device=dm_device,
         )
 
 
@@ -275,14 +302,65 @@ def clear_config_cache():
     _configs.clear()
 
 
+def resolve_channel_group(core, group: Optional[str] = None) -> Optional[str]:
+    """Return a valid channel config group for this core.
+
+    If ``group`` is given, use it as-is. Otherwise discover the group from
+    the core via ``get_config(core).channel_group``. Returns ``None`` if
+    the core has no channel config groups (some minimal setups).
+
+    Use this instead of hardcoding group names like ``'Fake'`` or ``'Channel'``
+    in core/ workflow defaults — those names are sim/site-specific.
+    """
+    if group is not None:
+        return group
+    return get_config(core).channel_group
+
+
+_BF_PATTERNS = ("brightfield", "bright-field", "bright_field", "bright field",
+                "bf", "phase", "dic", "transmitted")
+
+
+def resolve_brightfield_channel(core, channel: Optional[str] = None) -> Optional[str]:
+    """Return a brightfield-like channel preset name for this core.
+
+    If ``channel`` is given, use it as-is. Otherwise scan the core's
+    available channel presets (case-insensitive) for names containing one
+    of: ``brightfield``, ``bright-field``, ``bright_field``, ``bright field``,
+    ``bf``, ``phase``, ``dic``, ``transmitted``.
+
+    Returns ``None`` if no match. Callers that pass ``None`` can then fall
+    back to whatever is currently set on the core (i.e. don't call setConfig
+    at all), which matches the contract of :func:`snap` when ``channel=None``.
+
+    This exists because workflows in ``src/core/`` historically defaulted to
+    ``channel='brightfield'`` — a sim-specific preset name. On a real
+    microscope the channel might be labelled ``BF``, ``PhaseContrast``,
+    ``Trans-DIC``, etc. Pass the exact preset name if you know it; otherwise
+    this helper tries reasonable fuzzy matches.
+    """
+    if channel is not None:
+        return channel
+    cfg = get_config(core)
+    presets = [p for p in (cfg.available_channels or ()) if isinstance(p, str)]
+    if not presets:
+        return None
+    lowered = [(p, p.lower()) for p in presets]
+    for pat in _BF_PATTERNS:
+        for p, low in lowered:
+            if pat in low:
+                return p
+    return None
+
+
 # ---------------------------------------------------------------------------
 # Internal helpers
 # ---------------------------------------------------------------------------
 
-_MAG_RE = re.compile(r"(\d+)\s*[xX]")
+_MAG_RE = re.compile(r'(\d+)\s*[xX]')
 
 
-def _parse_mag_from_label(label: str) -> int | None:
+def _parse_mag_from_label(label: str) -> Optional[int]:
     """Extract magnification integer from an objective label.
 
     Handles: "10x", "Plan 40x ELWD", "Nikon 100x/1.4 Oil", "State-0", etc.
@@ -293,7 +371,8 @@ def _parse_mag_from_label(label: str) -> int | None:
     return None
 
 
-def _discover_pixel_size(core, objective_labels, image_width, objective_device=None) -> float:
+def _discover_pixel_size(core, objective_labels, image_width,
+                         objective_device=None) -> float:
     """Try to determine pixel size from core or objective labels.
 
     Strategy:
@@ -318,7 +397,7 @@ def _discover_pixel_size(core, objective_labels, image_width, objective_device=N
     return 1.0
 
 
-def _current_mag(core, objective_device, objective_labels) -> int | None:
+def _current_mag(core, objective_device, objective_labels) -> 'int | None':
     """Get the current objective magnification."""
     if objective_device is None:
         return None

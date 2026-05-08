@@ -11,12 +11,12 @@ import warnings
 
 import numpy as np
 
-from .config import _mag_to_pixel_size, get_config, refresh_config
+from .config import get_config, refresh_config, _mag_to_pixel_size
+
 
 # ---------------------------------------------------------------------------
 # Image acquisition
 # ---------------------------------------------------------------------------
-
 
 def snap(core, channel=None, exposure=None):
     """Snap an image, optionally switching channel/exposure first.
@@ -34,10 +34,36 @@ def snap(core, channel=None, exposure=None):
     return core.getImage().copy()
 
 
+def snap_all_channels(core, exposure=None):
+    """Snap an image in every available channel.
+
+    Discovers channels from the microscope config and returns a dict
+    mapping channel name to image array.  Useful for the pre-challenge
+    step "snap ALL channels, look at each".
+
+    Args:
+        core: CMMCorePlus (or proxy) instance.
+        exposure: Optional exposure time (ms) to use for all channels.
+            If None, keeps the current exposure.
+
+    Returns:
+        dict mapping channel_name (str) → np.ndarray.
+        Returns empty dict if no channel group is configured.
+    """
+    cfg = get_config(core)
+    if cfg.channel_group is None or not cfg.available_channels:
+        # No channel group — just snap a single image
+        return {'default': snap(core, exposure=exposure)}
+
+    images = {}
+    for ch in cfg.available_channels:
+        images[ch] = snap(core, channel=ch, exposure=exposure)
+    return images
+
+
 # ---------------------------------------------------------------------------
 # Stage movement
 # ---------------------------------------------------------------------------
-
 
 def move_to(core, x, y, wait=True):
     """Move stage to (x, y) in world coordinates."""
@@ -61,7 +87,6 @@ def get_position(core):
 # ---------------------------------------------------------------------------
 # Objectives
 # ---------------------------------------------------------------------------
-
 
 def set_objective(core, mag):
     """Set objective by magnification (e.g. 10, 20, 40, 100).
@@ -94,7 +119,49 @@ def set_objective(core, mag):
     except Exception:
         pass
     available = [lbl for _, lbl in cfg.objective_labels]
-    raise ValueError(f"No objective with magnification {mag}x found. " f"Available: {available}")
+    raise ValueError(
+        f"No objective with magnification {mag}x found. "
+        f"Available: {available}"
+    )
+
+
+def set_objective_verified(core, mag, max_wait=2.0):
+    """Set objective and verify the pixel size changed correctly.
+
+    Calls :func:`set_objective` then polls ``get_pixel_size`` to confirm
+    the expected pixel size is active. This catches silent failures where
+    the hardware command completes but the objective didn't actually switch
+    (e.g. asynchronous proxy, device busy).
+
+    Args:
+        mag: Target magnification (10, 20, 40, 100).
+        max_wait: Maximum time in seconds to wait for verification.
+
+    Raises:
+        RuntimeError: If pixel size doesn't match expected value within
+            *max_wait* seconds.
+    """
+    import time
+
+    expected_ps = _mag_to_pixel_size(mag)
+    set_objective(core, mag)
+
+    deadline = time.time() + max_wait
+    while time.time() < deadline:
+        actual_ps = get_pixel_size(core)
+        if abs(actual_ps - expected_ps) < 0.01:
+            return
+        time.sleep(0.1)
+
+    actual_ps = get_pixel_size(core)
+    if abs(actual_ps - expected_ps) < 0.01:
+        return
+
+    raise RuntimeError(
+        f"Objective switch to {mag}x failed verification: "
+        f"expected pixel_size={expected_ps:.3f} µm/px, "
+        f"got {actual_ps:.3f} µm/px after {max_wait}s"
+    )
 
 
 def get_objective(core):
@@ -130,7 +197,6 @@ def fov_size(core):
 # Z / Focus
 # ---------------------------------------------------------------------------
 
-
 def set_z(core, z, wait=True):
     """Set Z position."""
     cfg = get_config(core)
@@ -153,7 +219,6 @@ def get_z(core):
 # SLM
 # ---------------------------------------------------------------------------
 
-
 def make_slm_circle(center, radius, size=None, intensity=255, core=None):
     """Create a circular SLM mask in viewport coordinates.
 
@@ -175,7 +240,7 @@ def make_slm_circle(center, radius, size=None, intensity=255, core=None):
             size = 512
     mask = np.zeros((size, size), dtype=np.uint8)
     yy, xx = np.ogrid[:size, :size]
-    dist_sq = (xx - center[0]) ** 2 + (yy - center[1]) ** 2
+    dist_sq = (xx - center[0])**2 + (yy - center[1])**2
     mask[dist_sq <= radius**2] = intensity
     return mask
 
@@ -192,7 +257,7 @@ def apply_slm(core, mask, device=None):
         cfg = get_config(core)
         device = cfg.slm_device
         if device is None:
-            warnings.warn("No SLM device available", stacklevel=2)
+            warnings.warn("No SLM device available")
             return
     core.setSLMImage(device, mask)
     core.displaySLMImage(device)
@@ -201,7 +266,6 @@ def apply_slm(core, mask, device=None):
 # ---------------------------------------------------------------------------
 # Coordinate conversion
 # ---------------------------------------------------------------------------
-
 
 def world_to_viewport(world_x, world_y, stage_x, stage_y, viewport_size=512):
     """Convert world coordinates to viewport pixel coordinates.
@@ -222,7 +286,8 @@ def world_to_viewport(world_x, world_y, stage_x, stage_y, viewport_size=512):
     return vx, vy
 
 
-def pixel_to_world(px, py, stage_x, stage_y, config=None, core=None, mag=None):
+def pixel_to_world(px, py, stage_x, stage_y, config=None, core=None,
+                    mag=None, pixel_size=None):
     """Convert pixel coordinates to world coordinates.
 
     Uses config for image center and pixel size. Falls back to legacy
@@ -234,28 +299,35 @@ def pixel_to_world(px, py, stage_x, stage_y, config=None, core=None, mag=None):
         config: MicroscopeConfig instance (preferred).
         core: Core instance (used to get config if config is None).
         mag: Magnification override (legacy fallback).
+        pixel_size: Direct pixel size in µm/px (overrides mag).
 
     Returns:
         (world_x, world_y) tuple.
     """
     if config is not None:
         cx, cy = config.image_center_px
-        pixel_size = config.pixel_size_um
+        ps = config.pixel_size_um
     elif core is not None:
         cfg = get_config(core)
         cx, cy = cfg.image_center_px
-        pixel_size = cfg.pixel_size_um
+        ps = cfg.pixel_size_um
     else:
         # Legacy fallback
         cx, cy = 256.0, 256.0
-        pixel_size = _mag_to_pixel_size(mag) if mag else 1.0
+        if pixel_size is not None:
+            ps = pixel_size
+        elif mag is not None:
+            ps = _mag_to_pixel_size(mag)
+        else:
+            ps = 1.0
 
-    wx = stage_x + (px - cx) * pixel_size
-    wy = stage_y + (py - cy) * pixel_size
+    wx = stage_x + (px - cx) * ps
+    wy = stage_y + (py - cy) * ps
     return round(wx, 1), round(wy, 1)
 
 
-def world_to_pixel(wx, wy, stage_x, stage_y, config=None, core=None, mag=None):
+def world_to_pixel(wx, wy, stage_x, stage_y, config=None, core=None,
+                    mag=None, pixel_size=None):
     """Convert world coordinates to pixel coordinates.
 
     Args:
@@ -264,30 +336,35 @@ def world_to_pixel(wx, wy, stage_x, stage_y, config=None, core=None, mag=None):
         config: MicroscopeConfig instance (preferred).
         core: Core instance (used to get config if config is None).
         mag: Magnification override (legacy fallback).
+        pixel_size: Direct pixel size in µm/px (overrides mag).
 
     Returns:
         (px, py) tuple.
     """
     if config is not None:
         cx, cy = config.image_center_px
-        pixel_size = config.pixel_size_um
+        ps = config.pixel_size_um
     elif core is not None:
         cfg = get_config(core)
         cx, cy = cfg.image_center_px
-        pixel_size = cfg.pixel_size_um
+        ps = cfg.pixel_size_um
     else:
         cx, cy = 256.0, 256.0
-        pixel_size = _mag_to_pixel_size(mag) if mag else 1.0
+        if pixel_size is not None:
+            ps = pixel_size
+        elif mag is not None:
+            ps = _mag_to_pixel_size(mag)
+        else:
+            ps = 1.0
 
-    px_x = (wx - stage_x) / pixel_size + cx
-    py_y = (wy - stage_y) / pixel_size + cy
+    px_x = (wx - stage_x) / ps + cx
+    py_y = (wy - stage_y) / ps + cy
     return round(px_x, 1), round(py_y, 1)
 
 
 # ---------------------------------------------------------------------------
 # MDA helpers
 # ---------------------------------------------------------------------------
-
 
 def run_events(core, events, on_frame=None):
     """Execute MDAEvent generators via core.mda.run() with optional frame callback.
@@ -304,6 +381,15 @@ def run_events(core, events, on_frame=None):
     Currently handled:
         CustomAction(name='switch_objective', data={'mag': <int>})
 
+    If MDA engine fails (e.g. device configuration issues on the server),
+    automatically falls back to snap-based acquisition with manual channel
+    switching and timing.
+
+    **Generator support:** Generators are processed lazily (one event at a
+    time) to preserve side effects between yields (e.g., SLM device
+    control). Lists and other iterables are materialized so they can be
+    retried with the MDA engine fallback.
+
     Args:
         core: Microscope core (CMMCorePlus or RemoteMMCore proxy).
         events: Iterable of MDAEvent objects (generator, list, or MDASequence).
@@ -312,6 +398,27 @@ def run_events(core, events, on_frame=None):
     Returns:
         list of (image, event) tuples for all acquired frames.
     """
+    import types
+
+    def _filtered(events):
+        """Strip CustomAction events and execute them inline."""
+        for event in events:
+            action = getattr(event, 'action', None)
+            if action is not None and type(action).__name__ == 'CustomAction':
+                if action.name == 'switch_objective':
+                    set_objective(core, action.data.get('mag', 10))
+            else:
+                yield event
+
+    # Generators may have side effects between yields (e.g., SLM control).
+    # Process them lazily via manual acquisition to preserve those effects.
+    is_generator = isinstance(events, types.GeneratorType)
+
+    if is_generator:
+        return _manual_run(core, _filtered(events), on_frame)
+
+    # For lists/tuples/MDASequence: materialize and try MDA engine first
+    event_list = list(events)
     frames = []
 
     def _handler(image, event, meta=None):
@@ -319,20 +426,118 @@ def run_events(core, events, on_frame=None):
         if on_frame is not None:
             on_frame(image, event)
 
-    def _filtered(events):
-        """Strip CustomAction events and execute them inline."""
-        for event in events:
-            action = getattr(event, "action", None)
-            if action is not None and type(action).__name__ == "CustomAction":
-                if action.name == "switch_objective":
-                    set_objective(core, action.data.get("mag", 10))
-                # Don't forward to the engine — no image to acquire
-            else:
-                yield event
-
-    core.mda.events.frameReady.connect(_handler)
     try:
-        core.mda.run(_filtered(events))
-    finally:
-        core.mda.events.frameReady.disconnect(_handler)
+        core.mda.events.frameReady.connect(_handler)
+        try:
+            core.mda.run(_filtered(event_list))
+        finally:
+            core.mda.events.frameReady.disconnect(_handler)
+        return frames
+    except Exception as e:
+        err = str(e)
+        _retriable = (
+            "No device with label" in err
+            or "websocket" in err.lower()
+            or "connection" in err.lower()
+            or "websockets" in type(e).__module__
+            or type(e).__name__ in ("ConnectionClosedError", "ConnectionClosedOK",
+                                    "WebSocketDisconnect", "TimeoutError")
+        )
+        if not _retriable:
+            raise
+        import warnings
+        warnings.warn(f"MDA engine error ({type(e).__name__}: {e}) — retrying with manual acquisition")
+
+    return _manual_run(core, _filtered(event_list), on_frame)
+
+
+def _manual_run(core, events, on_frame=None):
+    """Manual snap-based acquisition fallback.
+
+    Processes events lazily (one at a time), preserving any side effects
+    the caller may have between event yields (e.g., SLM device control).
+    """
+    import time
+    frames = []
+    t0 = time.time()
+    for event in events:
+        # Apply timing
+        min_start = getattr(event, 'min_start_time', None)
+        if min_start is not None:
+            target = t0 + min_start
+            now = time.time()
+            if now < target:
+                time.sleep(target - now)
+
+        # Apply channel
+        ch = getattr(event, 'channel', None)
+        if ch is not None:
+            group = getattr(ch, 'group', None)
+            config = getattr(ch, 'config', None)
+            if group and config:
+                core.setConfig(group, config)
+                core.waitForConfig(group, config)
+
+        # Apply exposure
+        exposure = getattr(event, 'exposure', None)
+        if exposure is not None:
+            core.setExposure(exposure)
+
+        # Apply stage position
+        x_pos = getattr(event, 'x_pos', None)
+        y_pos = getattr(event, 'y_pos', None)
+        if x_pos is not None and y_pos is not None:
+            core.setXYPosition(x_pos, y_pos)
+            core.waitForDevice(core.getXYStageDevice())
+
+        z_pos = getattr(event, 'z_pos', None)
+        if z_pos is not None:
+            core.setPosition(z_pos)
+            core.waitForDevice(core.getFocusDevice())
+
+        # Snap and collect
+        core.snapImage()
+        image = core.getImage()
+        frames.append((image.copy(), event))
+        if on_frame is not None:
+            on_frame(image, event)
+
     return frames
+
+
+def timelapse(core, n_frames, interval_s=1.0, channel=None, exposure=None,
+              on_frame=None):
+    """Acquire a timelapse via the MDA engine.
+
+    Convenience wrapper around :func:`run_events` that handles the most
+    common acquisition pattern: N frames at fixed interval in one channel.
+    Returns a 3D numpy stack (T, H, W) ready for analysis.
+
+    Args:
+        core: Microscope core (CMMCorePlus or proxy).
+        n_frames: Number of frames to acquire.
+        interval_s: Interval between frames in seconds.
+        channel: Channel config name (e.g. 'GFP', 'brightfield').
+            If None, uses whatever is currently set.
+        exposure: Exposure time in ms. If None, uses current.
+        on_frame: Optional callback(image, event) per frame.
+
+    Returns:
+        np.ndarray: 3D array (T, H, W) of acquired frames.
+    """
+    from useq import MDASequence
+
+    seq_kwargs = {
+        'time_plan': {'loops': int(n_frames), 'interval': float(interval_s)},
+    }
+    if channel is not None:
+        cfg = get_config(core)
+        group = cfg.channel_group or 'Channel'
+        seq_kwargs['channels'] = [{'config': channel, 'group': group}]
+    if exposure is not None:
+        if 'channels' in seq_kwargs:
+            seq_kwargs['channels'][0]['exposure'] = float(exposure)
+
+    seq = MDASequence(**seq_kwargs)
+    frames = run_events(core, list(seq), on_frame=on_frame)
+    return np.array([f[0] for f in frames])

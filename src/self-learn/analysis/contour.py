@@ -52,7 +52,7 @@ def shape_descriptors(mask):
         perimeter = 1.0
 
     # Circularity
-    circularity = 4 * np.pi * area / (perimeter**2)
+    circularity = 4 * np.pi * area / (perimeter ** 2)
     circularity = min(circularity, 1.0)
 
     # Convex hull (simple approach using labeled image moments)
@@ -89,7 +89,7 @@ def shape_descriptors(mask):
 
     aspect_ratio = major / minor
     compactness = np.sqrt(4 * area / np.pi) / major
-    roundness = 4 * area / (np.pi * major**2)
+    roundness = 4 * area / (np.pi * major ** 2)
 
     # Extent
     r_range = rows.max() - rows.min() + 1
@@ -98,19 +98,19 @@ def shape_descriptors(mask):
     extent = area / max(bbox_area, 1)
 
     return {
-        "area": area,
-        "perimeter": round(perimeter, 2),
-        "circularity": round(float(circularity), 4),
-        "convexity": round(float(min(convexity, 1.5)), 4),
-        "solidity": round(float(min(solidity, 1.0)), 4),
-        "compactness": round(float(compactness), 4),
-        "aspect_ratio": round(float(aspect_ratio), 4),
-        "extent": round(float(extent), 4),
-        "roundness": round(float(roundness), 4),
-        "centroid": (round(float(cy), 2), round(float(cx), 2)),
-        "major_axis": round(major, 2),
-        "minor_axis": round(minor, 2),
-        "orientation": round(float(np.degrees(theta)), 2),
+        'area': area,
+        'perimeter': round(perimeter, 2),
+        'circularity': round(float(circularity), 4),
+        'convexity': round(float(min(convexity, 1.5)), 4),
+        'solidity': round(float(min(solidity, 1.0)), 4),
+        'compactness': round(float(compactness), 4),
+        'aspect_ratio': round(float(aspect_ratio), 4),
+        'extent': round(float(extent), 4),
+        'roundness': round(float(roundness), 4),
+        'centroid': (round(float(cy), 2), round(float(cx), 2)),
+        'major_axis': round(major, 2),
+        'minor_axis': round(minor, 2),
+        'orientation': round(float(np.degrees(theta)), 2),
     }
 
 
@@ -131,7 +131,7 @@ def fourier_descriptors(contour, n_descriptors=16):
     """
     pts = np.asarray(contour, dtype=np.float64)
     if len(pts) < 4:
-        return {"descriptors": np.zeros(n_descriptors), "n_points": len(pts)}
+        return {'descriptors': np.zeros(n_descriptors), 'n_points': len(pts)}
 
     # Complex representation
     z = pts[:, 1] + 1j * pts[:, 0]  # col + i*row
@@ -149,15 +149,15 @@ def fourier_descriptors(contour, n_descriptors=16):
 
     # Take requested number of descriptors (symmetric around DC)
     n = min(n_descriptors, len(magnitudes) // 2)
-    desc = magnitudes[1 : n + 1]
+    desc = magnitudes[1:n + 1]
 
     # Pad if needed
     if len(desc) < n_descriptors:
         desc = np.concatenate([desc, np.zeros(n_descriptors - len(desc))])
 
     return {
-        "descriptors": desc[:n_descriptors],
-        "n_points": len(pts),
+        'descriptors': desc[:n_descriptors],
+        'n_points': len(pts),
     }
 
 
@@ -177,11 +177,11 @@ def match_shape(contour1, contour2, n_descriptors=16):
     fd1 = fourier_descriptors(contour1, n_descriptors)
     fd2 = fourier_descriptors(contour2, n_descriptors)
 
-    d = float(np.sqrt(np.sum((fd1["descriptors"] - fd2["descriptors"]) ** 2)))
+    d = float(np.sqrt(np.sum((fd1['descriptors'] - fd2['descriptors']) ** 2)))
 
     return {
-        "distance": round(d, 4),
-        "similarity": round(1.0 / (1.0 + d), 4),
+        'distance': round(d, 4),
+        'similarity': round(1.0 / (1.0 + d), 4),
     }
 
 
@@ -231,43 +231,35 @@ def classify_shape(mask, circularity_threshold=0.7, aspect_threshold=2.0):
             confidence: How clearly it fits the class (0-1).
     """
     desc = shape_descriptors(mask)
-    circ = desc["circularity"]
-    ar = desc["aspect_ratio"]
+    circ = desc['circularity']
+    ar = desc['aspect_ratio']
 
     if circ >= circularity_threshold and ar < aspect_threshold:
-        shape_class = "round"
+        shape_class = 'round'
         confidence = circ
     elif ar >= aspect_threshold:
-        shape_class = "elongated"
+        shape_class = 'elongated'
         confidence = min(ar / 5.0, 1.0)
     else:
-        shape_class = "irregular"
+        shape_class = 'irregular'
         confidence = 1.0 - circ
 
     return {
-        "shape_class": shape_class,
-        "circularity": circ,
-        "aspect_ratio": ar,
-        "confidence": round(float(confidence), 3),
+        'shape_class': shape_class,
+        'circularity': circ,
+        'aspect_ratio': ar,
+        'confidence': round(float(confidence), 3),
     }
 
 
 def _empty_descriptors():
     """Return empty shape descriptors."""
     return {
-        "area": 0,
-        "perimeter": 0.0,
-        "circularity": 0.0,
-        "convexity": 0.0,
-        "solidity": 0.0,
-        "compactness": 0.0,
-        "aspect_ratio": 1.0,
-        "extent": 0.0,
-        "roundness": 0.0,
-        "centroid": (0.0, 0.0),
-        "major_axis": 0.0,
-        "minor_axis": 0.0,
-        "orientation": 0.0,
+        'area': 0, 'perimeter': 0.0,
+        'circularity': 0.0, 'convexity': 0.0, 'solidity': 0.0,
+        'compactness': 0.0, 'aspect_ratio': 1.0, 'extent': 0.0,
+        'roundness': 0.0, 'centroid': (0.0, 0.0),
+        'major_axis': 0.0, 'minor_axis': 0.0, 'orientation': 0.0,
     }
 
 
@@ -276,19 +268,11 @@ def _minimal_descriptors(area, perimeter, rows, cols):
     cy = float(rows.mean()) if len(rows) > 0 else 0.0
     cx = float(cols.mean()) if len(cols) > 0 else 0.0
     return {
-        "area": area,
-        "perimeter": round(perimeter, 2),
-        "circularity": 1.0,
-        "convexity": 1.0,
-        "solidity": 1.0,
-        "compactness": 1.0,
-        "aspect_ratio": 1.0,
-        "extent": 1.0,
-        "roundness": 1.0,
-        "centroid": (cy, cx),
-        "major_axis": 1.0,
-        "minor_axis": 1.0,
-        "orientation": 0.0,
+        'area': area, 'perimeter': round(perimeter, 2),
+        'circularity': 1.0, 'convexity': 1.0, 'solidity': 1.0,
+        'compactness': 1.0, 'aspect_ratio': 1.0, 'extent': 1.0,
+        'roundness': 1.0, 'centroid': (cy, cx),
+        'major_axis': 1.0, 'minor_axis': 1.0, 'orientation': 0.0,
     }
 
 
@@ -306,8 +290,8 @@ def _convex_hull_metrics(rows, cols):
     points = points[idx]
 
     # Build upper and lower hulls
-    def cross(pt_o, A, B):
-        return (A[0] - pt_o[0]) * (B[1] - pt_o[1]) - (A[1] - pt_o[1]) * (B[0] - pt_o[0])
+    def cross(O, A, B):
+        return (A[0] - O[0]) * (B[1] - O[1]) - (A[1] - O[1]) * (B[0] - O[0])
 
     lower = []
     for p in points:
@@ -333,6 +317,6 @@ def _convex_hull_metrics(rows, cols):
 
     # Perimeter
     diffs = np.diff(np.vstack([hull_arr, hull_arr[0:1]]), axis=0)
-    perimeter = float(np.sum(np.sqrt(np.sum(diffs**2, axis=1))))
+    perimeter = float(np.sum(np.sqrt(np.sum(diffs ** 2, axis=1))))
 
     return float(area), perimeter

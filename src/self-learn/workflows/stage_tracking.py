@@ -19,15 +19,16 @@ Design:
 """
 
 import math
-
+import numpy as np
 from useq import MDAEvent
 
 from ..hardware import core as hw
+from ..hardware.config import resolve_brightfield_channel
+
 
 # ---------------------------------------------------------------------------
 # Tracker state
 # ---------------------------------------------------------------------------
-
 
 def make_tracker(target_world_x, target_world_y):
     """Create a new tracker state dict.
@@ -39,21 +40,20 @@ def make_tracker(target_world_x, target_world_y):
         dict with position, velocity, history, and status fields.
     """
     return {
-        "x": float(target_world_x),
-        "y": float(target_world_y),
-        "vx": 0.0,
-        "vy": 0.0,
-        "history": [(float(target_world_x), float(target_world_y))],
-        "step": 0,
-        "lost_count": 0,
-        "status": "tracking",  # 'tracking', 'lost', 'recovered'
+        'x': float(target_world_x),
+        'y': float(target_world_y),
+        'vx': 0.0,
+        'vy': 0.0,
+        'history': [(float(target_world_x), float(target_world_y))],
+        'step': 0,
+        'lost_count': 0,
+        'status': 'tracking',  # 'tracking', 'lost', 'recovered'
     }
 
 
 # ---------------------------------------------------------------------------
 # Motion prediction
 # ---------------------------------------------------------------------------
-
 
 def predict_position(tracker, n_steps=1):
     """Predict target position using linear velocity extrapolation.
@@ -68,8 +68,8 @@ def predict_position(tracker, n_steps=1):
     Returns:
         (predicted_x, predicted_y) tuple.
     """
-    px = tracker["x"] + tracker["vx"] * n_steps
-    py = tracker["y"] + tracker["vy"] * n_steps
+    px = tracker['x'] + tracker['vx'] * n_steps
+    py = tracker['y'] + tracker['vy'] * n_steps
     return float(px), float(py)
 
 
@@ -81,18 +81,18 @@ def update_velocity(tracker, new_x, new_y, smoothing=0.5):
         new_x, new_y: New observed position.
         smoothing: Weight of new measurement (0-1). Higher = more responsive.
     """
-    dx = new_x - tracker["x"]
-    dy = new_y - tracker["y"]
-    tracker["vx"] = smoothing * dx + (1 - smoothing) * tracker["vx"]
-    tracker["vy"] = smoothing * dy + (1 - smoothing) * tracker["vy"]
+    dx = new_x - tracker['x']
+    dy = new_y - tracker['y']
+    tracker['vx'] = smoothing * dx + (1 - smoothing) * tracker['vx']
+    tracker['vy'] = smoothing * dy + (1 - smoothing) * tracker['vy']
 
 
 # ---------------------------------------------------------------------------
 # Core tracking operations
 # ---------------------------------------------------------------------------
 
-
-def locate_target(core, tracker, channel="brightfield", detect_fn=None, max_match_dist=100):
+def locate_target(core, tracker, channel=None,
+                  detect_fn=None, max_match_dist=100):
     """Snap an image and find the tracked target.
 
     Snaps at current stage position, detects objects, matches the closest
@@ -115,6 +115,7 @@ def locate_target(core, tracker, channel="brightfield", detect_fn=None, max_matc
             n_detections: how many objects were detected
             match_dist: distance to matched target (or None)
     """
+    channel = resolve_brightfield_channel(core, channel) or 'brightfield'
     img = hw.snap(core, channel=channel)
     sx, sy = hw.get_position(core)
 
@@ -126,14 +127,9 @@ def locate_target(core, tracker, channel="brightfield", detect_fn=None, max_matc
 
     if not centroids_px:
         return {
-            "found": False,
-            "world_x": None,
-            "world_y": None,
-            "pixel_x": None,
-            "pixel_y": None,
-            "image": img,
-            "n_detections": 0,
-            "match_dist": None,
+            'found': False, 'world_x': None, 'world_y': None,
+            'pixel_x': None, 'pixel_y': None,
+            'image': img, 'n_detections': 0, 'match_dist': None,
         }
 
     # Convert to world coords (prefer core-based config discovery)
@@ -146,7 +142,7 @@ def locate_target(core, tracker, channel="brightfield", detect_fn=None, max_matc
     pred_x, pred_y = predict_position(tracker)
 
     # Find closest detection to prediction
-    best_idx, best_dist = -1, float("inf")
+    best_idx, best_dist = -1, float('inf')
     for i, (wx, wy) in enumerate(world_pts):
         d = math.hypot(wx - pred_x, wy - pred_y)
         if d < best_dist:
@@ -155,34 +151,28 @@ def locate_target(core, tracker, channel="brightfield", detect_fn=None, max_matc
 
     if best_dist > max_match_dist:
         return {
-            "found": False,
-            "world_x": None,
-            "world_y": None,
-            "pixel_x": None,
-            "pixel_y": None,
-            "image": img,
-            "n_detections": len(centroids_px),
-            "match_dist": round(best_dist, 2),
+            'found': False, 'world_x': None, 'world_y': None,
+            'pixel_x': None, 'pixel_y': None,
+            'image': img, 'n_detections': len(centroids_px),
+            'match_dist': round(best_dist, 2),
         }
 
     wx, wy = world_pts[best_idx]
     px_x, px_y = centroids_px[best_idx]
 
     return {
-        "found": True,
-        "world_x": wx,
-        "world_y": wy,
-        "pixel_x": px_x,
-        "pixel_y": px_y,
-        "image": img,
-        "n_detections": len(centroids_px),
-        "match_dist": round(best_dist, 2),
+        'found': True,
+        'world_x': wx, 'world_y': wy,
+        'pixel_x': px_x, 'pixel_y': px_y,
+        'image': img,
+        'n_detections': len(centroids_px),
+        'match_dist': round(best_dist, 2),
     }
 
 
-def center_on_target(
-    core, tracker, channel="brightfield", detect_fn=None, max_match_dist=100, velocity_smoothing=0.5
-):
+def center_on_target(core, tracker, channel=None,
+                     detect_fn=None, max_match_dist=100,
+                     velocity_smoothing=0.5):
     """One tracking step: locate target, update state, move stage to re-center.
 
     Args:
@@ -196,34 +186,33 @@ def center_on_target(
     Returns:
         dict with locate_target result plus 'moved' bool.
     """
-    result = locate_target(
-        core, tracker, channel=channel, detect_fn=detect_fn, max_match_dist=max_match_dist
-    )
+    result = locate_target(core, tracker, channel=channel,
+                           detect_fn=detect_fn,
+                           max_match_dist=max_match_dist)
 
-    if result["found"]:
-        new_x, new_y = result["world_x"], result["world_y"]
+    if result['found']:
+        new_x, new_y = result['world_x'], result['world_y']
         update_velocity(tracker, new_x, new_y, smoothing=velocity_smoothing)
-        tracker["x"] = new_x
-        tracker["y"] = new_y
-        tracker["history"].append((new_x, new_y))
-        tracker["step"] += 1
-        tracker["lost_count"] = 0
-        tracker["status"] = "tracking"
+        tracker['x'] = new_x
+        tracker['y'] = new_y
+        tracker['history'].append((new_x, new_y))
+        tracker['step'] += 1
+        tracker['lost_count'] = 0
+        tracker['status'] = 'tracking'
 
         # Move stage to center on target
         hw.move_to(core, new_x, new_y)
-        result["moved"] = True
+        result['moved'] = True
     else:
-        tracker["lost_count"] += 1
-        tracker["status"] = "lost"
-        result["moved"] = False
+        tracker['lost_count'] += 1
+        tracker['status'] = 'lost'
+        result['moved'] = False
 
     return result
 
 
-def spiral_search(
-    core, tracker, channel="brightfield", detect_fn=None, step_size=None, max_rings=3
-):
+def spiral_search(core, tracker, channel=None,
+                  detect_fn=None, step_size=None, max_rings=3):
     """Search for lost target in expanding spiral pattern.
 
     Moves stage in a spiral around the last known (or predicted) position.
@@ -266,27 +255,24 @@ def spiral_search(
         # Use a temporary tracker centered on search position so match
         # distance is relative to FOV center, not the old prediction
         search_tracker = make_tracker(sx, sy)
-        result = locate_target(
-            core, search_tracker, channel=channel, detect_fn=detect_fn, max_match_dist=fov / 2
-        )
+        result = locate_target(core, search_tracker, channel=channel,
+                               detect_fn=detect_fn,
+                               max_match_dist=fov / 2)
         positions_searched += 1
 
-        if result["found"]:
+        if result['found']:
             _apply_found(tracker, result, core=core)
             return {
-                "found": True,
-                "world_x": result["world_x"],
-                "world_y": result["world_y"],
-                "n_positions_searched": positions_searched,
-                "ring_found": ring,
+                'found': True,
+                'world_x': result['world_x'],
+                'world_y': result['world_y'],
+                'n_positions_searched': positions_searched,
+                'ring_found': ring,
             }
 
     return {
-        "found": False,
-        "world_x": None,
-        "world_y": None,
-        "n_positions_searched": positions_searched,
-        "ring_found": None,
+        'found': False, 'world_x': None, 'world_y': None,
+        'n_positions_searched': positions_searched, 'ring_found': None,
     }
 
 
@@ -294,20 +280,11 @@ def spiral_search(
 # Full tracking loop
 # ---------------------------------------------------------------------------
 
-
-def track_target(
-    core,
-    tracker,
-    n_steps=10,
-    channel="brightfield",
-    detect_fn=None,
-    max_match_dist=100,
-    velocity_smoothing=0.5,
-    on_step=None,
-    search_on_loss=True,
-    max_search_rings=3,
-    advance_fn=None,
-):
+def track_target(core, tracker, n_steps=10, channel=None,
+                 detect_fn=None, max_match_dist=100,
+                 velocity_smoothing=0.5, on_step=None,
+                 search_on_loss=True, max_search_rings=3,
+                 advance_fn=None):
     """Run N steps of closed-loop target tracking.
 
     At each step:
@@ -347,42 +324,36 @@ def track_target(
             advance_fn()
 
         result = center_on_target(
-            core,
-            tracker,
-            channel=channel,
-            detect_fn=detect_fn,
+            core, tracker, channel=channel, detect_fn=detect_fn,
             max_match_dist=max_match_dist,
             velocity_smoothing=velocity_smoothing,
         )
 
-        if not result["found"] and search_on_loss:
+        if not result['found'] and search_on_loss:
             search = spiral_search(
-                core,
-                tracker,
-                channel=channel,
-                detect_fn=detect_fn,
+                core, tracker, channel=channel, detect_fn=detect_fn,
                 max_rings=max_search_rings,
             )
-            if search["found"]:
-                tracker["status"] = "recovered"
+            if search['found']:
+                tracker['status'] = 'recovered'
             else:
                 steps_lost += 1
 
-        elif not result["found"]:
+        elif not result['found']:
             steps_lost += 1
             # Use prediction to keep moving
             pred_x, pred_y = predict_position(tracker)
-            tracker["x"] = pred_x
-            tracker["y"] = pred_y
-            tracker["history"].append((pred_x, pred_y))
-            tracker["step"] += 1
+            tracker['x'] = pred_x
+            tracker['y'] = pred_y
+            tracker['history'].append((pred_x, pred_y))
+            tracker['step'] += 1
             hw.move_to(core, pred_x, pred_y)
 
         if on_step is not None:
             on_step(step, tracker, result)
 
     # Compute trajectory stats
-    traj = tracker["history"]
+    traj = tracker['history']
     total_dist = 0.0
     for i in range(1, len(traj)):
         dx = traj[i][0] - traj[i - 1][0]
@@ -392,13 +363,13 @@ def track_target(
     n_steps_actual = max(len(traj) - 1, 1)
 
     return {
-        "trajectory": list(traj),
-        "steps_completed": len(traj) - 1,
-        "steps_lost": steps_lost,
-        "total_distance": round(total_dist, 2),
-        "mean_step_size": round(total_dist / n_steps_actual, 2),
-        "final_status": tracker["status"],
-        "velocity": (round(tracker["vx"], 3), round(tracker["vy"], 3)),
+        'trajectory': list(traj),
+        'steps_completed': len(traj) - 1,
+        'steps_lost': steps_lost,
+        'total_distance': round(total_dist, 2),
+        'mean_step_size': round(total_dist / n_steps_actual, 2),
+        'final_status': tracker['status'],
+        'velocity': (round(tracker['vx'], 3), round(tracker['vy'], 3)),
     }
 
 
@@ -406,19 +377,11 @@ def track_target(
 # MDA-native tracking
 # ---------------------------------------------------------------------------
 
-
-def track_target_mda(
-    initial_x,
-    initial_y,
-    n_steps=10,
-    channel="brightfield",
-    exposure=50.0,
-    detect_fn=None,
-    max_match_dist=100,
-    velocity_smoothing=0.5,
-    pixel_size=1.0,
-    image_center=256,
-):
+def track_target_mda(initial_x, initial_y, n_steps=10,
+                     channel=None, exposure=50.0,
+                     detect_fn=None, max_match_dist=100,
+                     velocity_smoothing=0.5, pixel_size=1.0,
+                     image_center=256):
     """MDA-native closed-loop tracking via generator + on_frame.
 
     Returns (event_generator, on_frame, state) for use with run_events().
@@ -455,16 +418,16 @@ def track_target_mda(
     tracker = make_tracker(initial_x, initial_y)
 
     state = {
-        "tracker": tracker,
-        "steps_lost": 0,
-        "images": [],
+        'tracker': tracker,
+        'steps_lost': 0,
+        'images': [],
     }
 
     def on_frame(image, event, meta=None):
         """Detect target in image and update tracker state."""
         t = tracker  # alias
-        sx = event.x_pos if event.x_pos is not None else t["x"]
-        sy = event.y_pos if event.y_pos is not None else t["y"]
+        sx = event.x_pos if event.x_pos is not None else t['x']
+        sy = event.y_pos if event.y_pos is not None else t['y']
 
         # Detect objects
         if detect_fn is not None:
@@ -473,16 +436,16 @@ def track_target_mda(
             centroids_px = _default_detect(image)
 
         if not centroids_px:
-            t["lost_count"] += 1
-            t["status"] = "lost"
-            state["steps_lost"] += 1
+            t['lost_count'] += 1
+            t['status'] = 'lost'
+            state['steps_lost'] += 1
             # Use velocity prediction
             pred_x, pred_y = predict_position(t)
-            t["x"] = pred_x
-            t["y"] = pred_y
-            t["history"].append((pred_x, pred_y))
-            t["step"] += 1
-            state["images"].append(image)
+            t['x'] = pred_x
+            t['y'] = pred_y
+            t['history'].append((pred_x, pred_y))
+            t['step'] += 1
+            state['images'].append(image)
             return
 
         # Convert pixel centroids to world coordinates
@@ -495,7 +458,7 @@ def track_target_mda(
 
         # Match closest to prediction
         pred_x, pred_y = predict_position(t)
-        best_idx, best_dist = -1, float("inf")
+        best_idx, best_dist = -1, float('inf')
         for i, (wx, wy) in enumerate(world_pts):
             d = math.hypot(wx - pred_x, wy - pred_y)
             if d < best_dist:
@@ -503,35 +466,35 @@ def track_target_mda(
                 best_idx = i
 
         if best_dist > max_match_dist:
-            t["lost_count"] += 1
-            t["status"] = "lost"
-            state["steps_lost"] += 1
+            t['lost_count'] += 1
+            t['status'] = 'lost'
+            state['steps_lost'] += 1
             pred_x, pred_y = predict_position(t)
-            t["x"] = pred_x
-            t["y"] = pred_y
-            t["history"].append((pred_x, pred_y))
+            t['x'] = pred_x
+            t['y'] = pred_y
+            t['history'].append((pred_x, pred_y))
         else:
             new_x, new_y = world_pts[best_idx]
             update_velocity(t, new_x, new_y, smoothing=velocity_smoothing)
-            t["x"] = new_x
-            t["y"] = new_y
-            t["history"].append((new_x, new_y))
-            t["lost_count"] = 0
-            t["status"] = "tracking"
+            t['x'] = new_x
+            t['y'] = new_y
+            t['history'].append((new_x, new_y))
+            t['lost_count'] = 0
+            t['status'] = 'tracking'
 
-        t["step"] += 1
-        state["images"].append(image)
+        t['step'] += 1
+        state['images'].append(image)
 
     def event_generator():
         """Yield tracking MDAEvents with dynamic positions."""
         for step in range(n_steps):
-            x, y = tracker["x"], tracker["y"]
+            x, y = tracker['x'], tracker['y']
             yield MDAEvent(
                 x_pos=float(x),
                 y_pos=float(y),
                 exposure=exposure,
-                channel={"config": channel},
-                index={"t": step},
+                channel={'config': channel} if channel else None,
+                index={'t': step},
             )
 
     return event_generator, on_frame, state
@@ -541,15 +504,12 @@ def track_target_mda(
 # Helpers
 # ---------------------------------------------------------------------------
 
-
 def _default_detect(image, threshold_sigma=2.5, min_area_px=30):
     """Default detection: threshold-based, returns list of (cx, cy) pixel coords."""
     from ..detection.cells import detect_cells
-
-    cells = detect_cells(
-        image, threshold_sigma=threshold_sigma, min_area_px=min_area_px, fill_holes=True
-    )
-    return [(c["centroid_px"][0], c["centroid_px"][1]) for c in cells]
+    cells = detect_cells(image, threshold_sigma=threshold_sigma,
+                         min_area_px=min_area_px, fill_holes=True)
+    return [(c['centroid_px'][0], c['centroid_px'][1]) for c in cells]
 
 
 def _ring_offsets(ring, step_size):
@@ -567,14 +527,14 @@ def _ring_offsets(ring, step_size):
 
 def _apply_found(tracker, locate_result, core=None):
     """Update tracker when target is found during search."""
-    new_x, new_y = locate_result["world_x"], locate_result["world_y"]
+    new_x, new_y = locate_result['world_x'], locate_result['world_y']
     update_velocity(tracker, new_x, new_y, smoothing=0.3)
-    tracker["x"] = new_x
-    tracker["y"] = new_y
-    tracker["history"].append((new_x, new_y))
-    tracker["step"] += 1
-    tracker["lost_count"] = 0
-    tracker["status"] = "recovered"
+    tracker['x'] = new_x
+    tracker['y'] = new_y
+    tracker['history'].append((new_x, new_y))
+    tracker['step'] += 1
+    tracker['lost_count'] = 0
+    tracker['status'] = 'recovered'
     if core is not None:
         hw.move_to(core, new_x, new_y)
 
@@ -583,17 +543,9 @@ def _apply_found(tracker, locate_result, core=None):
 # Multi-target tracking
 # ---------------------------------------------------------------------------
 
-
-def track_multiple(
-    core,
-    targets,
-    n_rounds=5,
-    channel="brightfield",
-    detect_fn=None,
-    max_match_dist=100,
-    velocity_smoothing=0.5,
-    advance_fn=None,
-):
+def track_multiple(core, targets, n_rounds=5, channel=None,
+                   detect_fn=None, max_match_dist=100,
+                   velocity_smoothing=0.5, advance_fn=None):
     """Track multiple targets in round-robin fashion.
 
     At each round, visits each target's predicted position, snaps,
@@ -618,16 +570,13 @@ def track_multiple(
     """
     total_snaps = 0
 
-    for _round_idx in range(n_rounds):
-        for _t_idx, tracker in enumerate(targets):
+    for round_idx in range(n_rounds):
+        for t_idx, tracker in enumerate(targets):
             if advance_fn is not None:
                 advance_fn()
 
-            center_on_target(
-                core,
-                tracker,
-                channel=channel,
-                detect_fn=detect_fn,
+            result = center_on_target(
+                core, tracker, channel=channel, detect_fn=detect_fn,
                 max_match_dist=max_match_dist,
                 velocity_smoothing=velocity_smoothing,
             )
@@ -636,25 +585,23 @@ def track_multiple(
     # Summarize
     per_target = []
     for tracker in targets:
-        traj = tracker["history"]
+        traj = tracker['history']
         total_dist = 0.0
         for i in range(1, len(traj)):
             dx = traj[i][0] - traj[i - 1][0]
             dy = traj[i][1] - traj[i - 1][1]
             total_dist += math.hypot(dx, dy)
 
-        per_target.append(
-            {
-                "trajectory": list(traj),
-                "total_distance": round(total_dist, 2),
-                "steps": len(traj) - 1,
-                "lost_count": tracker["lost_count"],
-                "status": tracker["status"],
-            }
-        )
+        per_target.append({
+            'trajectory': list(traj),
+            'total_distance': round(total_dist, 2),
+            'steps': len(traj) - 1,
+            'lost_count': tracker['lost_count'],
+            'status': tracker['status'],
+        })
 
     return {
-        "trackers": targets,
-        "per_target": per_target,
-        "total_snaps": total_snaps,
+        'trackers': targets,
+        'per_target': per_target,
+        'total_snaps': total_snaps,
     }

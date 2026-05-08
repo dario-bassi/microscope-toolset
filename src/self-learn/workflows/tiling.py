@@ -15,7 +15,7 @@ Functions:
 import numpy as np
 
 
-def tile_positions(bbox, fov_size, overlap=0.1):
+def tile_positions(bbox, fov_size, overlap=0.1, serpentine=False):
     """Compute grid of stage positions covering a bounding box.
 
     Args:
@@ -23,6 +23,9 @@ def tile_positions(bbox, fov_size, overlap=0.1):
         fov_size: (width, height) of one field of view in world coords.
             Or a single number for square FOV.
         overlap: Fractional overlap between adjacent tiles (0.0-0.5).
+        serpentine: If True, alternate row scan direction (boustrophedon).
+            Row 0 left-to-right, row 1 right-to-left, etc.
+            Minimizes stage travel time.
 
     Returns:
         dict with:
@@ -55,16 +58,19 @@ def tile_positions(bbox, fov_size, overlap=0.1):
 
     positions = []
     for row in range(n_rows):
-        for col in range(n_cols):
+        cols = range(n_cols)
+        if serpentine and row % 2 == 1:
+            cols = reversed(cols)
+        for col in cols:
             x = x_start + col * step_x
             y = y_start + row * step_y
             positions.append((float(x), float(y)))
 
     return {
-        "positions": positions,
-        "grid_shape": (n_cols, n_rows),
-        "step": (float(step_x), float(step_y)),
-        "n_tiles": len(positions),
+        'positions': positions,
+        'grid_shape': (n_cols, n_rows),
+        'step': (float(step_x), float(step_y)),
+        'n_tiles': len(positions),
     }
 
 
@@ -87,7 +93,8 @@ def stitch_tiles(tiles, grid_shape, overlap_px=0):
             tile_origins: List of (x, y) pixel origins of each tile.
     """
     n_cols, n_rows = grid_shape
-    assert len(tiles) == n_cols * n_rows, f"Expected {n_cols * n_rows} tiles, got {len(tiles)}"
+    assert len(tiles) == n_cols * n_rows, (
+        f"Expected {n_cols * n_rows} tiles, got {len(tiles)}")
 
     tile_h, tile_w = tiles[0].shape[:2]
 
@@ -107,12 +114,13 @@ def stitch_tiles(tiles, grid_shape, overlap_px=0):
             oy = row * step_y
             origins.append((ox, oy))
 
-            region = mosaic[oy : oy + tile_h, ox : ox + tile_w]
-            mosaic[oy : oy + tile_h, ox : ox + tile_w] = np.maximum(region, tiles[idx])
+            region = mosaic[oy:oy + tile_h, ox:ox + tile_w]
+            mosaic[oy:oy + tile_h, ox:ox + tile_w] = np.maximum(
+                region, tiles[idx])
 
     return {
-        "mosaic": mosaic,
-        "tile_origins": origins,
+        'mosaic': mosaic,
+        'tile_origins': origins,
     }
 
 
@@ -173,13 +181,13 @@ def phase_correlation(img1, img2):
     confidence = peak_val / max(mean_corr, 1e-10)
 
     return {
-        "shift_y": int(dy),
-        "shift_x": int(dx),
-        "confidence": round(float(confidence), 2),
+        'shift_y': int(dy),
+        'shift_x': int(dx),
+        'confidence': round(float(confidence), 2),
     }
 
 
-def align_tile_pair(tile1, tile2, overlap_px, direction="horizontal"):
+def align_tile_pair(tile1, tile2, overlap_px, direction='horizontal'):
     """Align two adjacent tiles using phase correlation on the overlap region.
 
     Args:
@@ -199,9 +207,9 @@ def align_tile_pair(tile1, tile2, overlap_px, direction="horizontal"):
     t2 = np.asarray(tile2, dtype=np.float64)
 
     if overlap_px < 4:
-        return {"shift_y": 0, "shift_x": 0, "confidence": 0.0}
+        return {'shift_y': 0, 'shift_x': 0, 'confidence': 0.0}
 
-    if direction == "horizontal":
+    if direction == 'horizontal':
         # Overlap region: right edge of tile1, left edge of tile2
         strip1 = t1[:, -overlap_px:]
         strip2 = t2[:, :overlap_px]
@@ -214,7 +222,8 @@ def align_tile_pair(tile1, tile2, overlap_px, direction="horizontal"):
     return result
 
 
-def stitch_tiles_aligned(tiles, grid_shape, overlap_px, max_correction=None):
+def stitch_tiles_aligned(tiles, grid_shape, overlap_px,
+                          max_correction=None):
     """Stitch tiles with phase-correlation alignment.
 
     First computes nominal positions from the grid, then refines each
@@ -261,32 +270,28 @@ def stitch_tiles_aligned(tiles, grid_shape, overlap_px, max_correction=None):
             # Align with left neighbor
             if col > 0 and overlap_px >= 4:
                 left_idx = row * n_cols + (col - 1)
-                align = align_tile_pair(tiles[left_idx], tiles[idx], overlap_px, "horizontal")
-                if (
-                    abs(align["shift_x"]) <= max_correction
-                    and abs(align["shift_y"]) <= max_correction
-                ):
-                    dx = align["shift_x"]
-                    dy = align["shift_y"]
-                    conf = align["confidence"]
+                align = align_tile_pair(tiles[left_idx], tiles[idx],
+                                         overlap_px, 'horizontal')
+                if abs(align['shift_x']) <= max_correction and abs(align['shift_y']) <= max_correction:
+                    dx = align['shift_x']
+                    dy = align['shift_y']
+                    conf = align['confidence']
 
             # Align with top neighbor (use average if both available)
             if row > 0 and overlap_px >= 4:
                 top_idx = (row - 1) * n_cols + col
-                align = align_tile_pair(tiles[top_idx], tiles[idx], overlap_px, "vertical")
-                if (
-                    abs(align["shift_x"]) <= max_correction
-                    and abs(align["shift_y"]) <= max_correction
-                ):
+                align = align_tile_pair(tiles[top_idx], tiles[idx],
+                                         overlap_px, 'vertical')
+                if abs(align['shift_x']) <= max_correction and abs(align['shift_y']) <= max_correction:
                     if conf > 0:
                         # Average horizontal and vertical alignments
-                        dx = (dx + align["shift_x"]) // 2
-                        dy = (dy + align["shift_y"]) // 2
-                        conf = (conf + align["confidence"]) / 2
+                        dx = (dx + align['shift_x']) // 2
+                        dy = (dy + align['shift_y']) // 2
+                        conf = (conf + align['confidence']) / 2
                     else:
-                        dx = align["shift_x"]
-                        dy = align["shift_y"]
-                        conf = align["confidence"]
+                        dx = align['shift_x']
+                        dy = align['shift_y']
+                        conf = align['confidence']
 
             # Accumulate corrections from previous tiles
             if col > 0:
@@ -313,12 +318,13 @@ def stitch_tiles_aligned(tiles, grid_shape, overlap_px, max_correction=None):
     mosaic = np.zeros((max_y, max_x), dtype=tiles[0].dtype)
 
     for idx, (ox, oy) in enumerate(origins):
-        region = mosaic[oy : oy + tile_h, ox : ox + tile_w]
-        mosaic[oy : oy + tile_h, ox : ox + tile_w] = np.maximum(region, tiles[idx])
+        region = mosaic[oy:oy + tile_h, ox:ox + tile_w]
+        mosaic[oy:oy + tile_h, ox:ox + tile_w] = np.maximum(
+            region, tiles[idx])
 
     return {
-        "mosaic": mosaic,
-        "tile_origins": origins,
-        "corrections": corrections,
-        "confidences": confidences,
+        'mosaic': mosaic,
+        'tile_origins': origins,
+        'corrections': corrections,
+        'confidences': confidences,
     }

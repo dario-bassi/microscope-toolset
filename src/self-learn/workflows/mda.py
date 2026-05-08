@@ -4,12 +4,11 @@ Provides adaptive_phase_events() for phase-based generators with
 early-stop support.
 
 For all acquisitions (fixed or adaptive), use run_events() from
-src.hardware.core — it delegates to core.mda.run() which works
+src.core.hardware.core — it delegates to core.mda.run() which works
 identically for local CMMCorePlus and remote pymmcore-proxy.
 """
 
-from collections.abc import Generator
-from typing import Any
+from typing import Any, Generator, Optional
 
 from useq import MDAEvent
 
@@ -19,10 +18,10 @@ def adaptive_phase_events(
     max_frames: int,
     interval: float = 1.0,
     exposure: float = 50.0,
-    shared_state: dict | None = None,
+    shared_state: Optional[dict] = None,
     stop_key: str = "stop",
     t_offset: int = 0,
-    metadata: dict[str, Any] | None = None,
+    metadata: Optional[dict[str, Any]] = None,
 ) -> Generator[MDAEvent, None, None]:
     """Yield MDAEvents for a phase that can be stopped early.
 
@@ -56,3 +55,5 @@ def adaptive_phase_events(
             min_start_time=t * interval,
             metadata={"phase": name, **extra_meta},
         )
+
+

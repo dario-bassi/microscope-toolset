@@ -11,14 +11,6 @@ Functions:
     characterize_sample -- Classify multi-channel sample
     suggest_workflow    -- Recommend analysis pipeline
     check_completeness  -- Verify all expected analysis steps done
-
-Real microscope note:
-    This module uses heuristic-based detection that assumes perfect images
-    with clear textural signatures. Real samples are messier and may be
-    misclassified. For production use:
-    - Add manual sample-type hints via metadata or UI
-    - Use more robust color indices (hue-saturation vs raw RGB means)
-    - Consider user feedback loops to improve classification
 """
 
 import numpy as np
@@ -56,11 +48,11 @@ def characterize_image(image):
         r_mean, g_mean, b_mean = r.mean(), g.mean(), b.mean()
         max_ch = max(r_mean, g_mean, b_mean)
         if max_ch == r_mean:
-            dominant_color = "red"
+            dominant_color = 'red'
         elif max_ch == g_mean:
-            dominant_color = "green"
+            dominant_color = 'green'
         else:
-            dominant_color = "blue"
+            dominant_color = 'blue'
     else:
         gray = image.astype(float)
         dominant_color = None
@@ -78,9 +70,7 @@ def characterize_image(image):
     is_brightfield = median_val > 0.3 * bit_depth
 
     # Sparsity: fraction of pixels near background
-    bg_threshold = np.percentile(gray, 10) + 0.1 * (
-        np.percentile(gray, 90) - np.percentile(gray, 10)
-    )
+    bg_threshold = np.percentile(gray, 10) + 0.1 * (np.percentile(gray, 90) - np.percentile(gray, 10))
     sparsity = float((gray < bg_threshold).mean())
 
     # Texture: spatial variation via Laplacian
@@ -88,15 +78,15 @@ def characterize_image(image):
     has_texture = float(np.var(lap)) > 1.0
 
     return {
-        "is_rgb": is_rgb,
-        "is_fluorescence": is_fluorescence,
-        "is_brightfield": is_brightfield,
-        "mean_intensity": round(mean_val, 1),
-        "dynamic_range": round(dynamic_range, 3),
-        "has_texture": has_texture,
-        "sparsity": round(sparsity, 3),
-        "n_components": 3 if is_rgb else 1,
-        "dominant_color": dominant_color,
+        'is_rgb': is_rgb,
+        'is_fluorescence': is_fluorescence,
+        'is_brightfield': is_brightfield,
+        'mean_intensity': round(mean_val, 1),
+        'dynamic_range': round(dynamic_range, 3),
+        'has_texture': has_texture,
+        'sparsity': round(sparsity, 3),
+        'n_components': 3 if is_rgb else 1,
+        'dominant_color': dominant_color,
     }
 
 
@@ -121,48 +111,48 @@ def characterize_sample(channels):
         ch_info[name] = characterize_image(img)
 
     # Determine sample type from channel properties
-    has_rgb = any(c["is_rgb"] for c in ch_info.values())
-    has_fluor = any(c["is_fluorescence"] for c in ch_info.values())
-    has_bf = any(c["is_brightfield"] for c in ch_info.values())
+    has_rgb = any(c['is_rgb'] for c in ch_info.values())
+    has_fluor = any(c['is_fluorescence'] for c in ch_info.values())
+    has_bf = any(c['is_brightfield'] for c in ch_info.values())
     n_channels = len(channels)
 
     # H&E tissue: RGB brightfield with blue-purple and pink staining
     if has_rgb and has_bf:
         # Check for H&E colors
         for name, img in channels.items():
-            if ch_info[name]["is_rgb"] and ch_info[name]["is_brightfield"]:
+            if ch_info[name]['is_rgb'] and ch_info[name]['is_brightfield']:
                 rgb = np.asarray(img)
                 r_mean = rgb[:, :, 0].astype(float).mean()
                 b_mean = rgb[:, :, 2].astype(float).mean()
                 if b_mean > r_mean * 0.5:  # Significant blue component
-                    sample_type = "tissue_hae"
-                    staining = "H&E"
+                    sample_type = 'tissue_hae'
+                    staining = 'H&E'
                     break
         else:
-            sample_type = "brightfield_cells"
-            staining = "unstained"
+            sample_type = 'brightfield_cells'
+            staining = 'unstained'
     elif has_fluor and n_channels >= 2:
-        sample_type = "fluorescence_cells"
-        staining = "fluorescence"
+        sample_type = 'fluorescence_cells'
+        staining = 'fluorescence'
     elif has_fluor:
-        sample_type = "fluorescence_cells"
-        staining = "single_channel_fluorescence"
+        sample_type = 'fluorescence_cells'
+        staining = 'single_channel_fluorescence'
     elif has_bf:
-        sample_type = "brightfield_cells"
-        staining = "unstained"
+        sample_type = 'brightfield_cells'
+        staining = 'unstained'
     else:
-        sample_type = "unknown"
-        staining = "unknown"
+        sample_type = 'unknown'
+        staining = 'unknown'
 
     # Generate recommendations
     recommended, checklist = suggest_workflow(sample_type, ch_info)
 
     return {
-        "sample_type": sample_type,
-        "staining": staining,
-        "channels": ch_info,
-        "recommended_analysis": recommended,
-        "checklist": checklist,
+        'sample_type': sample_type,
+        'staining': staining,
+        'channels': ch_info,
+        'recommended_analysis': recommended,
+        'checklist': checklist,
     }
 
 
@@ -179,67 +169,67 @@ def suggest_workflow(sample_type, channel_info=None):
     recommended = []
     checklist = []
 
-    if sample_type == "tissue_hae":
+    if sample_type == 'tissue_hae':
         recommended = [
-            "10x_overview",
-            "hae_deconvolution",
-            "nuclear_segmentation",
-            "gland_architecture",
-            "mitotic_figure_detection",
-            "necrosis_check",
-            "nuclear_pleomorphism",
-            "tumor_grading",
+            '10x_overview',
+            'hae_deconvolution',
+            'nuclear_segmentation',
+            'gland_architecture',
+            'mitotic_figure_detection',
+            'necrosis_check',
+            'nuclear_pleomorphism',
+            'tumor_grading',
         ]
         checklist = [
-            "Check for necrosis (eosinophilic acellular regions)",
-            "Assess gland formation (ring vs solid clusters)",
-            "Quantify nuclear size CV",
-            "Count mitotic figures at 20x or 40x",
-            "Look for lymphocyte infiltrate",
-            "Use watershed to split touching nuclei",
+            'Check for necrosis (eosinophilic acellular regions)',
+            'Assess gland formation (ring vs solid clusters)',
+            'Quantify nuclear size CV',
+            'Count mitotic figures at 20x or 40x',
+            'Look for lymphocyte infiltrate',
+            'Use watershed to split touching nuclei',
         ]
-    elif sample_type == "fluorescence_cells":
+    elif sample_type == 'fluorescence_cells':
         recommended = [
-            "10x_overview",
-            "channel_scout",
-            "background_subtraction",
-            "cell_segmentation",
-            "morphometry",
-            "intensity_quantification",
+            '10x_overview',
+            'channel_scout',
+            'background_subtraction',
+            'cell_segmentation',
+            'morphometry',
+            'intensity_quantification',
         ]
         checklist = [
-            "Verify which channel has the target signal",
-            "Check for autofluorescence cross-talk",
-            "Subtract background before measurements",
-            "Exclude edge objects (>3px from border)",
-            "Correct for photobleaching if timelapse",
+            'Verify which channel has the target signal',
+            'Check for autofluorescence cross-talk',
+            'Subtract background before measurements',
+            'Exclude edge objects (>3px from border)',
+            'Correct for photobleaching if timelapse',
         ]
-    elif sample_type == "brightfield_cells":
+    elif sample_type == 'brightfield_cells':
         recommended = [
-            "10x_overview",
-            "adaptive_threshold",
-            "cell_detection",
-            "morphometry",
-            "counting",
+            '10x_overview',
+            'adaptive_threshold',
+            'cell_detection',
+            'morphometry',
+            'counting',
         ]
         checklist = [
-            "Verify cells are darker or lighter than background",
-            "Choose correct threshold direction (bright vs dark objects)",
-            "Exclude edge objects",
-            "Use watershed for touching cells",
-            "Cross-validate count with second method if critical",
+            'Verify cells are darker or lighter than background',
+            'Choose correct threshold direction (bright vs dark objects)',
+            'Exclude edge objects',
+            'Use watershed for touching cells',
+            'Cross-validate count with second method if critical',
         ]
     else:
         recommended = [
-            "10x_overview",
-            "channel_scout",
-            "segmentation",
-            "measurement",
+            '10x_overview',
+            'channel_scout',
+            'segmentation',
+            'measurement',
         ]
         checklist = [
-            "Verify channel selection",
-            "Check magnification is appropriate",
-            "Exclude edge artifacts",
+            'Verify channel selection',
+            'Check magnification is appropriate',
+            'Exclude edge artifacts',
         ]
 
     return recommended, checklist
@@ -263,22 +253,20 @@ def check_completeness(sample_type, completed_steps):
 
     # Critical steps that must not be skipped
     critical = {
-        "tissue_hae": [
-            "hae_deconvolution",
-            "nuclear_segmentation",
-            "necrosis_check",
-            "tumor_grading",
-        ],
-        "fluorescence_cells": ["channel_scout", "cell_segmentation", "background_subtraction"],
-        "brightfield_cells": ["cell_detection", "counting"],
+        'tissue_hae': ['hae_deconvolution', 'nuclear_segmentation',
+                       'necrosis_check', 'tumor_grading'],
+        'fluorescence_cells': ['channel_scout', 'cell_segmentation',
+                              'background_subtraction'],
+        'brightfield_cells': ['cell_detection', 'counting'],
     }
 
-    type_critical = critical.get(sample_type, ["segmentation"])
+    type_critical = critical.get(sample_type, ['segmentation'])
     missing = [s for s in type_critical if s not in completed_set]
-    suggested = [s for s in recommended if s not in completed_set and s not in missing]
+    suggested = [s for s in recommended if s not in completed_set
+                 and s not in missing]
 
     return {
-        "complete": len(missing) == 0,
-        "missing": missing,
-        "warnings": [f"Consider also: {s}" for s in suggested[:3]],
+        'complete': len(missing) == 0,
+        'missing': missing,
+        'warnings': [f"Consider also: {s}" for s in suggested[:3]],
     }

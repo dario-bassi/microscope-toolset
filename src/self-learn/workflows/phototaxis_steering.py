@@ -6,7 +6,7 @@ in the direction of the target, causing it to turn and swim toward
 the goal.
 
 Usage:
-    from src.workflows.phototaxis_steering import steering_generator, SteeringState
+    from src.core.workflows.phototaxis_steering import steering_generator, SteeringState
 
     state = SteeringState(target=(370, 170), lead_distance=50)
 
@@ -14,20 +14,9 @@ Usage:
         cx, cy = detect_colony(img)
         state.update_position(cx, cy)
 
-    events = steering_generator(state, channel='brightfield', group='Fake',
+    events = steering_generator(state, channel='brightfield',
                                 max_steps=150, threshold_px=30)
     results = run_events(core, events, on_frame=on_frame)
-
-Real microscope note:
-    This controller assumes INSTANT behavioral response to SLM light placement.
-    Real organisms (C. elegans, Drosophila larvae, algae, etc.) have sensorimotor
-    lag (100–300ms typical) between light stimulus and behavioral turn initiation.
-    On real hardware:
-    - Add response_lag parameter to predict organism position N frames ahead
-    - Implement lag compensation: place light at predicted future position
-    - Reduce lead_distance for organisms with slower phototaxis response
-    - Use feedback from velocity history to auto-tune lead distance
-    - Test on single organism before running population-level experiments
 """
 
 import numpy as np
@@ -37,7 +26,8 @@ from useq import MDAEvent, SLMImage
 class SteeringState:
     """Tracks phototaxis steering state."""
 
-    def __init__(self, target, lead_distance=50, light_radius=40, slm_size=512, slm_device="SLM"):
+    def __init__(self, target, lead_distance=50, light_radius=40,
+                 slm_size=512, slm_device='SLM'):
         """Initialize steering state.
 
         Parameters
@@ -67,7 +57,7 @@ class SteeringState:
     def update_position(self, x, y):
         """Update organism position and check if target reached."""
         self.positions.append((x, y))
-        dist = np.sqrt((x - self.target_x) ** 2 + (y - self.target_y) ** 2)
+        dist = np.sqrt((x - self.target_x)**2 + (y - self.target_y)**2)
         self.distances.append(dist)
         return dist
 
@@ -83,7 +73,7 @@ class SteeringState:
         """Current distance to target."""
         if self.distances:
             return self.distances[-1]
-        return float("inf")
+        return float('inf')
 
     @property
     def velocity(self):
@@ -146,8 +136,8 @@ class SteeringState:
         """
         light_x, light_y = self.compute_light_position()
         mask = np.zeros((self.slm_size, self.slm_size), dtype=np.uint8)
-        yy, xx = np.ogrid[: self.slm_size, : self.slm_size]
-        circle = (yy - light_y) ** 2 + (xx - light_x) ** 2 <= self.light_radius**2
+        yy, xx = np.ogrid[:self.slm_size, :self.slm_size]
+        circle = (yy - light_y)**2 + (xx - light_x)**2 <= self.light_radius**2
         mask[circle] = 255
         return mask
 
@@ -157,7 +147,8 @@ class SteeringState:
         return len(self.positions)
 
 
-def steering_generator(state, channel="brightfield", group="Fake", max_steps=150, threshold_px=30):
+def steering_generator(state, channel=None, group=None,
+                       max_steps=150, threshold_px=30):
     """Generate MDA events for phototaxis steering.
 
     Yields MDAEvents with SLM masks that steer the organism toward
@@ -170,8 +161,11 @@ def steering_generator(state, channel="brightfield", group="Fake", max_steps=150
         Shared steering state (updated by on_frame callback).
     channel : str
         Channel config name for BF imaging.
-    group : str
-        Config group name.
+    group : str or None
+        Config group name. Pass None and call through a core-aware
+        wrapper to auto-discover (see ``clear_slm_event`` for a core
+        helper). When None, the MDAEvent is emitted without a group
+        and the engine uses the active config group.
     max_steps : int
         Maximum number of steering steps.
     threshold_px : float
@@ -182,7 +176,7 @@ def steering_generator(state, channel="brightfield", group="Fake", max_steps=150
     MDAEvent
         Events with SLM images for phototaxis.
     """
-    for _step in range(max_steps):
+    for step in range(max_steps):
         if state.reached:
             return
 
@@ -192,13 +186,20 @@ def steering_generator(state, channel="brightfield", group="Fake", max_steps=150
             return
 
         slm_mask = state.make_slm_mask()
+        if channel is None:
+            ch = None
+        else:
+            ch = {"config": channel}
+            if group is not None:
+                ch["group"] = group
         yield MDAEvent(
-            channel={"config": channel, "group": group},
+            channel=ch,
             slm_image=SLMImage(data=slm_mask, device=state.slm_device),
         )
 
 
-def make_tracking_callback(state, detector_fn, log_interval=10, threshold_px=30):
+def make_tracking_callback(state, detector_fn, log_interval=10,
+                           threshold_px=30):
     """Create an on_frame callback for steering.
 
     Parameters
@@ -217,7 +218,6 @@ def make_tracking_callback(state, detector_fn, log_interval=10, threshold_px=30)
     callable
         on_frame callback for run_events.
     """
-
     def on_frame(img, event):
         cx, cy = detector_fn(img)
         dist = state.update_position(cx, cy)
@@ -225,25 +225,44 @@ def make_tracking_callback(state, detector_fn, log_interval=10, threshold_px=30)
 
         step = state.n_steps
         if step % log_interval == 0 or dist < threshold_px + 10:
-            print(f"  Step {step}: pos=({cx:.0f},{cy:.0f}), " f"dist={dist:.1f}px")
+            print(f'  Step {step}: pos=({cx:.0f},{cy:.0f}), '
+                  f'dist={dist:.1f}px')
 
         if dist < threshold_px:
             state.reached = True
-            print(f"  *** TARGET REACHED at step {step}! " f"dist={dist:.1f}px ***")
+            print(f'  *** TARGET REACHED at step {step}! '
+                  f'dist={dist:.1f}px ***')
 
     return on_frame
 
 
-def clear_slm_event(channel="brightfield", group="Fake", slm_device="SLM", size=512):
+def clear_slm_event(channel=None, group=None,
+                    slm_device='SLM', size=512):
     """Create an event that clears the SLM.
+
+    Parameters
+    ----------
+    channel : str or None
+        Channel config name. If None, the event is emitted without a
+        channel field and the engine keeps the active channel.
+    group : str or None
+        Config group name. If None and ``channel`` is given, the event
+        is emitted without a group field and the engine uses the active
+        config group.
 
     Returns
     -------
     MDAEvent
         Event with blank SLM mask.
     """
+    if channel is None:
+        ch = None
+    else:
+        ch = {"config": channel}
+        if group is not None:
+            ch["group"] = group
     return MDAEvent(
-        channel={"config": channel, "group": group},
+        channel=ch,
         slm_image=SLMImage(
             data=np.zeros((size, size), dtype=np.uint8),
             device=slm_device,

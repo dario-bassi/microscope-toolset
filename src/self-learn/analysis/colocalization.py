@@ -43,7 +43,7 @@ def pearson_r(ch1, ch2, mask=None):
 
     n = len(a)
     if n < 2:
-        return {"r": 0.0, "n_pixels": n}
+        return {'r': 0.0, 'n_pixels': n}
 
     a_mean = a.mean()
     b_mean = b.mean()
@@ -51,13 +51,13 @@ def pearson_r(ch1, ch2, mask=None):
     b_dev = b - b_mean
 
     num = np.sum(a_dev * b_dev)
-    denom = np.sqrt(np.sum(a_dev**2) * np.sum(b_dev**2))
+    denom = np.sqrt(np.sum(a_dev ** 2) * np.sum(b_dev ** 2))
 
     if denom < 1e-10:
-        return {"r": 0.0, "n_pixels": n}
+        return {'r': 0.0, 'n_pixels': n}
 
     r = float(num / denom)
-    return {"r": r, "n_pixels": n}
+    return {'r': r, 'n_pixels': n}
 
 
 def manders_coefficients(ch1, ch2, threshold1=0, threshold2=0, mask=None):
@@ -107,13 +107,13 @@ def manders_coefficients(ch1, ch2, threshold1=0, threshold2=0, mask=None):
         M2 = 0.0
 
     # Overlap coefficient
-    denom_oc = np.sqrt(np.sum(a**2) * np.sum(b**2))
+    denom_oc = np.sqrt(np.sum(a ** 2) * np.sum(b ** 2))
     if denom_oc > 0:
         OC = float(np.sum(a * b) / denom_oc)
     else:
         OC = 0.0
 
-    return {"M1": M1, "M2": M2, "overlap_coefficient": OC}
+    return {'M1': M1, 'M2': M2, 'overlap_coefficient': OC}
 
 
 def costes_threshold(ch1, ch2, mask=None):
@@ -148,15 +148,12 @@ def costes_threshold(ch1, ch2, mask=None):
     n = len(av)
     if n < 10:
         return {
-            "threshold1": 0.0,
-            "threshold2": 0.0,
-            "r_total": 0.0,
-            "slope": 0.0,
-            "intercept": 0.0,
+            'threshold1': 0.0, 'threshold2': 0.0,
+            'r_total': 0.0, 'slope': 0.0, 'intercept': 0.0,
         }
 
     # Total Pearson r
-    r_total = pearson_r(ch1, ch2, mask)["r"]
+    r_total = pearson_r(ch1, ch2, mask)['r']
 
     # Linear regression: ch2 = slope * ch1 + intercept
     a_mean = av.mean()
@@ -205,11 +202,11 @@ def costes_threshold(ch1, ch2, mask=None):
             break
 
     return {
-        "threshold1": best_t1,
-        "threshold2": best_t2,
-        "r_total": r_total,
-        "slope": slope,
-        "intercept": intercept,
+        'threshold1': best_t1,
+        'threshold2': best_t2,
+        'r_total': r_total,
+        'slope': slope,
+        'intercept': intercept,
     }
 
 
@@ -247,7 +244,7 @@ def intensity_scatter(ch1, ch2, mask=None, n_sample=5000):
         a = a[idx]
         b = b[idx]
 
-    return {"x": a, "y": b, "n_total": n_total}
+    return {'x': a, 'y': b, 'n_total': n_total}
 
 
 def colocalization_map(ch1, ch2, threshold1=0, threshold2=0):
@@ -281,7 +278,7 @@ def colocalization_map(ch1, ch2, threshold1=0, threshold2=0):
     result = np.zeros(a.shape, dtype=np.int32)
     result[sig1 & ~sig2] = 1  # ch1 only
     result[~sig1 & sig2] = 2  # ch2 only
-    result[sig1 & sig2] = 3  # both
+    result[sig1 & sig2] = 3   # both
 
     n_ch1 = int((result == 1).sum())
     n_ch2 = int((result == 2).sum())
@@ -292,10 +289,10 @@ def colocalization_map(ch1, ch2, threshold1=0, threshold2=0):
     frac = n_both / n_signal if n_signal > 0 else 0.0
 
     return {
-        "map": result,
-        "fraction_coloc": float(frac),
-        "n_ch1_only": n_ch1,
-        "n_ch2_only": n_ch2,
-        "n_both": n_both,
-        "n_neither": n_bg,
+        'map': result,
+        'fraction_coloc': float(frac),
+        'n_ch1_only': n_ch1,
+        'n_ch2_only': n_ch2,
+        'n_both': n_both,
+        'n_neither': n_bg,
     }

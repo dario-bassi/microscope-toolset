@@ -1,265 +1,331 @@
-"""Showcase figure generator for experiment results.
+"""Matplotlib-native showcase-figure auto-generator.
 
-Creates multi-panel publication-style figures with annotations,
-scale bars, and result text. Ideal for documenting microscopy
-experiments and analysis results.
+Sprint #12 (2026-04-26 → 2026-04-27 rename). Replaces the per-recipe
+ad-hoc matplotlib boilerplate with a single
+``make_showcase(panels, title, save_to)`` call. Predecessor was an
+OpenCV ``showcase.py`` (now retired); this matplotlib version was
+shipped as ``showcase_mpl.py`` then promoted to the canonical name
+in sprint #12 (rename + reconciliation).
 
-Functions:
-    make_showcase -- Build and save a multi-panel showcase figure
-    add_scalebar  -- Add a scale bar to an image
-    annotate_image -- Add markers, contours, or text to an image
-    get_showcase_dir -- Get the output directory for showcase figures
+API
+---
+
+::
+
+    from src.core.utils.showcase import make_showcase, Panel
+
+    panels = [
+        Panel("heatmap", title="plate", data=plate_array,
+              cmap="viridis", highlight=[(0, 0), (7, 11)], colorbar=True),
+        Panel("trace", title="per-row controls",
+              data={"x": rows, "y": pos_ctrl, "label": "pos"},
+              ylabel="kRLU"),
+        Panel("fit_curve", title="4-PL fit", xscale="log",
+              data={"series": [{"x": doses, "y": viab, "yerr": sd,
+                                 "xfit": xfit, "yfit": yfit,
+                                 "label": "Compound 1"}]}),
+    ]
+    make_showcase(panels, "ch593 r4 — plate-reader IC50",
+                  Path("../logs/showcase/agent_ch593_r4.png"))
+
+The dispatcher resolves grid layout (1×1 ··· 2×3) automatically and
+saves at 140 dpi. Power-users mutate the returned ``Figure`` before
+or after save.
+
+Built-in panel kinds:
+
+- ``"image"``     — ``imshow`` + optional scatter overlay
+- ``"heatmap"``   — ``imshow`` + ``Rectangle`` patches for highlights
+                  + colorbar
+- ``"trace"``     — ``plot`` time series with optional fit + events
+- ``"histogram"`` — ``hist`` with optional vertical lines
+- ``"fit_curve"`` — error-bar data + smooth fit + IC50/EC50 vline
+- ``"rgb_overlay"`` — channel-stack RGB display
+
+New kinds register via the ``@register("kind")`` decorator.
 """
 
-import os
+from __future__ import annotations
 
-import cv2
-import numpy as np
+from dataclasses import dataclass, field
+from pathlib import Path
+from typing import Any, Callable, Optional
 
 
-def get_showcase_dir():
-    """Get the showcase output directory.
+_GRIDS = {1: (1, 1), 2: (1, 2), 3: (1, 3), 4: (2, 2), 5: (2, 3), 6: (2, 3)}
+_RENDERERS: dict[str, Callable[[Any, "Panel"], None]] = {}
 
-    Checks in order:
-    1. MICROSCOPE_SHOWCASE_DIR environment variable
-    2. ~/.microscope/showcase directory
-    3. ./showcase in current working directory (fallback)
 
-    Returns:
-        str: Path to showcase directory (will be created if doesn't exist).
+@dataclass
+class Panel:
+    """A single panel in a showcase figure.
+
+    ``kind`` selects the renderer (``image``, ``heatmap``, ``trace``,
+    ``histogram``, ``fit_curve``, ``rgb_overlay``, or anything
+    registered via ``@register``). ``data`` is panel-kind-specific:
+    a 2-D array for image/heatmap, a dict ``{"x", "y", ...}`` for
+    trace/fit_curve, an array of values for histogram, etc.
+
+    Well-known optional kwargs: ``title``, ``xlabel``, ``ylabel``,
+    ``cmap``, ``vmin``, ``vmax``, ``xscale``, ``yscale``,
+    ``colorbar``, ``highlight``, ``overlay_points``, ``vlines``.
+    Anything else goes in ``kwargs`` and is forwarded to the
+    renderer's primary matplotlib call.
     """
-    # Check environment variable first
-    if "MICROSCOPE_SHOWCASE_DIR" in os.environ:
-        return os.environ["MICROSCOPE_SHOWCASE_DIR"]
-
-    # Default to user's home directory
-    default_dir = os.path.expanduser("~/.microscope/showcase")
-    return default_dir
-
-
-# Legacy global for backward compatibility
-SHOWCASE_DIR = get_showcase_dir()
-
-
-def _scale_image(img):
-    """Scale any image to uint8 for display."""
-    img_f = img.astype(np.float64)
-    lo, hi = img_f.min(), img_f.max()
-    if hi > lo:
-        return ((img_f - lo) / (hi - lo) * 255).astype(np.uint8)
-    return np.zeros_like(img, dtype=np.uint8)
+    kind: str
+    title: str = ""
+    data: Any = None
+    cmap: Optional[str] = None
+    vmin: Optional[float] = None
+    vmax: Optional[float] = None
+    xlabel: Optional[str] = None
+    ylabel: Optional[str] = None
+    xscale: Optional[str] = None
+    yscale: Optional[str] = None
+    colorbar: bool = False
+    highlight: Optional[list[tuple[int, int]]] = None
+    overlay_points: Optional[list[tuple[float, float]]] = None
+    vlines: Optional[list[float]] = None
+    xticks: Optional[list[Any]] = None
+    yticks: Optional[list[Any]] = None
+    legend: bool = True
+    kwargs: dict = field(default_factory=dict)
 
 
-def _to_bgr(img):
-    """Convert grayscale or RGB to BGR for OpenCV."""
-    if img.ndim == 2:
-        return cv2.cvtColor(img, cv2.COLOR_GRAY2BGR)
-    if img.ndim == 3 and img.shape[2] == 3:
-        return img.copy()
-    return cv2.cvtColor(img, cv2.COLOR_GRAY2BGR)
+def register(kind: str):
+    """Decorator: register a renderer under ``kind``."""
+
+    def _deco(fn: Callable[[Any, Panel], None]):
+        _RENDERERS[kind] = fn
+        return fn
+
+    return _deco
 
 
-def add_scalebar(
-    img, pixel_size_um, bar_um=None, position="bottom_right", color=(255, 255, 255), thickness=3
-):
-    """Add a scale bar to an image.
-
-    Args:
-        img: 2D or 3D (BGR) uint8 image.
-        pixel_size_um: Micrometers per pixel.
-        bar_um: Length of scale bar in µm. If None, auto-selects a
-            round number that fits ~1/5 of image width.
-        position: 'bottom_right', 'bottom_left', 'top_right', 'top_left'.
-        color: BGR color tuple.
-        thickness: Line thickness in pixels.
-
-    Returns:
-        Annotated BGR image (copy).
-    """
-    bgr = _to_bgr(img)
-    h, w = bgr.shape[:2]
-
-    if bar_um is None:
-        target_px = w // 5
-        target_um = target_px * pixel_size_um
-        # Round to nice number
-        for nice in [1, 2, 5, 10, 20, 50, 100, 200, 500]:
-            if nice >= target_um * 0.5:
-                bar_um = nice
-                break
-        else:
-            bar_um = int(target_um)
-
-    bar_px = int(bar_um / pixel_size_um)
-    margin = 15
-
-    if "right" in position:
-        x1 = w - margin
-        x0 = x1 - bar_px
-    else:
-        x0 = margin
-        x1 = x0 + bar_px
-
-    if "bottom" in position:
-        y = h - margin
-    else:
-        y = margin + 10
-
-    cv2.line(bgr, (x0, y), (x1, y), color, thickness)
-    label = f"{bar_um} um"
-    cv2.putText(bgr, label, (x0, y - 5), cv2.FONT_HERSHEY_SIMPLEX, 0.4, color, 1)
-    return bgr
+def render_panel(ax, panel: Panel) -> None:
+    """Dispatch to the panel's renderer."""
+    if panel.kind not in _RENDERERS:
+        raise KeyError(
+            f"unknown panel kind {panel.kind!r}; "
+            f"registered: {sorted(_RENDERERS)}"
+        )
+    _RENDERERS[panel.kind](ax, panel)
 
 
-def annotate_image(
-    img,
-    centroids=None,
-    contours=None,
-    text=None,
-    marker_color=(0, 255, 0),
-    marker_radius=6,
-    contour_color=(0, 255, 255),
-    text_color=(255, 255, 255),
-):
-    """Add markers, contours, and text to an image.
-
-    Args:
-        img: 2D or BGR image.
-        centroids: List of (x, y) or dicts with 'x','y' keys.
-        contours: List of contour arrays (OpenCV format).
-        text: List of (x, y, string) tuples for text labels.
-        marker_color, contour_color, text_color: BGR colors.
-        marker_radius: Circle radius for centroids.
-
-    Returns:
-        Annotated BGR image (copy).
-    """
-    bgr = _to_bgr(_scale_image(img) if img.dtype != np.uint8 else img)
-
-    if centroids:
-        for c in centroids:
-            if isinstance(c, dict):
-                cx, cy = int(c.get("x", 0)), int(c.get("y", 0))
-            else:
-                cx, cy = int(c[0]), int(c[1])
-            cv2.circle(bgr, (cx, cy), marker_radius, marker_color, 2)
-
-    if contours:
-        cv2.drawContours(bgr, contours, -1, contour_color, 1)
-
-    if text:
-        for tx, ty, label in text:
-            cv2.putText(
-                bgr, str(label), (int(tx), int(ty)), cv2.FONT_HERSHEY_SIMPLEX, 0.4, text_color, 1
-            )
-
-    return bgr
+def _resolve_grid(n_panels: int, grid: Optional[tuple[int, int]]) -> tuple[int, int]:
+    if grid is not None:
+        return grid
+    if n_panels not in _GRIDS:
+        raise ValueError(
+            f"{n_panels} panels has no default grid; "
+            f"pass grid=(rows, cols) explicitly"
+        )
+    return _GRIDS[n_panels]
 
 
 def make_showcase(
-    panels,
-    experiment_id,
-    description="",
-    cols=None,
-    panel_size=(256, 256),
-    results_text=None,
-    output_dir=None,
+    panels: list[Panel],
+    title: str,
+    save_to: Path,
+    *,
+    grid: Optional[tuple[int, int]] = None,
+    figsize: Optional[tuple[float, float]] = None,
+    dpi: int = 140,
+    results_text: Optional[list[str]] = None,
 ):
-    """Build and save a multi-panel showcase figure.
+    """Build a multi-panel showcase figure and save to ``save_to``.
 
-    Args:
-        panels: List of dicts, each with:
-            'image': 2D or BGR array.
-            'title': Panel title string.
-            Optional 'centroids': list for annotation.
-            Optional 'contours': list for annotation.
-            Optional 'scalebar': pixel_size_um for auto scale bar.
-        experiment_id: Experiment identifier (e.g., 'exp_001' or descriptive name).
-        description: Short description for filename.
-        cols: Number of columns (default: auto based on panel count).
-        panel_size: (width, height) to resize each panel.
-        results_text: List of strings to show in a results panel at
-            the bottom (e.g., ["Count: 42", "Diameter: 15.3 um"]).
-        output_dir: Directory to save showcase figure. If None, uses
-            get_showcase_dir() (respects MICROSCOPE_SHOWCASE_DIR env var).
-
-    Returns:
-        str: Path to saved showcase file.
+    Returns the matplotlib ``Figure`` so callers can mutate it
+    further before/after the save.
     """
-    if output_dir is None:
-        output_dir = get_showcase_dir()
-    os.makedirs(output_dir, exist_ok=True)
+    import matplotlib.pyplot as plt
 
-    n = len(panels)
-    if cols is None:
-        cols = min(n, 3)
+    if not panels:
+        raise ValueError("panels list is empty")
 
-    pw, ph = panel_size
-    title_h = 25
-    rows = (n + cols - 1) // cols
+    rows, cols = _resolve_grid(len(panels), grid)
+    if figsize is None:
+        figsize = (5.0 * cols, 4.0 * rows)
+    fig, axes = plt.subplots(rows, cols, figsize=figsize)
 
-    # Results panel at bottom
-    results_h = 0
+    if rows * cols == 1:
+        axes_list = [axes]
+    else:
+        axes_list = list(axes.flat) if hasattr(axes, "flat") else list(axes)
+
+    for ax, panel in zip(axes_list, panels):
+        render_panel(ax, panel)
+
+    # Hide unused axes (when grid > n_panels, e.g. 5 panels in 2×3).
+    for ax in axes_list[len(panels):]:
+        ax.set_visible(False)
+
+    if title:
+        fig.suptitle(title, fontsize=12)
     if results_text:
-        results_h = 20 * len(results_text) + 15
-
-    canvas_w = cols * pw
-    canvas_h = rows * (ph + title_h) + results_h
-
-    canvas = np.zeros((canvas_h, canvas_w, 3), dtype=np.uint8)
-
-    for i, panel in enumerate(panels):
-        r, c = divmod(i, cols)
-        x0 = c * pw
-        y0 = r * (ph + title_h)
-
-        # Process image
-        img = panel["image"]
-        display = _scale_image(img)
-        bgr = _to_bgr(display)
-
-        # Annotate if needed
-        if panel.get("centroids"):
-            for pt in panel["centroids"]:
-                if isinstance(pt, dict):
-                    cx, cy = int(pt.get("x", 0)), int(pt.get("y", 0))
-                else:
-                    cx, cy = int(pt[0]), int(pt[1])
-                # Scale coordinates to panel size
-                sx = cx * pw // img.shape[1] if img.shape[1] > 0 else cx
-                sy = cy * ph // img.shape[0] if img.shape[0] > 0 else cy
-                cv2.circle(bgr, (sx, sy), 4, (0, 255, 0), 1)
-
-        # Resize to panel size
-        resized = cv2.resize(bgr, (pw, ph))
-
-        # Scale bar
-        if panel.get("scalebar"):
-            pxsz = panel["scalebar"]
-            scale_factor = img.shape[1] / pw
-            resized = add_scalebar(resized, pxsz * scale_factor)
-
-        # Title bar
-        canvas[y0 : y0 + title_h, x0 : x0 + pw] = (50, 50, 50)
-        title = panel.get("title", f"Panel {i}")
-        cv2.putText(
-            canvas, title, (x0 + 5, y0 + 17), cv2.FONT_HERSHEY_SIMPLEX, 0.45, (255, 255, 255), 1
+        fig.text(
+            0.5, 0.005, "  |  ".join(results_text),
+            ha="center", fontsize=9, color="dimgray",
         )
 
-        # Image
-        canvas[y0 + title_h : y0 + title_h + ph, x0 : x0 + pw] = resized
+    fig.tight_layout()
+    save_to = Path(save_to)
+    save_to.parent.mkdir(parents=True, exist_ok=True)
+    fig.savefig(save_to, dpi=int(dpi), bbox_inches="tight")
+    return fig
 
-    # Results text at bottom
-    if results_text:
-        results_y0 = rows * (ph + title_h)
-        canvas[results_y0:, :] = (30, 30, 30)
-        for j, line in enumerate(results_text):
-            y = results_y0 + 15 + j * 20
-            cv2.putText(canvas, line, (10, y), cv2.FONT_HERSHEY_SIMPLEX, 0.45, (200, 200, 200), 1)
 
-    # Save
-    desc = description.replace(" ", "_")[:40] if description else "result"
-    filename = f"{experiment_id}_{desc}.png"
-    path = os.path.join(output_dir, filename)
-    cv2.imwrite(path, canvas)
-    return path
+# ── Built-in renderers ─────────────────────────────────────────────────
+
+
+@register("image")
+def _render_image(ax, panel: Panel) -> None:
+    arr = panel.data
+    cmap = panel.cmap or "gray"
+    im = ax.imshow(arr, cmap=cmap, vmin=panel.vmin, vmax=panel.vmax,
+                   **panel.kwargs)
+    if panel.overlay_points:
+        xs = [p[0] for p in panel.overlay_points]
+        ys = [p[1] for p in panel.overlay_points]
+        ax.scatter(xs, ys, s=80, facecolor="none",
+                   edgecolor="cyan", linewidth=1.5)
+    if panel.colorbar:
+        ax.figure.colorbar(im, ax=ax, fraction=0.04)
+    ax.set_title(panel.title)
+    if panel.xlabel:
+        ax.set_xlabel(panel.xlabel)
+    if panel.ylabel:
+        ax.set_ylabel(panel.ylabel)
+
+
+@register("heatmap")
+def _render_heatmap(ax, panel: Panel) -> None:
+    from matplotlib.patches import Rectangle
+
+    arr = panel.data
+    cmap = panel.cmap or "viridis"
+    im = ax.imshow(arr, cmap=cmap, vmin=panel.vmin, vmax=panel.vmax,
+                   aspect=panel.kwargs.pop("aspect", "auto"),
+                   **panel.kwargs)
+    if panel.colorbar:
+        ax.figure.colorbar(im, ax=ax, fraction=0.04)
+    if panel.highlight:
+        for r, c in panel.highlight:
+            ax.add_patch(Rectangle(
+                (c - 0.5, r - 0.5), 1, 1,
+                edgecolor="red", facecolor="none", linewidth=2.0,
+            ))
+    ax.set_title(panel.title)
+    if panel.xticks is not None:
+        ax.set_xticks(range(len(panel.xticks)))
+        ax.set_xticklabels([str(x) for x in panel.xticks])
+    if panel.yticks is not None:
+        ax.set_yticks(range(len(panel.yticks)))
+        ax.set_yticklabels([str(y) for y in panel.yticks])
+    if panel.xlabel:
+        ax.set_xlabel(panel.xlabel)
+    if panel.ylabel:
+        ax.set_ylabel(panel.ylabel)
+
+
+@register("trace")
+def _render_trace(ax, panel: Panel) -> None:
+    d = panel.data
+    if "series" in d:
+        for series in d["series"]:
+            ax.plot(series["x"], series["y"],
+                    label=series.get("label"),
+                    color=series.get("color"))
+    else:
+        ax.plot(d["x"], d["y"], label=d.get("label"),
+                color=d.get("color"))
+        if "y2" in d:
+            label2 = d.get("labels", [None, None])[1] if "labels" in d else d.get("label2")
+            ax.plot(d["x"], d["y2"], label=label2)
+        if "fit" in d:
+            ax.plot(d["x"], d["fit"], "--", color="tab:red", label="fit")
+    if panel.vlines:
+        for v in panel.vlines:
+            ax.axvline(v, color="gray", linestyle=":", alpha=0.6)
+    if panel.xscale:
+        ax.set_xscale(panel.xscale)
+    if panel.yscale:
+        ax.set_yscale(panel.yscale)
+    ax.set_title(panel.title)
+    if panel.xlabel:
+        ax.set_xlabel(panel.xlabel)
+    if panel.ylabel:
+        ax.set_ylabel(panel.ylabel)
+    if panel.legend:
+        ax.legend(fontsize=8)
+    ax.grid(alpha=0.3)
+
+
+@register("histogram")
+def _render_histogram(ax, panel: Panel) -> None:
+    bins = panel.kwargs.pop("bins", 30)
+    ax.hist(panel.data, bins=bins, color="steelblue", **panel.kwargs)
+    if panel.vlines:
+        for v in panel.vlines:
+            ax.axvline(v, color="tab:red", linestyle="--", linewidth=1.5)
+    ax.set_title(panel.title)
+    if panel.xlabel:
+        ax.set_xlabel(panel.xlabel)
+    if panel.ylabel:
+        ax.set_ylabel(panel.ylabel or "count")
+    ax.grid(alpha=0.3)
+
+
+@register("fit_curve")
+def _render_fit_curve(ax, panel: Panel) -> None:
+    d = panel.data
+    series = d.get("series") or [d]
+    for s in series:
+        if "yerr" in s:
+            ax.errorbar(s["x"], s["y"], yerr=s["yerr"], fmt="o",
+                        markersize=6, label=s.get("label"),
+                        color=s.get("color"))
+        else:
+            ax.plot(s["x"], s["y"], "o", label=s.get("label"),
+                    color=s.get("color"))
+        if "xfit" in s and "yfit" in s:
+            ax.plot(s["xfit"], s["yfit"], lw=1.5, color=s.get("color"))
+        if "vline" in s:
+            ax.axvline(s["vline"], color=s.get("color"), ls=":", alpha=0.6)
+    if panel.xscale:
+        ax.set_xscale(panel.xscale)
+    if panel.yscale:
+        ax.set_yscale(panel.yscale)
+    ax.set_title(panel.title)
+    if panel.xlabel:
+        ax.set_xlabel(panel.xlabel)
+    if panel.ylabel:
+        ax.set_ylabel(panel.ylabel)
+    if panel.legend:
+        ax.legend(fontsize=8, loc="best")
+    ax.grid(alpha=0.3)
+
+
+@register("rgb_overlay")
+def _render_rgb_overlay(ax, panel: Panel) -> None:
+    import numpy as np
+
+    d = panel.data
+    if isinstance(d, (list, tuple)) and len(d) == 3:
+        r, g, b = d
+        rgb = np.stack([
+            r / max(r.max(), 1e-9),
+            g / max(g.max(), 1e-9),
+            b / max(b.max(), 1e-9),
+        ], axis=-1)
+    else:
+        rgb = np.asarray(d)
+    rgb = np.clip(rgb * panel.kwargs.pop("gain", 1.5), 0, 1)
+    ax.imshow(rgb)
+    if panel.overlay_points:
+        xs = [p[0] for p in panel.overlay_points]
+        ys = [p[1] for p in panel.overlay_points]
+        ax.scatter(xs, ys, s=80, facecolor="none",
+                   edgecolor="white", linewidth=1.5)
+    ax.set_title(panel.title)
+    ax.axis("off")

@@ -13,20 +13,13 @@ When tissue_mode=True, applies adaptive area filtering:
 - Edge cells: keep if area >= 50% of median (catches partial boundary cells)
 """
 
-import cv2
 import numpy as np
+import cv2
 
 
-def segment_tissue(
-    image,
-    use_otsu=True,
-    threshold_sigma=1.5,
-    open_kernel=5,
-    dilate_iter=1,
-    min_area=50,
-    tissue_mode=True,
-    connectivity=4,
-):
+def segment_tissue(image, use_otsu=True, threshold_sigma=1.5,
+                   open_kernel=5, dilate_iter=1, min_area=50,
+                   tissue_mode=True, connectivity=4):
     """Segment tissue cells from a membrane channel image.
 
     Args:
@@ -49,7 +42,8 @@ def segment_tissue(
             binary: thresholded membrane mask (before inversion)
     """
     if use_otsu:
-        _, binary = cv2.threshold(image, 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU)
+        _, binary = cv2.threshold(image, 0, 255,
+                                  cv2.THRESH_BINARY + cv2.THRESH_OTSU)
         binary = (binary > 0).astype(np.uint8)
     else:
         m, s = float(image.mean()), float(image.std())
@@ -81,39 +75,34 @@ def segment_tissue(
         y0 = int(stats[i, cv2.CC_STAT_TOP])
         cw = int(stats[i, cv2.CC_STAT_WIDTH])
         ch = int(stats[i, cv2.CC_STAT_HEIGHT])
-        touches_edge = x0 == 0 or y0 == 0 or x0 + cw >= w_img or y0 + ch >= h_img
-        raw_cells.append(
-            {
-                "px": round(cx, 1),
-                "py": round(cy, 1),
-                "area": area,
-                "label": i,
-                "touches_edge": touches_edge,
-            }
-        )
+        touches_edge = (x0 == 0 or y0 == 0
+                        or x0 + cw >= w_img or y0 + ch >= h_img)
+        raw_cells.append({
+            'px': round(cx, 1), 'py': round(cy, 1),
+            'area': area, 'label': i, 'touches_edge': touches_edge,
+        })
 
     if tissue_mode and len(raw_cells) > 3:
-        areas = sorted(c["area"] for c in raw_cells)
+        areas = sorted(c['area'] for c in raw_cells)
         median_area = areas[len(areas) // 2]
         interior_thresh = max(min_area, int(median_area * 0.2))
         edge_thresh = max(min_area, int(median_area * 0.5))
         raw_cells = [
-            c
-            for c in raw_cells
-            if c["area"] >= (edge_thresh if c["touches_edge"] else interior_thresh)
+            c for c in raw_cells
+            if c['area'] >= (edge_thresh if c['touches_edge'] else interior_thresh)
         ]
 
     return {
-        "cells": raw_cells,
-        "labels": labels,
-        "stats": stats,
-        "centroids": centroids,
-        "n_labels": nl - 1,
-        "binary": binary,
+        'cells': raw_cells,
+        'labels': labels,
+        'stats': stats,
+        'centroids': centroids,
+        'n_labels': nl - 1,
+        'binary': binary,
     }
 
 
-def measure_wound_closure(images, threshold=None, direction="horizontal"):
+def measure_wound_closure(images, threshold=None, direction='horizontal'):
     """Measure wound gap closure over a time series.
 
     Detects the wound (cell-free region) and tracks its width over time.
@@ -140,11 +129,8 @@ def measure_wound_closure(images, threshold=None, direction="horizontal"):
     n = len(images)
     if n == 0:
         return {
-            "gap_widths": [],
-            "closure_rate": 0.0,
-            "closure_pct": 0.0,
-            "leading_edges": [],
-            "time_to_close": None,
+            'gap_widths': [], 'closure_rate': 0.0, 'closure_pct': 0.0,
+            'leading_edges': [], 'time_to_close': None,
         }
 
     gap_widths = []
@@ -158,11 +144,12 @@ def measure_wound_closure(images, threshold=None, direction="horizontal"):
             binary = (img > threshold).astype(np.uint8)
         else:
             img8 = np.clip(img, 0, 255).astype(np.uint8)
-            _, binary = cv2.threshold(img8, 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU)
+            _, binary = cv2.threshold(img8, 0, 255,
+                                      cv2.THRESH_BINARY + cv2.THRESH_OTSU)
             binary = (binary > 0).astype(np.uint8)
 
         # Project along wound direction to get 1D density profile
-        if direction == "horizontal":
+        if direction == 'horizontal':
             # Wound runs horizontally → measure vertical gap
             profile = binary.mean(axis=1)  # average across columns
         else:
@@ -215,11 +202,11 @@ def measure_wound_closure(images, threshold=None, direction="horizontal"):
             break
 
     return {
-        "gap_widths": gap_widths,
-        "closure_rate": round(closure_rate, 2),
-        "closure_pct": round(closure_pct, 1),
-        "leading_edges": leading_edges,
-        "time_to_close": time_to_close,
+        'gap_widths': gap_widths,
+        'closure_rate': round(closure_rate, 2),
+        'closure_pct': round(closure_pct, 1),
+        'leading_edges': leading_edges,
+        'time_to_close': time_to_close,
     }
 
 
@@ -263,7 +250,7 @@ def contact_graph(labels, cells, max_boundary_px=20):
 
     contact_dist = {}  # (min_label, max_label) -> min dilation iterations
     for c in cells:
-        lbl = c["label"]
+        lbl = c['label']
         mask = (labels == lbl).astype(np.uint8)
         for d in range(1, max_iter + 1):
             dilated = cv2.dilate(mask, kernel, iterations=d)
@@ -280,14 +267,14 @@ def contact_graph(labels, cells, max_boundary_px=20):
         degree[a] = degree.get(a, 0) + 1
         degree[b] = degree.get(b, 0) + 1
     for c in cells:
-        if c["label"] not in degree:
-            degree[c["label"]] = 0
+        if c['label'] not in degree:
+            degree[c['label']] = 0
 
     degrees = list(degree.values())
     return {
-        "edges": edges,
-        "degree": degree,
-        "n_edges": len(edges),
-        "mean_degree": float(np.mean(degrees)) if degrees else 0.0,
-        "max_degree": int(max(degrees)) if degrees else 0,
+        'edges': edges,
+        'degree': degree,
+        'n_edges': len(edges),
+        'mean_degree': float(np.mean(degrees)) if degrees else 0.0,
+        'max_degree': int(max(degrees)) if degrees else 0,
     }

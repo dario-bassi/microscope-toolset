@@ -59,7 +59,8 @@ def project_std(stack):
     return stack.std(axis=0)
 
 
-def slice_orthogonal(stack, axis="xz", position=None, pixel_size_xy=1.0, pixel_size_z=1.0):
+def slice_orthogonal(stack, axis='xz', position=None, pixel_size_xy=1.0,
+                     pixel_size_z=1.0):
     """Extract an orthogonal cross-section from a Z-stack.
 
     Args:
@@ -78,12 +79,12 @@ def slice_orthogonal(stack, axis="xz", position=None, pixel_size_xy=1.0, pixel_s
     stack = np.asarray(stack)
     nz, ny, nx = stack.shape
 
-    if axis == "xz":
+    if axis == 'xz':
         if position is None:
             position = ny // 2
         section = stack[:, position, :]  # shape (Z, X)
         extent = (0, nx * pixel_size_xy, nz * pixel_size_z, 0)
-    elif axis == "yz":
+    elif axis == 'yz':
         if position is None:
             position = nx // 2
         section = stack[:, :, position]  # shape (Z, Y)
@@ -92,13 +93,14 @@ def slice_orthogonal(stack, axis="xz", position=None, pixel_size_xy=1.0, pixel_s
         raise ValueError(f"axis must be 'xz' or 'yz', got '{axis}'")
 
     return {
-        "image": section,
-        "extent": extent,
-        "axis": axis,
+        'image': section,
+        'extent': extent,
+        'axis': axis,
     }
 
 
-def measure_volume(stack, threshold=None, pixel_size_xy=1.0, pixel_size_z=1.0):
+def measure_volume(stack, threshold=None, pixel_size_xy=1.0,
+                   pixel_size_z=1.0):
     """Measure volume of structures in a Z-stack by thresholding.
 
     Args:
@@ -124,19 +126,19 @@ def measure_volume(stack, threshold=None, pixel_size_xy=1.0, pixel_size_z=1.0):
 
     mask = stack > threshold
     n_voxels = int(mask.sum())
-    voxel_size = pixel_size_xy**2 * pixel_size_z
+    voxel_size = pixel_size_xy ** 2 * pixel_size_z
     volume = n_voxels * voxel_size
 
     return {
-        "volume_um3": float(volume),
-        "volume_voxels": n_voxels,
-        "voxel_size_um3": float(voxel_size),
-        "threshold": float(threshold),
-        "mask": mask,
+        'volume_um3': float(volume),
+        'volume_voxels': n_voxels,
+        'voxel_size_um3': float(voxel_size),
+        'threshold': float(threshold),
+        'mask': mask,
     }
 
 
-def find_focus_plane(stack, metric="laplacian"):
+def find_focus_plane(stack, metric='laplacian'):
     """Find the best-focused plane in a Z-stack.
 
     Args:
@@ -157,13 +159,13 @@ def find_focus_plane(stack, metric="laplacian"):
     scores = np.zeros(nz)
     for z in range(nz):
         plane = stack[z]
-        if metric == "laplacian":
+        if metric == 'laplacian':
             lap = filters.laplace(plane)
             scores[z] = lap.var()
-        elif metric == "gradient":
+        elif metric == 'gradient':
             gy, gx = np.gradient(plane)
-            scores[z] = np.sqrt(gx**2 + gy**2).mean()
-        elif metric == "std":
+            scores[z] = np.sqrt(gx ** 2 + gy ** 2).mean()
+        elif metric == 'std':
             scores[z] = plane.std()
         else:
             raise ValueError(f"Unknown metric: {metric}")
@@ -171,9 +173,9 @@ def find_focus_plane(stack, metric="laplacian"):
     best_z = int(scores.argmax())
 
     return {
-        "best_z": best_z,
-        "scores": scores,
-        "best_score": float(scores[best_z]),
+        'best_z': best_z,
+        'scores': scores,
+        'best_score': float(scores[best_z]),
     }
 
 
@@ -220,8 +222,8 @@ def z_profile(stack, position=None, roi_mask=None):
         fwhm = None
 
     return {
-        "z_indices": np.arange(nz),
-        "intensities": intensities,
-        "peak_z": peak_z,
-        "fwhm_z": fwhm,
+        'z_indices': np.arange(nz),
+        'intensities': intensities,
+        'peak_z': peak_z,
+        'fwhm_z': fwhm,
     }

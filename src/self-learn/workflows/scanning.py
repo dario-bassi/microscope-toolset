@@ -11,8 +11,7 @@ For standard multi-position scans without callbacks, use
 pymmcore-plus MDASequence directly.
 """
 
-from collections.abc import Sequence
-from typing import Any
+from typing import Any, Generator, Optional, Sequence
 
 import numpy as np
 from scipy.cluster.hierarchy import fcluster, linkage
@@ -21,7 +20,8 @@ from useq import MDAEvent
 from ..detection.cells import detect_cells
 
 
-def grid_positions(world_width, world_height, fov_size, overlap_frac=0.3):
+def grid_positions(world_width, world_height, fov_size, overlap_frac=0.3,
+                   serpentine=False):
     """Generate grid scan positions to tile a world with overlap.
 
     Args:
@@ -29,6 +29,8 @@ def grid_positions(world_width, world_height, fov_size, overlap_frac=0.3):
         world_height: World height in world units.
         fov_size: FOV size in world units (assumes square).
         overlap_frac: Fraction of FOV to overlap (0.3 = 30%).
+        serpentine: If True, alternate row direction (boustrophedon).
+            Minimizes stage travel.
 
     Returns:
         List of (x, y) stage center positions.
@@ -53,7 +55,12 @@ def grid_positions(world_width, world_height, fov_size, overlap_frac=0.3):
         if ys[-1] >= world_height - half_fov:
             break
 
-    return [(float(x), float(y)) for y in ys for x in xs]
+    positions = []
+    for row_idx, yy in enumerate(ys):
+        row_xs = xs if not serpentine or row_idx % 2 == 0 else list(reversed(xs))
+        for xx in row_xs:
+            positions.append((float(xx), float(yy)))
+    return positions
 
 
 def scan_and_detect_mda(
@@ -62,9 +69,9 @@ def scan_and_detect_mda(
     threshold_sigma: float = 2.5,
     min_area_px: int = 20,
     fill_holes: bool = False,
-    channels: Sequence[str] | None = None,
+    channels: Optional[Sequence[str]] = None,
     exposure: float = 50.0,
-    metadata: dict[str, Any] | None = None,
+    metadata: Optional[dict[str, Any]] = None,
 ):
     """Create an MDA-native grid scan with cell detection.
 
@@ -93,8 +100,8 @@ def scan_and_detect_mda(
         shared_state contains 'world_positions' (list of (wx, wy)).
     """
     state: dict[str, Any] = {
-        "world_positions": [],
-        "per_tile_counts": [],
+        'world_positions': [],
+        'per_tile_counts': [],
     }
 
     def event_generator():
@@ -123,18 +130,16 @@ def scan_and_detect_mda(
         sy = event.y_pos if event.y_pos is not None else 0.0
 
         cells = detect_cells(
-            image,
-            threshold_sigma=threshold_sigma,
-            min_area_px=min_area_px,
-            fill_holes=fill_holes,
+            image, threshold_sigma=threshold_sigma,
+            min_area_px=min_area_px, fill_holes=fill_holes,
         )
-        state["per_tile_counts"].append(len(cells))
+        state['per_tile_counts'].append(len(cells))
 
         for c in cells:
-            col, row = c["centroid_px"]
+            col, row = c['centroid_px']
             wx = sx + (col - W / 2) * pixel_size
             wy = sy + (row - H / 2) * pixel_size
-            state["world_positions"].append((wx, wy))
+            state['world_positions'].append((wx, wy))
 
     return event_generator, on_frame, state
 
@@ -162,12 +167,13 @@ def deduplicate_cells(world_positions, min_dist=5):
         return list(world_positions)
 
     pts = np.array(world_positions, dtype=float)
-    Z = linkage(pts, method="complete")
-    clusters = fcluster(Z, t=min_dist, criterion="distance")
+    Z = linkage(pts, method='complete')
+    clusters = fcluster(Z, t=min_dist, criterion='distance')
 
     unique = []
     for cid in sorted(set(clusters)):
         mask = clusters == cid
         cluster_pts = pts[mask]
-        unique.append((float(cluster_pts[:, 0].mean()), float(cluster_pts[:, 1].mean())))
+        unique.append((float(cluster_pts[:, 0].mean()),
+                        float(cluster_pts[:, 1].mean())))
     return unique
