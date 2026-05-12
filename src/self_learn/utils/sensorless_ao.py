@@ -6,8 +6,8 @@ dict-shaped inputs so they can be tested with synthetic data — no live
 core required.
 
 Composes from:
-- :func:`src.core.hardware.core.snap`
-- :func:`src.core.workflows.autofocus.focus_metric`
+- :func:`self_learn.hardware.core.snap`
+- :func:`self_learn.workflows.autofocus.focus_metric`
 
 Extracted from the ch607 / ch608 / ch610 wins (sprint #25, counter=87).
 The three patterns this module operationalises:

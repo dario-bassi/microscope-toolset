@@ -1,6 +1,6 @@
 """Auto-recipe selector — image (+ optional core) → recipe suggestion.
 
-Bridges :mod:`src.core.utils.sample_classifier` to the recipes catalogue
+Bridges :mod:`self_learn.utils.sample_classifier` to the recipes catalogue
 under ``src/recipes/``. Pure dispatch primitive: never snaps, never moves
 hardware, never invokes a recipe. Returns a :class:`RecipeSuggestion`
 the caller can act on.
@@ -353,7 +353,7 @@ def auto_recipe(
             the raw description text. When supplied, this both drives
             the archetype override AND pre-fills ``default_kwargs``
             from disclosed numeric facts and coordinate priors via
-            :func:`src.core.utils.brief_parse.kwargs_from_brief`.
+            :func:`self_learn.utils.brief_parse.kwargs_from_brief`.
             Disclosed values override feature-derived heuristics —
             the brief author chose to surface them. Sprint #41
             (2026-04-28) closes the ch651 gap where the GT-adjacent

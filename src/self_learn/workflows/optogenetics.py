@@ -21,7 +21,7 @@ def detect_somata_fluorescence(image, min_area=50, edge_margin=20, sigma=3.0,
     Filters by area and edge proximity.
 
     Note: Named ``detect_somata_fluorescence`` to distinguish from
-    ``src.core.detection.neurons.detect_somata`` which uses MAP2 + distance
+    ``self_learn.detection.neurons.detect_somata`` which uses MAP2 + distance
     transform. This function is generic CC-based detection.
 
     Args:

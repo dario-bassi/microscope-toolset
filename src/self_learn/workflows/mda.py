@@ -4,7 +4,7 @@ Provides adaptive_phase_events() for phase-based generators with
 early-stop support.
 
 For all acquisitions (fixed or adaptive), use run_events() from
-src.core.hardware.core — it delegates to core.mda.run() which works
+self_learn.hardware.core — it delegates to core.mda.run() which works
 identically for local CMMCorePlus and remote pymmcore-proxy.
 """
 

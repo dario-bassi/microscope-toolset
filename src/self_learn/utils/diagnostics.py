@@ -1,68 +1,69 @@
-"""Diagnostic image saving for challenge submissions.
+"""Diagnostic image saving for visual verification.
 
-Every submission must include at least one saved snapshot showing what
-the microscope acquired and what the analysis found. This is non-negotiable
-per orchestrator directive.
+Save snapshots and overlays to disk so the agent can read them with its
+vision capability and confirm the analysis before acting on the result.
 
-See `knowledge/core/approach/Visual verification.md` for the why and when:
-an overlay is only useful if you then Read the PNG and confirm the drawn
-marks match what you're about to submit. The habit — render, Read, then
-submit — is source-invariant; verify fresh inline code and pedigreed
-recipes alike.
+See `knowledge/Core/Approach/Visual verification.md` for the full protocol:
+render an overlay, read the PNG, verify the marks match what you plan to
+report — then proceed.
 
 Usage:
     from self_learn.utils.diagnostics import save_snapshot, save_overlay
 
-    # Save raw channel images
-    save_snapshot(img, 153, 'membrane_raw')
-
-    # Save image with detected cell centroids overlaid
-    save_overlay(img, cells, 153, 'detected_cells')
+    tmp = Path(tempfile.gettempdir())
+    save_snapshot(img, 'membrane_raw', save_dir=tmp)
+    save_overlay(img, cells, 'detected_cells', save_dir=tmp)
 """
 
+import tempfile
 import numpy as np
 import cv2
-import os
+from pathlib import Path
 
 
-def save_snapshot(img, challenge_id, label='snapshot'):
+def save_snapshot(img, label='snapshot', save_dir=None):
     """Save a grayscale image as PNG with auto-scaling.
 
     Args:
-        img: 2D numpy array (any dtype).
-        challenge_id: Challenge number for filename.
-        label: Descriptive label for the image.
+        img: 2D numpy array (any dtype, any bit depth — auto-scaled to uint8).
+        label: Descriptive label used in the filename.
+        save_dir: Directory to save into (Path or str). Defaults to the
+            system temp directory (`tempfile.gettempdir()`).
 
     Returns:
-        str: Path to saved file.
+        Path: Path to the saved PNG file.
     """
-    path = f'/tmp/ch{challenge_id}_{label}.png'
+    out = Path(save_dir) if save_dir else Path(tempfile.gettempdir())
+    path = out / f'{label}.png'
     img_f = img.astype(float)
     if img_f.max() > img_f.min():
         scaled = ((img_f - img_f.min()) / (img_f.max() - img_f.min()) * 255)
     else:
         scaled = np.zeros_like(img_f)
-    cv2.imwrite(path, scaled.astype(np.uint8))
+    cv2.imwrite(str(path), scaled.astype(np.uint8))
     return path
 
 
-def save_overlay(img, cells, challenge_id, label='overlay',
+def save_overlay(img, cells, label='overlay', save_dir=None,
                  marker_color=(0, 255, 0), marker_radius=8):
     """Save image with cell centroids marked as circles.
 
     Args:
-        img: 2D grayscale image.
-        cells: List of dicts with 'x', 'y' (pixel coords within image)
-            or list of (x, y) tuples.
-        challenge_id: Challenge number for filename.
-        label: Descriptive label.
-        marker_color: BGR color for markers.
-        marker_radius: Circle radius in pixels.
+        img: 2D grayscale image (any dtype — auto-scaled to uint8).
+        cells: List of dicts with 'x', 'y' keys (pixel coordinates, image
+            space) or list of (x, y) tuples. Coordinates must be in pixel
+            space (not world/µm coordinates).
+        label: Descriptive label used in the filename.
+        save_dir: Directory to save into (Path or str). Defaults to the
+            system temp directory.
+        marker_color: BGR tuple for the circle color. Default: green (0,255,0).
+        marker_radius: Circle radius in pixels. Default: 8.
 
     Returns:
-        str: Path to saved file.
+        Path: Path to the saved PNG file.
     """
-    path = f'/tmp/ch{challenge_id}_{label}.png'
+    out = Path(save_dir) if save_dir else Path(tempfile.gettempdir())
+    path = out / f'{label}.png'
 
     # Auto-scale to 8-bit
     img_f = img.astype(float)
@@ -85,24 +86,26 @@ def save_overlay(img, cells, challenge_id, label='overlay',
             continue
         cv2.circle(bgr, (cx, cy), marker_radius, marker_color, 2)
 
-    cv2.imwrite(path, bgr)
+    cv2.imwrite(str(path), bgr)
     return path
 
 
-def save_composite(images, titles, challenge_id, label='composite', cols=3):
+def save_composite(images, titles, label='composite', save_dir=None, cols=3):
     """Save a composite image showing multiple channels side by side.
 
     Args:
-        images: List of 2D arrays.
-        titles: List of title strings (same length as images).
-        challenge_id: Challenge number.
-        label: Descriptive label.
-        cols: Number of columns in the grid.
+        images: List of 2D arrays (any dtype — each auto-scaled to uint8).
+        titles: List of title strings, same length as images.
+        label: Descriptive label used in the filename.
+        save_dir: Directory to save into (Path or str). Defaults to the
+            system temp directory.
+        cols: Number of columns in the grid layout. Default: 3.
 
     Returns:
-        str: Path to saved file.
+        Path: Path to the saved PNG file.
     """
-    path = f'/tmp/ch{challenge_id}_{label}.png'
+    out = Path(save_dir) if save_dir else Path(tempfile.gettempdir())
+    path = out / f'{label}.png'
 
     n = len(images)
     rows = (n + cols - 1) // cols
@@ -133,5 +136,5 @@ def save_composite(images, titles, challenge_id, label='composite', cols=3):
         # Image
         canvas[y0 + title_h:y0 + title_h + h, x0:x0 + w] = bgr
 
-    cv2.imwrite(path, canvas)
+    cv2.imwrite(str(path), canvas)
     return path

@@ -8,7 +8,7 @@ shape into a transferable primitive that sits cleanly above the
 loops.
 
 Why this exists separate from
-:func:`src.core.utils.sensorless_ao.sweep_state_device`:
+:func:`self_learn.utils.sensorless_ao.sweep_state_device`:
 
 - ``sensorless_ao.sweep_state_device`` is the legacy AO sweep — inline
   ``setState`` → ``waitForDevice`` → ``snap``. Trips the submission gate
@@ -24,14 +24,14 @@ Why this exists separate from
   that's a categorical state-device with N positions.
 
 Sister to:
-- :mod:`src.core.utils.sensorless_ao` — same coordinate-descent shape,
+- :mod:`self_learn.utils.sensorless_ao` — same coordinate-descent shape,
   inline-snap variant.
-- :mod:`src.core.utils.fft_peak`, :mod:`src.core.utils.fluorophore_brightness` —
+- :mod:`self_learn.utils.fft_peak`, :mod:`self_learn.utils.fluorophore_brightness` —
   reduce-on-snap utilities that compose cleanly with the per-state
   reduce hook here.
 
 Composes with:
-- :func:`src.core.hardware.core.run_events`
+- :func:`self_learn.hardware.core.run_events`
 - :class:`useq.MDAEvent` ``properties`` field
 
 Tested on:

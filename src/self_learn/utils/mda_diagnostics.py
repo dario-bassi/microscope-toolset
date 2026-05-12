@@ -12,7 +12,7 @@ This module provides:
   - ``check_frame_count(results, expected, *, raise_on_mismatch=False)``
     — pure-numpy validator the caller invokes after ``run_events``.
   - ``run_events_checked(core, events, *, expected_frames, ...)`` —
-    thin wrapper around ``src.core.hardware.core.run_events`` that
+    thin wrapper around ``self_learn.hardware.core.run_events`` that
     raises ``MDAFrameTruncation`` when the result is short of the
     request, or returns the validated list unchanged when complete.
 

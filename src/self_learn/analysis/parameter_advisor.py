@@ -44,7 +44,7 @@ def suggest_watershed_params(pixel_size_um, expected_diameter_um=None,
     """Suggest watershed segmentation parameters from physical context.
 
     Converts physical object size to optimal pixel-domain parameters
-    for :func:`~src.core.detection.cells.watershed_split`.
+    for :func:`~self_learn.detection.cells.watershed_split`.
 
     Args:
         pixel_size_um: Micrometers per pixel (e.g. 1.0 for 10x, 0.5 for 20x).
@@ -89,8 +89,8 @@ def suggest_tracking_params(pixel_size_um, expected_speed_um_s=None,
     """Suggest tracking parameters from physical context.
 
     Converts expected object speed and frame interval to pixel-domain
-    parameters for :func:`~src.core.analysis.tracking.match_centroids` and
-    :func:`~src.core.analysis.run_tumble.build_tracks`.
+    parameters for :func:`~self_learn.analysis.tracking.match_centroids` and
+    :func:`~self_learn.analysis.run_tumble.build_tracks`.
 
     Args:
         pixel_size_um: Micrometers per pixel.
@@ -156,7 +156,7 @@ def suggest_detection_params(pixel_size_um, object_type=None,
     """Suggest detection parameters for cell/object detection.
 
     Provides min_area, threshold guidance, and LoG sigma for
-    :func:`~src.core.detection.cells.detect_cells` and related functions.
+    :func:`~self_learn.detection.cells.detect_cells` and related functions.
 
     Args:
         pixel_size_um: Micrometers per pixel.
@@ -220,8 +220,8 @@ def suggest_log_params(pixel_size_um, expected_diameter_um=None,
                         object_type=None):
     """Suggest Laplacian of Gaussian parameters for blob detection.
 
-    Optimized for :func:`~src.core.detection.cells.count_blobs_log` and
-    :func:`~src.core.analysis.condensate.detect_foci`.
+    Optimized for :func:`~self_learn.detection.cells.count_blobs_log` and
+    :func:`~self_learn.analysis.condensate.detect_foci`.
 
     Args:
         pixel_size_um: Micrometers per pixel.

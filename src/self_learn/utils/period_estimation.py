@@ -3,7 +3,7 @@
 Sprint #50 (2026-04-28). Lifts the ch663 r1 = 10/10 pollen-tube
 oscillation analysis (autocorr + FFT consensus on pooled per-pair
 displacements) into a transferable utility. Sister to the existing
-:mod:`src.core.analysis.temporal` (which provides ``autocorrelation``
+:mod:`self_learn.analysis.temporal` (which provides ``autocorrelation``
 and ``fft_spectrum`` but not the parabolic-peak-interp + first-peak +
 band-restricted argmax + cross-validator combo this module exposes).
 
@@ -33,9 +33,9 @@ Public functions:
   - :func:`estimate_period_consensus` — both methods + agreement check.
 
 Composes with:
-  - :mod:`src.core.analysis.temporal` (the existing autocorr/FFT
+  - :mod:`self_learn.analysis.temporal` (the existing autocorr/FFT
     primitives — this module wraps and extends them).
-  - :mod:`src.core.utils.firing_energy` (for pre-detrending oscillating
+  - :mod:`self_learn.utils.firing_energy` (for pre-detrending oscillating
     intensity traces before period analysis).
 
 Tested on:

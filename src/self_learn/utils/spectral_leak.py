@@ -25,7 +25,7 @@ single-call leak-measurement kernel; this module is the
 agent-portable substrate.
 
 This module is intentionally NOT registered in
-:mod:`src.core.utils.auto_recipe`. Spectral leak is a brief-level
+:mod:`self_learn.utils.auto_recipe`. Spectral leak is a brief-level
 signal ("crosstalk", "unmix", "bleed") that the agent picks
 deliberately.
 """

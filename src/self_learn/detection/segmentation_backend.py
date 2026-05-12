@@ -1,7 +1,7 @@
-"""Pluggable segmentation backends for `src.core.detection`.
+"""Pluggable segmentation backends for `self_learn.detection`.
 
 The platform currently ships sigma-tuned thresholding under
-`src.core.detection.cells`. The role doc is explicit that on a real
+`self_learn.detection.cells`. The role doc is explicit that on a real
 microscope you'd use Cellpose / StarDist instead — and the
 `Sim-state vs rendered count asymmetry` pitfall (knowledge/core/
 pitfalls/) showed exactly why: shared-feature segmentation can't be

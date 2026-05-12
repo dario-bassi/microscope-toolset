@@ -29,7 +29,7 @@ Convention notes called out in the public API:
   challenge demands it.
 
 This module is intentionally NOT registered in
-:mod:`src.core.utils.auto_recipe`: SLM availability + centroid
+:mod:`self_learn.utils.auto_recipe`: SLM availability + centroid
 geometry are scenario-level signals, not first-contact-image signals.
 """
 

@@ -11,7 +11,7 @@ Usage:
     log.log_measurement("cell_count", 32, units="cells")
     log.log_decision("arrest detected", {"g1_frac": 0.95})
     log.log_device("Perfusion", "Drug")
-    log.save("/tmp/experiment.json")
+    log.save(Path(tempfile.gettempdir()) / "experiment.json")
 """
 
 import json

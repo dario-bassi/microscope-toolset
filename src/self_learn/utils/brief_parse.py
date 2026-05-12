@@ -673,7 +673,7 @@ def kwargs_from_brief(
     """Pull recipe-specific kwargs from a parsed brief.
 
     Maps a classifier-class label (the keys in
-    ``src.core.utils.auto_recipe._PRIMARY``) to recipe kwargs that the
+    ``self_learn.utils.auto_recipe._PRIMARY``) to recipe kwargs that the
     brief explicitly disclosed. Disclosed values are *strong* signals —
     the brief author chose to surface them — and should override the
     feature-derived heuristics that ``auto_recipe`` builds from the

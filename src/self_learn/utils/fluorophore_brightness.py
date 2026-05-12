@@ -1,8 +1,8 @@
 """Fluorophore-brightness primitives: predict ranking + measure + compare.
 
 Pure-data utilities — no live core required for the predict / compare
-half. Mirrors :mod:`src.core.utils.fft_peak` and
-:mod:`src.core.utils.spectral_leak` (utility-only, no recipe layer
+half. Mirrors :mod:`self_learn.utils.fft_peak` and
+:mod:`self_learn.utils.spectral_leak` (utility-only, no recipe layer
 this sprint).
 
 Lifted from :mod:`scratch.solve_617` (counter=116) where the inline
@@ -21,17 +21,17 @@ Three primitives:
    bool + per-channel rel-err + max rel-err + tolerance check.
 
 This module is intentionally NOT registered in
-:mod:`src.core.utils.auto_recipe`. Brightness ranking is a
+:mod:`self_learn.utils.auto_recipe`. Brightness ranking is a
 brief-level signal ("brightness", "ε × Φ", "FPbase") — same
-rationale as :mod:`src.core.utils.spectral_leak`,
-:mod:`src.core.utils.fft_peak`.
+rationale as :mod:`self_learn.utils.spectral_leak`,
+:mod:`self_learn.utils.fft_peak`.
 
 REUSABLE per the ch617 grader:
 - Multi-channel bleach-rate ranking via the registry's
   ``bleach_kx`` field.
 - Filter-set SNR design.
 - Bleed-through severity (the brightness ratio sets which channel
-  the leak from :mod:`src.core.utils.spectral_leak` is most visible
+  the leak from :mod:`self_learn.utils.spectral_leak` is most visible
   in).
 """
 

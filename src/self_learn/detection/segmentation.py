@@ -20,7 +20,7 @@ from skimage import filters, morphology, measure, segmentation, feature
 def watershed_split(binary_mask, min_distance=7):
     """Split touching cells in a binary mask using watershed.
 
-    Delegates to :func:`~src.core.detection.cells.watershed_split` which has
+    Delegates to :func:`~self_learn.detection.cells.watershed_split` which has
     the full implementation (``dt_threshold``, ``fill_holes``, ``'auto'``
     min_distance).  This wrapper remaps return keys for backward
     compatibility: ``n_cells`` instead of ``n_objects``, centroids as

@@ -1,8 +1,8 @@
 """Dose-threshold sweep + bisection — minimum-effective-dose detection.
 
 The third leg of dose-aware control, alongside
-:mod:`src.core.utils.rate_limited_drive` (single-setpoint drive to a
-band) and :mod:`src.core.utils.pulsed_schedule` (multi-waypoint
+:mod:`self_learn.utils.rate_limited_drive` (single-setpoint drive to a
+band) and :mod:`self_learn.utils.pulsed_schedule` (multi-waypoint
 trajectory MPC):
 
   - **rate_limited_drive** answers "how many ON pulses to reach the

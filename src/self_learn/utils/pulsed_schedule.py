@@ -22,14 +22,14 @@ Three functions, no scenario-specific assumptions:
     :class:`PulsedSchedule`.
 
 Composes nothing — pure math + planning. Sister of
-:func:`src.core.utils.rate_limited_drive.predict_n_steps` (single-
+:func:`self_learn.utils.rate_limited_drive.predict_n_steps` (single-
 setpoint forward model). Decoupled from microscope / bridge / SLM:
 the caller wires up `step_bridge` + `setSLMImage` themselves, same
 callback boundary as `rate_limited_drive`.
 
 Multi-waypoint trajectories cannot use the single-setpoint
 early-stop semantics from
-:func:`src.core.utils.rate_limited_drive.drive_to_band`: a multi-
+:func:`self_learn.utils.rate_limited_drive.drive_to_band`: a multi-
 waypoint trajectory must OVERSHOOT intermediate setpoints to reach
 later waypoints, and early-stop would terminate the controller
 mid-trajectory. The new shape is pulsed segments with decay between
@@ -41,7 +41,7 @@ For now, the open-loop planner suffices (ch624 r1 = 10/10 with
 [2, 4, 4] all-in-band on round 1, no sample-and-correct needed).
 
 This module is intentionally NOT registered in
-:mod:`src.core.utils.auto_recipe`. Trajectory-planning availability
+:mod:`self_learn.utils.auto_recipe`. Trajectory-planning availability
 is a scenario-level signal (the brief names rate, decay, segment_len,
 and waypoint bands) — same rationale as the other utility primitives.
 """

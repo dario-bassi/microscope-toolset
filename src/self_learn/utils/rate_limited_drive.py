@@ -27,11 +27,11 @@ Single-setpoint by design. Multi-waypoint reference-trajectory MPC
 (pulsed stim, no mid-trajectory early-stop) is a different shape —
 the early-stop semantics break when you have to overshoot
 intermediate setpoints — and lives in
-:mod:`src.core.utils.pulsed_schedule` (sprint #37, lifted from
+:mod:`self_learn.utils.pulsed_schedule` (sprint #37, lifted from
 ch624 r1).
 
 This module is intentionally NOT registered in
-:mod:`src.core.utils.auto_recipe`. Rate-limited-drive availability
+:mod:`self_learn.utils.auto_recipe`. Rate-limited-drive availability
 is a scenario-level signal (rate constant + setpoint target both
 named in the brief) — same rationale as the other utility primitives.
 """

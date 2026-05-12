@@ -190,7 +190,7 @@ def link_tracks_gap(all_spots, max_dist, max_gap=2, min_len=15):
 def compute_msd(track_xy, *, pixel_size_um, dt=DT_DEFAULT, max_lag_frac=0.5):
     """Compute mean squared displacement vs lag time for one track.
 
-    Delegates core MSD calculation to :func:`~src.core.analysis.diffusion.compute_msd`
+    Delegates core MSD calculation to :func:`~self_learn.analysis.diffusion.compute_msd`
     and converts to physical units.
 
     MSD(τ) = <|r(t+τ) − r(t)|²>  averaged over all valid pairs.

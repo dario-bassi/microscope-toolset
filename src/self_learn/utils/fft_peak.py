@@ -1,7 +1,7 @@
 """FFT-peak primitives: 2D power-spectrum peak + bandpass + orientation.
 
 Pure-data utilities — no live core required for tests. Mirrors the
-:mod:`src.core.utils.spectral_leak` template.
+:mod:`self_learn.utils.spectral_leak` template.
 
 Lifted from :mod:`scratch.solve_615` (counter=106) where the inline
 ``fft2 + bandpass + argmax`` block was the core of the ch615 r1 →
@@ -17,9 +17,9 @@ Composes nothing (numpy only). Useful for:
   microvilli) via the same FFT-peak-then-bandpass approach.
 
 This module is intentionally NOT registered in
-:mod:`src.core.utils.auto_recipe`. Frequency content isn't yet a
+:mod:`self_learn.utils.auto_recipe`. Frequency content isn't yet a
 sample-classifier signal (the classifier looks at spatial
-features); same rationale as :mod:`src.core.utils.spectral_leak`.
+features); same rationale as :mod:`self_learn.utils.spectral_leak`.
 """
 
 from __future__ import annotations
