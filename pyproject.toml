@@ -150,12 +150,12 @@ ignore = [
 ]
 
 [tool.ruff.lint.per-file-ignores]
-"src/self-learn/__init__.py" = ["F401"]
-"src/self-learn/analysis/__init__.py" = ["F401"]
-"src/self-learn/detection/__init__.py" = ["F401"]
-"src/self-learn/hardware/__init__.py" = ["F401"]
-"src/self-learn/utils/__init__.py" = ["F401"]
-"src/self-learn/workflows/__init__.py" = ["F401"]
+"src/self_learn/__init__.py" = ["F401"]
+"src/self_learn/analysis/__init__.py" = ["F401"]
+"src/self_learn/detection/__init__.py" = ["F401"]
+"src/self_learn/hardware/__init__.py" = ["F401"]
+"src/self_learn/utils/__init__.py" = ["F401"]
+"src/self_learn/workflows/__init__.py" = ["F401"]
 "src/benchmarking/tests/*/initialize_test.py" = ["F821"]
 
 [tool.ruff.lint.isort]
