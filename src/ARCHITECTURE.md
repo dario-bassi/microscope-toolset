@@ -8,23 +8,22 @@
 
 | Task | Location |
 |------|----------|
-| Snap an image, move stage, set objective | `src/core/hardware/core.py` |
-| Run a timelapse / Z-stack / multi-position | `src/core/hardware/core.py:run_events()` |
-| Detect cells / tissue / neurons | `src/core/detection/` |
-| Measure intensity / morphology / kinetics | `src/core/analysis/` |
-| High-level protocol (adaptive survey, tracking, optogenetics) | `src/core/workflows/` |
-| Channel discovery, pixel size, config group | `src/core/hardware/config.py` |
-| Autofocus | `src/core/workflows/autofocus.py` |
-| FUCCI cell cycle | `src/core/analysis/cell_cycle.py` |
-| Bacterial light trap | `src/recipes/bacteria_trap.py` |
-| Q10 / temperature growth | `src/recipes/temperature_experiment.py` |
-| Save overlay / showcase image | `src/core/utils/diagnostics.py`, `src/core/utils/showcase.py` |
-| Per-sample-type step-by-step guide | `knowledge/recipes/` |
-| Universal microscopy strategies | `knowledge/core/approach/`, `knowledge/core/strategies/` |
-| pymmcore-plus / useq API reference | `knowledge/core/concepts/` |
-| Generalizable pitfalls and lessons | `knowledge/core/pitfalls/` |
-| Verified paper citations | `knowledge/papers/` |
-| Reusable skill runbooks | `skills/` |
+| Snap an image, move stage, set objective | `src/self_learn/hardware/core.py` |
+| Run a timelapse / Z-stack / multi-position | `src/self_learn/hardware/core.py:run_events()` |
+| Detect cells / tissue / neurons | `src/self_learn/detection/` |
+| Measure intensity / morphology / kinetics | `src/self_learn/analysis/` |
+| High-level protocol (adaptive survey, tracking, optogenetics) | `src/self_learn/workflows/` |
+| Channel discovery, pixel size, config group | `src/self_learn/hardware/config.py` |
+| Autofocus | `src/self_learn/workflows/autofocus.py` |
+| FUCCI cell cycle | `src/self_learn/analysis/cell_cycle.py` |
+| Save overlay / showcase image | `src/self_learn/utils/diagnostics.py`, `src/self_learn/utils/showcase.py` |
+| Universal microscopy strategies | `src/self_learn/knowledge/Core/Approach/`, `Core/Strategies/` |
+| pymmcore-plus / useq API reference | `src/self_learn/knowledge/Core/Concepts/` |
+| Generalizable pitfalls and lessons | `src/self_learn/knowledge/Core/Pitfalls/` |
+| Verified paper citations | `src/self_learn/knowledge/Papers/` |
+| MCP server tools | `src/mcp_microscopetoolset/server_setup.py` |
+| Napari plugin entry point | `src/plugin_napari.py` |
+| Benchmarking / test harness | `src/benchmarking/` |
 
 ---
 
@@ -33,30 +32,33 @@
 ```
 LLM Agent  (reasoning + vision)
       │
-  Knowledge  (knowledge/)          ← reasoning, strategies, playbooks
+  Knowledge  (src/self_learn/knowledge/)   ← reasoning, strategies, playbooks
       │
-  Workflows  (src/core/workflows/)      ← acquisition + analysis protocols
+  Workflows  (src/self_learn/workflows/)   ← acquisition + analysis protocols
       │
-  Analysis   (src/core/analysis/)       ← image feature extraction
-  Detection  (src/core/detection/)      ← segmentation, object detection
+  Analysis   (src/self_learn/analysis/)    ← image feature extraction
+  Detection  (src/self_learn/detection/)   ← segmentation, object detection
       │
-  Hardware   (src/core/hardware/)       ← pymmcore-plus wrappers
+  Hardware   (src/self_learn/hardware/)    ← pymmcore-plus wrappers
       │
-  Utils      (src/core/utils/)          ← diagnostics, logging, reporting
+  Utils      (src/self_learn/utils/)       ← diagnostics, logging, reporting
+      │
+  MCP Server (src/mcp_microscopetoolset/)  ← tool surface for LLM clients
+  Napari UI  (src/plugin_napari.py)        ← live view + GUI
 ```
 
 **Rule:** layers only call downward. Workflows call analysis/detection/hardware; analysis never calls workflows.
 
 ---
 
-## src/core/hardware/ — Microscope Control
+## src/self_learn/hardware/ — Microscope Control
 
 The single entry point for all hardware interaction.
 
 | Module | Key functions |
 |--------|--------------|
 | `core.py` | `snap()`, `move_to()`, `get_position()`, `set_objective()`, `get_pixel_size()`, `set_z()`, `get_z()`, `apply_slm()`, `make_slm_circle()`, `pixel_to_world()`, `world_to_pixel()`, `run_events()` |
-| `config.py` | `get_config()`, `refresh_config()`, `resolve_channel_group(core, group)` — runtime discovery of channel group, pixel size, objective, SLM, XY/Z devices. Pass `group=None` anywhere in core/ to auto-discover. |
+| `config.py` | `get_config()`, `refresh_config()`, `resolve_channel_group(core, group)` — runtime discovery of channel group, pixel size, objective, SLM, XY/Z devices. Pass `group=None` anywhere in self_learn/ to auto-discover. |
 | `quality.py` | SNR estimation, focus variance, brightness assessment |
 | `zstack.py` | Z-stack acquisition, best-focus plane detection |
 | `drift.py` | Drift detection/correction via phase correlation and centroid tracking |
@@ -64,7 +66,7 @@ The single entry point for all hardware interaction.
 
 ---
 
-## src/core/detection/ — Object Detection & Segmentation
+## src/self_learn/detection/ — Object Detection & Segmentation
 
 | Module | What it detects |
 |--------|----------------|
@@ -77,7 +79,7 @@ The single entry point for all hardware interaction.
 
 ---
 
-## src/core/analysis/ — Feature Extraction
+## src/self_learn/analysis/ — Feature Extraction
 
 ### Cell Biology & Physiology
 | Module | What it measures |
@@ -102,7 +104,7 @@ The single entry point for all hardware interaction.
 | `ring.py` | Ring / annular structure analysis (organoids, ZOI) |
 | `network.py` | Branching / tubular / vascular / dendritic structure analysis |
 | `gradient.py` | Radial gradient and edge detection for ZOI / spheroid boundaries |
-| `histology.py` | H&E deconvolution, nuclear morphometry, necrosis detection, `detect_vessels()` (RBC-cluster + optional nuclear-ring filter) |
+| `histology.py` | H&E deconvolution, nuclear morphometry, necrosis detection, `detect_vessels()` |
 | `cytoskeleton.py` | Actin / stress fiber analysis (VSF_count, DSF_count) |
 | `lipid_droplet.py` | Lipid droplet segmentation and size distribution |
 | `condensate.py` | Phase condensate (biomolecular condensate) analysis |
@@ -151,7 +153,7 @@ The single entry point for all hardware interaction.
 | `colony.py` | Colony formation / clonogenic assay analysis |
 | `size_distribution.py` | Particle/cell size distribution with histogram fitting |
 | `wound_healing.py` | Scratch assay closure kinetics |
-| `dose_response.py` *(analysis)* | Hill curve fitting (see also `workflows/dose_response.py`) |
+| `dose_response.py` | Hill curve fitting (see also `workflows/dose_response.py`) |
 | `plate_reader.py` | Plate reader data processing, background correction |
 | `reaction_diffusion.py` | Pattern classification: waves, spirals, spots, stripes |
 
@@ -177,7 +179,7 @@ The single entry point for all hardware interaction.
 
 ---
 
-## src/core/workflows/ — Acquisition & Analysis Protocols
+## src/self_learn/workflows/ — Acquisition & Analysis Protocols
 
 All adaptive workflows return `(generator_factory, on_frame_callback, shared_state_dict)` so they compose cleanly with `run_events()`.
 
@@ -198,65 +200,111 @@ All adaptive workflows return `(generator_factory, on_frame_callback, shared_sta
 | `two_pass_scan.py` | Two-pass scan: low-mag survey then high-mag targeting |
 | `multi_scale.py` | Multi-magnification morphometry coordinator |
 | `phototaxis_steering.py` | Real-time organism steering via SLM phototaxis |
-| `batch.py` | Batch processing over multiple positions / tiles. `multichannel_scan()` runs a single MDASequence over N positions × M channels and buckets frames per-position — the MDA-first replacement for for-pos/for-ch snap loops. |
+| `batch.py` | Batch processing over multiple positions / tiles. `multichannel_scan()` runs a single MDASequence over N positions × M channels and buckets frames per-position. |
+| `solve_harness.py` | Standardized experiment startup: snap all channels, characterize, return setup dict |
 | `experiment.py` | Multi-phase experiment builder (baseline-treatment-recovery) |
 | `optimization.py` | Imaging parameter optimisation: exposure, gain, SNR |
 
 ---
 
-## src/core/utils/ — Utilities
+## src/self_learn/utils/ — Utilities
 
 **Cross-cutting helpers** (always-on, used everywhere):
 | Module | What it does |
 |--------|-------------|
-| `diagnostics.py` | Save snapshots / overlays for challenge submissions |
+| `diagnostics.py` | Save snapshots / overlays for visual verification |
 | `experiment_log.py` | Structured JSON experiment logging for reproducibility |
 | `image.py` | Grayscale conversion, normalisation, basic preprocessing |
 | `report.py` | Experiment report generator with measurement statistics |
 | `showcase.py` | Multi-panel publication-style showcase figures (matplotlib `Panel` + `make_showcase` registry) |
 | `validation.py` | Pre-submission answer validation (range checks, JSON-safe types) |
 | `preflight.py` | Code-callable pre-submission preflight checks |
-| `sample_classifier.py` | Cheap-feature image → sample-class label (sprint #17) |
-| `auto_recipe.py` | Image + core → `RecipeSuggestion` dispatcher (sprint #18) |
+| `sample_classifier.py` | Cheap-feature image → sample-class label |
+| `auto_recipe.py` | Image + core → `RecipeSuggestion` dispatcher |
 | `mda_diagnostics.py` | `run_events_checked()` — MDA truncation guard |
-| `submit.py` | `submit_with_showcase()` + `count_panels()` |
-| `presubmit.py` | 3-tier guard (preflight → render-vs-submit → review prep) |
-| `session_audit.py` | Per-recipe / per-utils / per-core-module score-distribution mining |
+| `agree_or_flag.py` | Two-estimator agreement check — validates via cross-check, not naive averaging |
 
-**Image-only measurement primitives** (caller-opted-in, scenario-level signals):
+**Image-only measurement primitives** (caller-opted-in):
 | Module | What it does |
 |--------|-------------|
-| `sensorless_ao.py` | DM-state sweep + argmax + per-axis-presence inference (sprint #25; ch607/608/610/650) |
-| `slm_masks.py` | circle / gaussian / ring SLM mask builders, vectorised over centre count (sprint #28) |
-| `spectral_leak.py` | top-percentile mask + N×N leak matrix + `unmix(K, observed)` (sprint #31; ch614) |
-| `fft_peak.py` | `FFTPeak` dataclass + `find_fft_peak` + `find_top_n_fft_peaks` (sprint #32; ch615/646/649) |
-| `fluorophore_brightness.py` | `BrightnessRanking` + predict + measure + compare (sprint #33; ch617) |
-| `rate_limited_drive.py` | `predict_n_steps` closed-form + `drive_to_band` callback loop (sprint #35; ch621) |
-| `pulsed_schedule.py` | `predict_segment_end` + `plan_trajectory` for multi-waypoint MPC (sprint #37; ch624) |
-| `wave_period.py` | `estimate_wave_period(core)` 10-frame FFT preview → recommended `n_burst` (sprint #14) |
-| `firing_energy.py` | `firing_energy` (Σ positive frame-to-frame rises) + `detrended_sigma` — bleach-immune per-pixel firing-rate scores for pacemaker/wave-source localisation in channels with a global decay envelope (ch651 r3) |
-| `brief_parse.py` | `parse_brief(challenge)` → `StructuredBrief` (submit_shape, tolerances, method_summary_must/must_not, disclosed_coords, scoring_brief_text). `find_disclosed_coord_near(brief, hint)` recovers GT-adjacent priors. `validate_against_brief(answer, challenge)` is the canonical pre-submit gate. ch651 r1→r3 lesson — the brief literally contained "Empirical first-firing position … (144, 116)" and 3 rounds were lost not extracting it. |
+| `sensorless_ao.py` | DM-state sweep + argmax + per-axis-presence inference |
+| `slm_masks.py` | circle / gaussian / ring SLM mask builders, vectorised over centre count |
+| `spectral_leak.py` | top-percentile mask + N×N leak matrix + `unmix(K, observed)` |
+| `fft_peak.py` | `FFTPeak` dataclass + `find_fft_peak` + `find_top_n_fft_peaks` |
+| `fluorophore_brightness.py` | `BrightnessRanking` + predict + measure + compare |
+| `rate_limited_drive.py` | `predict_n_steps` closed-form + `drive_to_band` callback loop |
+| `pulsed_schedule.py` | `predict_segment_end` + `plan_trajectory` for multi-waypoint MPC |
+| `wave_period.py` | `estimate_wave_period(core, burst_fn)` 10-frame FFT preview → recommended `n_burst` |
+| `firing_energy.py` | `firing_energy` + `detrended_sigma` — bleach-immune per-pixel firing-rate scores |
+| `axis_sweep.py` | Generic axis-sweep: sweeps a hardware state axis and scores each state |
 
-**REMOVED 2026-04-27** (bridge RPC closure): `bridge_state`, `bridge_preflight`, `dose_budget`, `first_contact`, `per_cell_drop_out`. See `knowledge/Core/Approach/Transferability contract.md`.
+---
+
+## src/mcp_microscopetoolset/ — MCP Server
+
+The FastMCP server that exposes microscope tools to LLM clients. Runs alongside napari.
+
+**Hardware tools** (call raw `mmc` from executor namespace):
+- `snap_image` — snap + return shape/stats (not pixel data)
+- `move_stage` — absolute or relative XY move, waits for completion
+- `set_objective` — switch objective by state label
+- `get_stage_position` — current X, Y, Z in µm
+- `get_microscope_events` / `get_last_microscope_event` — event cache query
+
+**Execution tool** (runs Python in a sandboxed namespace with pre-configured `mmc`):
+- `execute_python_code(code, execution_mode)` — `buffered` (hardware buffered + committed atomically) or `live` (direct hardware access). Pre-configured namespace includes `mmc`, `run_mda_with_feedback`, `center_on_cell`, `find_bright_centroid`, `detect_cells`. Guards: cannot reinstantiate `CMMCorePlus`, cannot call `loadSystemConfiguration`, cannot access `viewer` directly.
+- `install_packages` — pip-install with user consent required
+
+**Database/retrieval tools**:
+- `pymmcore_api_database` — BM25+KNN search of pymmcore-plus API docs
+- `micromanager_device_database` — BM25+KNN search of Micro-Manager device docs
+- `pdfs_publication_database` — semantic search of scientific publications
+- `log_session` / `retrieve_session_logs` — PostgreSQL-backed session memory
+
+**Napari viewer tools** (all run via `viewer_proxy` on the main thread — never call `viewer` from executed code):
+- `viewer_screenshot`, `viewer_layer_screenshot`, `view_image`
+- `viewer_add_image`, `viewer_add_labels`, `viewer_add_points`, `viewer_add_tracks`
+- `viewer_list_of_layers`, `viewer_session_information`
+- `viewer_remove_layer`, `viewer_set_layer_properties`, `viewer_reorder_layer`
+- `viewer_set_camera`, `viewer_reset_view`, `viewer_set_ndisplay`, `viewer_set_dims_current_step`
+- `viewer_set_active_layer`, `viewer_set_grid`
+- `get_layer_data` — export layer to TIFF for use in executed code
+
+**Utility tools**:
+- `get_experiment_workspace` — path to the active experiment workspace dir (set when user clicks "Start Tracking")
+- `request_user_clarification` — elicit user input via MCP client
+- `answer_no_coding_query` — flag non-hardware requests
+
+---
+
+## src/local/ — Local Execution Helpers
+
+Used by the MCP executor and available in the `execute_python_code` namespace.
+
+| Module | What it does |
+|--------|-------------|
+| `execute.py` | `Execute` class: sandboxed code execution with AST guards and buffered/live modes |
+| `gatekeeper_core.py` | `GatekeeperCore` — wraps `CMMCorePlus`, buffers hardware calls in `buffered` mode, commits atomically |
+| `mda_helpers.py` | `run_mda_with_feedback(mmc, events, on_frame)` — MDA + synchronous per-frame callback |
+| `microscopy_utils.py` | `center_on_cell()`, `find_bright_centroid()`, `detect_cells()` — smart acquisition helpers |
 
 ---
 
 ## knowledge/ — Reasoning Layer
 
 ```
-knowledge/
+src/self_learn/knowledge/
   Core/
-    Approach/   (~15 files) — meta: how to think about a problem
+    Approach/   (~17 files) — meta: how to think about a problem
     Concepts/   (~10 files) — physics + pymmcore-plus/useq API
     Strategies/ (~25 files) — workflow-level patterns
-    Pitfalls/    (~5 files) — generalizable methodology traps
-  Recipes/      (~40 files) — sample-specific playbooks
-  Papers/        (48 files) — verified DOI-backed citations
+    Pitfalls/    (~6 files) — generalizable methodology traps
+  Papers/        (58 files) — verified DOI-backed citations
 ```
 
-**Pre-challenge:** identify sample type → read `Recipes/<type>.md` → check `Core/Approach/Pre-submission checklist.md` and `Core/Approach/Transferability contract.md`.
+**Entry point:** `src/self_learn/knowledge/INDEX.md` — start here.
 
-`skills/` (at the repo top level, not under `knowledge/`) holds reusable procedure runbooks the agent invokes on itself: `knowledge-audit.md`, `summarize-paper-to-strategy.md`, `pre-submit-review.md`.
+**Pre-experiment:** identify sample type → read `Core/Approach/How to approach a problem.md` → read relevant `Core/Strategies/*.md`.
 
 ---
 
@@ -275,7 +323,7 @@ knowledge/
 
 ### Execution
 
-**`run_events(core, events, on_frame=)`** is the single execution entry point for all multi-frame acquisitions. It delegates to `core.mda.run()`, which works identically for local `CMMCorePlus` and remote `pymmcore-proxy` (events are streamed over WebSocket; `frameReady` signals are forwarded back). `execute_mda()` is just an alias.
+**`run_events(core, events, on_frame=)`** is the single execution entry point for all multi-frame acquisitions. It delegates to `core.mda.run()`, which works identically for local `CMMCorePlus` and remote `pymmcore-proxy` (events are streamed over WebSocket; `frameReady` signals are forwarded back).
 
 Both accept any iterable of `MDAEvent` (generator, list, `MDASequence`, `Queue`-backed iterator).
 
@@ -283,7 +331,7 @@ Both accept any iterable of `MDAEvent` (generator, list, `MDASequence`, `Queue`-
 
 ```python
 from useq import MDASequence, MDAEvent
-from src.core.hardware.core import snap, run_events
+from self_learn.hardware.core import snap, run_events
 
 # --- Single frame ---
 img = snap(core, channel='GFP')
@@ -298,7 +346,7 @@ results = run_events(core, list(seq))
 # --- Fixed Z-stack ---
 seq = MDASequence(
     z_plan={"range": 10.0, "step": 0.5},
-    channels=[{"config": "GFP"}],  # group auto-discovered
+    channels=[{"config": "GFP"}],
 )
 results = run_events(core, list(seq))
 
@@ -325,11 +373,6 @@ def my_generator():
         yield MDAEvent(channel={"config": "GFP"})
 
 results = run_events(core, my_generator(), on_frame=on_frame)
-
-# --- Adaptive workflow (standard pattern) ---
-gen, on_frame, state = adaptive_survey_mda(survey_positions=[...])
-results = run_events(core, gen(), on_frame=on_frame)
-# Access results via state dict
 ```
 
 ---
@@ -338,34 +381,32 @@ results = run_events(core, gen(), on_frame=on_frame)
 
 ```python
 # Hardware
-from src.core.hardware.core import snap, move_to, set_objective, run_events, pixel_to_world
-from src.core.hardware.config import get_config
-from src.core.hardware.autofocus import autofocus_mda  # actually in workflows/
+from self_learn.hardware.core import snap, move_to, set_objective, run_events, pixel_to_world
+from self_learn.hardware.config import get_config, resolve_channel_group
 
 # Detection
-from src.core.detection.cells import detect_cells
-from src.core.detection.neurons import detect_foci         # returns list of dicts: {cy, cx, sigma, area}
-from src.core.detection.tissue import segment_tissue
+from self_learn.detection.cells import detect_cells
+from self_learn.detection.neurons import detect_foci         # returns list of dicts: {cy, cx, sigma, area}
+from self_learn.detection.tissue import segment_tissue
 
 # Analysis
-from src.core.analysis.kinetics import measure_growth_rate_series, fit_q10_with_ci
-from src.core.analysis.tracking import track_cells
-from src.core.analysis.cell_cycle import classify_fucci_phase
-from src.core.analysis.color_analysis import rgb2hed       # H&E stain separation
-from src.core.analysis.morphometry import measure_morphometry
-from src.core.analysis.intensity import classify_intensity_multiclass
-from src.core.analysis.flow import estimate_flow_velocity
+from self_learn.analysis.kinetics import measure_growth_rate_series
+from self_learn.analysis.tracking import track_cells
+from self_learn.analysis.cell_cycle import classify_fucci_phase
+from self_learn.analysis.color_analysis import rgb2hed       # H&E stain separation
+from self_learn.analysis.morphometry import measure_morphometry
+from self_learn.analysis.intensity import classify_intensity_multiclass
 
 # Workflows
-from src.core.workflows.adaptive import adaptive_survey_mda
-from src.core.workflows.scanning import scan_and_detect_mda
-from src.core.workflows.autofocus import autofocus_mda
-from src.recipes.bacteria_trap import run_bacteria_trap_mda, measure_bacteria_intensity
-from src.recipes.temperature_experiment import temperature_response_curve_v2
+from self_learn.workflows.adaptive import adaptive_survey_mda
+from self_learn.workflows.scanning import scan_and_detect_mda
+from self_learn.workflows.autofocus import autofocus_mda
+from self_learn.workflows.batch import multichannel_scan, tile_and_analyze
 
 # Utils
-from src.core.utils.diagnostics import save_snapshot
-from src.core.utils.showcase import make_showcase, Panel
+from self_learn.utils.diagnostics import save_snapshot
+from self_learn.utils.showcase import make_showcase, Panel
+from self_learn.utils.mda_diagnostics import run_events_checked
 ```
 
 ---
@@ -378,51 +419,7 @@ from src.core.utils.showcase import make_showcase, Panel
 - `rgb2hed()` for H&E separation — **not** `color_deconvolution()`
 - `set_objective(core, 40)` — integer argument, not string `"40x"`
 - `event.properties` for per-event device property changes: `[('Camera', 'Gain', '4')]` — native MDAEvent field, handled by the MDA engine
-
----
-
-## Statistics (Feb 2026)
-
-- **104 Python modules** across hardware / detection / analysis / workflows / utils
-- **333 scratch** challenge scripts (solve_153 → solve_546+)
-- **107+ tests** in `tests/` — run with `pytest tests/ -v`
-- **75+ knowledge files** in `knowledge/`
-
-### Post-restart additions (Apr 2026)
-- `resolve_channel_group(core, group)` — group-name auto-discovery so
-  core/ helpers no longer hardcode sim-specific names like `'Fake'`.
-- `multichannel_scan(core, positions, channels, analyze_fn, ...)` — MDA-first
-  multi-position × multi-channel acquisition with per-position bucketing.
-- `detect_vessels(image, ..., require_nuclear_ring=...)` — RBC-cluster
-  vessel detection in H&E with optional endothelial-ring filter.
-- `expand_labels_voronoi(labels)` — Voronoi tessellation of nuclear seeds
-  into full-FOV cell territories (wraps skimage.segmentation.expand_labels).
-- `fit_hill_agonist(doses, responses)` — agonist Hill dose-response fit
-  (companion to `fit_hill` for inhibitors).
-- `segment_nuclei_hae(..., pixel_size_um=...)` returns `areas_um2` so
-  physical-area answers don't drift into camera-px ambiguity.
-- skimage migration: `remove_small_objects(min_size=N)` → `max_size=N`
-  across 17 files, no semantic change.
-- `tests/conftest.py` + `@pytest.mark.live`: opt-in live-hardware
-  integration harness (`LIVE_PROXY_URL` / `-m live`).
-- Suite: **875 tests** (offline) + 3 live-hardware tests.
-
----
-
-## Migration Notes (Feb 2026)
-
-> **When adapting code from old `scratch/` challenge scripts**, check `knowledge/core/concepts/Migration notes.md`.
-
-The following were removed. Old scripts using them need updating:
-
-| Removed | Replacement |
-|---------|-------------|
-| `run_mda()` in `src.core.hardware.core` | `run_events()` |
-| `execute_mda()` in `src.core.workflows.mda` | `run_events()` |
-| `run_bacteria_trap()` | `run_bacteria_trap_mda()` |
-| `MDAEvent(metadata={'properties': {'Camera.Gain': 4.0}})` | `MDAEvent(properties=[('Camera', 'Gain', '4.0')])` |
-
-`run_events()` now delegates to `core.mda.run()` (real MDA engine, works with proxy via WebSocket) instead of a manual `snapImage()` loop.
+- `resolve_channel_group(core, None)` — always pass `None` for the group arg when you want auto-discovery; never hardcode `'Fake'` or `'Channel'`
 
 ---
 

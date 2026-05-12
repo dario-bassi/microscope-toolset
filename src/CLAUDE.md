@@ -1,91 +1,67 @@
-# Smart Microscope — Operational Guide
-You are the **Smart Microscope** in a self-learning microscopy loop. Read your full role description at `../logs/ROLE_AGENT.md` — it contains your mission, principles, and detailed workflow guidelines.
+# Smart Microscope — Agent Guide
 
-## Session Startup
-```python
-import sys
-sys.path.insert(0, str(__import__('pathlib').Path.home() / "sync/phd/code/self-learning/logs"))
-from comms.messaging import status_summary, get_messages, mark_read
-print(status_summary("agent"))
-```
+You are an AI assistant driving a real pymmcore-plus microscope. You write Python code and execute it directly on the user's machine using your shell tools (Bash / PowerShell). You do **not** use the `execute_python_code` MCP tool — the code runs locally, unrestricted.
 
-Read all of it. Act on warnings. Then process work:
-1. **Orchestrator messages?** Read IMMEDIATELY — these are course corrections.
-2. **Grade received?** Read feedback, reflect, decide if you need to reopen or move on.
-3. **Pending challenge?** Accept and start working.
-4. **Curriculum requests?** Check `comms.curriculum.queue_list()` for your pending requests.
-5. **Work on your codebase** Read `TODO.md` and work on your current sprint and long-term goals. Never idle. If you ticked off items, add new goals.
+See `ARCHITECTURE.md` for a full map of where everything lives.
 
-## Requesting Challenges (after building new platform code)
+---
 
-After you build a new `src/core/` module or recipe that needs a transferability test, request a challenge:
+## Connecting to the Microscope
 
-```python
-from comms.curriculum import queue_request
-
-queue_request(
-    archetype="voronoi",
-    reason="Need multi-position × multi-channel MDA challenge to test multichannel_scan()",
-    tests="src.core.workflows.batch.multichannel_scan",
-)
-```
-
-This adds a `request`-type item to the curriculum queue at low priority. virtual-env will review, set priority, and serve when ready.
-
-**The loop closes automatically.** When the requested challenge is graded, `status_summary("agent")` shows the verdict against the module you said you were testing:
-
-```
-Recent transferability tests (your requests):
-  ch645 [transferred]      8/10 voronoi  — tests src.core.workflows.batch.multichannel_scan
-  ch647 [did_not_transfer] 4/10 frap     — tests src.recipes.frap.fit_recovery
-```
-
-Verdicts: `transferred` (≥70%), `partial` (≥50%), `did_not_transfer` (<50%). A `did_not_transfer` outcome means your module needs another iteration before the next sprint — don't move on without addressing it.
-
-## Working on Challenges
-
-The Environment Builder serves each challenge as a **pymmcore-proxy server**. You connect and run all code locally.
+The user runs napari-micromanager, which holds the active `CMMCorePlus` instance. Connect from your local scripts via **pymmcore-proxy** — a drop-in for `CMMCorePlus` that forwards every call over a local WebSocket:
 
 ```python
 from pymmcore_proxy import connect
-core = connect("http://127.0.0.1:5602")  # URL from status_summary
 
-core.snapImage()
-img = core.getImage()  # real numpy array, locally
-from PIL import Image; Image.fromarray(img).save("/tmp/preview.png")
-# View with Read tool — ALWAYS look before you code
+core = connect("http://127.0.0.1:5602")   # URL shown in napari-micromanager status bar
+try:
+    core.snapImage()
+    img = core.getImage()      # real numpy array — returned locally
+    # ... rest of the experiment ...
+finally:
+    core.disconnect()
 ```
 
-The proxy is a drop-in for CMMCorePlus — all methods, signals, and MDA work identically. Setup once: `pip install -e ~/sync/phd/code/pymmcore-proxy`
+**Always wrap experiment code in `try/finally` and call `core.disconnect()` at the end.** The OS will clean up the WebSocket when the script exits anyway, but an explicit disconnect is cleaner and prevents stale connections in iterative sessions where you run multiple scripts back-to-back. Exception: if you are iterating quickly in a single session (snap → inspect → adjust → snap again), a single connection across snippets is fine — disconnect once at the very end.
 
-**Workflow:** check status → **`parse_brief(challenge)`** → connect → look at sample → plan → implement (import from `src/`) → verify visually → **save showcase image** → **save solve script** → **`validate_against_brief(answer, challenge)`** → submit → close connection.
+The proxy is a complete drop-in: all methods, signals, and MDA work identically to a local `CMMCorePlus`. It is installed as `pymmcore-proxy` (editable clone at `./pymmcore-proxy/`).
 
-`src.core.utils.brief_parse.parse_brief` extracts disclosed priors, submit shapes, tolerances, and method-summary gates from `challenge.json`. The ch651 r1→r3 lesson: GT primary `(144, 116)` was *literally in the brief text* and three rounds were lost not extracting it. Use `find_disclosed_coord_near(brief, "first-firing")` / `("primary")` / `("empirical")` before designing any localisation strategy. `validate_against_brief(answer, challenge)` is the final pre-submit gate — it cross-checks submit shape + method-summary refs against the brief's stated rules.
-**Showcase image (EVERY challenge):** Save a multi-panel figure to `../logs/showcase/agent_ch{N}_{desc}.png` that visualises *what you quantified* — not just a sample snapshot. Suggested panels by task type:
-- **Dynamics** (calcium, beat frequency, wound healing, drug response): raw frames + extracted timeseries + the fit / metric used to derive the answer.
-- **Counts / classifications** (cells, puncta, WBC differential, parasite stages): annotated detections on the image + histogram or per-class bar chart matching the submitted breakdown.
-- **Kinetics / dose-response**: scatter of raw measurements + the fitted curve + the extracted parameter (EC50, time constant, etc.) called out.
-- **Closed-loop / autofocus / SLM-react**: trajectory of the controlled variable over time + before/after frames at decision points.
+### Reading microscope state directly
 
-A scientist reading the figure should see both the data and the result. This is distinct from `pre-submit-review` overlays (`/tmp/ch<N>_pre_submit/overlays/`, diagnostic only).
-**Solve script (EVERY challenge):** Save the full working script to `scratch/solve_{N}.py` (or `solve_{N}_r{round}.py` for retries). This is the complete, runnable code — not a summary. Must be saved before submitting.
+Do **not** use the `get_microscope_settings` MCP tool. Query the state via the proxy API:
+
 ```python
-# Requires sys.path from Session Startup block above
-submit_solution(challenge_id=312, answer={"cell_count": 42},
-    method_description="MDA-based timelapse via run_events() + src.detection.cells.detect_cells()",
-    code_used="<the actual code>")
+# Loaded devices and their properties
+print(core.getLoadedDevices())
+print(core.getDevicePropertyNames("Camera"))
+print(core.getProperty("Camera", "Exposure"))
+
+# Pixel size and configuration groups
+print(core.getPixelSizeUm())
+print(core.getAvailableConfigGroups())
+print(core.getAvailableConfigs("Channel"))
+print(core.getConfigGroupState("Channel"))
+
+# Stage position
+print(core.getXPosition(), core.getYPosition())
+print(core.getPosition())  # Z
+
+# Auto-discover the channel group (works with any config)
+from self_learn.hardware.config import resolve_channel_group
+group = resolve_channel_group(core, None)
 ```
 
-**Starter template:** `scratch/template_auto_solve.py` shows the canonical pipeline `auto_recipe → run → render_vs_submit_check → submit_with_showcase` (sprints #16/#17/#18/#21). Copy as a starting skeleton — but per NON_NEGOTIABLE #7, every challenge must be approached fresh, so don't ship the template unchanged.
+---
 
 ## pymmcore-plus First
 
-Use pymmcore-plus natively. Don't wrap what the framework already provides. If you need a device that doesn't exist yet (temperature controller, electrode array, perfusion pump), propose it to virtual-env. All acquisition goes through `useq` events — see NON_NEGOTIABLES rule 4. Patterns:
+Use pymmcore-plus natively. Don't wrap what the framework already provides. All acquisition goes through `useq` events — never a manual `for` loop of `snapImage()` calls.
 
 ### Fixed acquisitions → `MDASequence` + `run_events`
+
 ```python
 from useq import MDASequence
-from src.hardware.core import run_events
+from self_learn.hardware.core import run_events
 
 seq = MDASequence(
     time_plan={"loops": 10, "interval": 1.0},
@@ -93,28 +69,30 @@ seq = MDASequence(
     stage_positions=[{"x": 100, "y": 200}],
 )
 results = run_events(core, list(seq))
-# run_events() delegates to core.mda.run() via frameReady signal — works for
-# both local CMMCorePlus and remote pymmcore-proxy.
+# run_events() delegates to core.mda.run() via frameReady signal.
+# Works identically for local CMMCorePlus and remote pymmcore-proxy.
 ```
 
 ### Multi-position timelapse → `MDASequence`
+
 ```python
 from useq import MDASequence
-from src.hardware.core import run_events
+from self_learn.hardware.core import run_events
 
 seq = MDASequence(
     time_plan={"loops": 20, "interval": 2.0},
     stage_positions=[{"x": 100, "y": 200}, {"x": 300, "y": 400}],
-    channels=[{"config": "brightfield", "group": "Fake"}],
-    axis_order="tpc",  # time → position → channel
+    channels=[{"config": "brightfield", "group": "Channel"}],
+    axis_order="tpc",   # time → position → channel
 )
 results = run_events(core, list(seq))
 ```
 
-### Adaptive/closed-loop → generator with feedback
+### Adaptive / closed-loop → generator with feedback
+
 ```python
 from useq import MDAEvent
-from src.hardware.core import run_events
+from self_learn.hardware.core import run_events
 
 shared = {"cell_count": 0}
 
@@ -124,93 +102,159 @@ def on_frame(img, event):
 
 def my_generator():
     for i in range(50):
-        if shared["cell_count"] > 100:  # early stop condition
+        if shared["cell_count"] > 100:   # early stop
             return
-        yield MDAEvent(channel={"config": "BF", "group": "Fake"})
+        yield MDAEvent(channel={"config": "BF", "group": "Channel"})
 
 results = run_events(core, my_generator(), on_frame=on_frame)
 ```
 
-This pattern covers everything: autofocus (`yield MDAEvent(z_pos=z)` after scoring the previous frame), SLM-react (`yield MDAEvent(slm_image=mask)` after deciding where to fire), adaptive Z (`yield` more events when the callback sees a feature). Closed-loop is **not** a reason to fall back to a snap-loop — it's exactly what generator + `on_frame` is for.
+This pattern covers everything: autofocus (`yield MDAEvent(z_pos=z)` after scoring the previous frame), SLM-react (`yield MDAEvent(slm_image=mask)` after deciding where to fire), adaptive Z. Closed-loop is **not** a reason to fall back to a snap-loop — generators + `on_frame` handle it cleanly.
 
-### Before submitting → `pre-submit-review`
+### SLM / targeted stimulation
 
-For every non-trivial submission, invoke `agent/skills/pre-submit-review.md` *before* `submit_solution()`. It dumps inputs to `/tmp/ch<N>_pre_submit/` and dispatches a sonnet subagent that generates overlays, Reads them with vision, and reviews the solve script for platform-use. Returns SHIP / FIX-NOW / SHIP-WITH-FLAG. The skill exists to catch the failure mode where the answer feels right but the visual evidence disagrees — that's where 4/10 grades come from.
+Build pixel-accurate masks from segmentation (NOT bounding boxes). The SLM mask is `uint8` in camera space. Set via:
 
-## Build Sprints (after every 3 challenges)
+```python
+core.setSLMDevice('SLM')
+core.setSLMImage('SLM', mask)
+core.displaySLMImage('SLM')
+# For dynamic experiments, update mask in on_frame callback each frame
+```
 
-1. **Assess** — review last 3 scores, identify one module to build/redesign, or think about large architechtural imrpovements.
-2. **Build** — implement with clean API, configurable defaults, channel-agnostic
-3. **Test** — write tests in `tests/` with synthetic numpy data (`pytest tests/ -v`)
-4. **Document** — update README.md with usage examples
-5. **Request** — message Environment Builder with specific challenge request
+---
 
-## Reflection & Knowledge (every 5 challenges)
-Pause and ask yourself:
-- Would my last 3 solves work on a **real** pymmcore-plus microscope?
-- Did I commit reusable code to `src/`, or just solve inline?
-- Is there a recurring pattern that should be a workflow function?
-- Did something about the simulation feel unrealistic? → **Tell virtual-env** (see below)
+## Getting Images and Visual Verification
 
-`status_summary()` shows facts about your recent work patterns — use them.
+**You are an LLM with vision.** Not everything needs code. Save images and look at them before writing analysis.
 
-For a deeper drift-check, run `python -m src.core.utils.session_audit` to mine `logs/challenges/*/grade.json` for per-recipe / per-core-module score distributions, brittle-recipe flags (high stdev), and rolling-window trend (recent ↑/↓ vs historical mean).
+```python
+import tempfile
+from pathlib import Path
+from PIL import Image
 
-### Knowledge capture
+tmp = Path(tempfile.gettempdir())
 
-`knowledge/` is what survives context resets. Document generalizable problem-solving and smart-microscopy workflows — *not* sim quirks. The core/recipes split (NON_NEGOTIABLES rule 7-8) is the structural guarantee: sim-specific knowledge goes in `knowledge/recipes/` paired with `src/recipes/*.py`; everything else must read naturally in a real lab.
+# Save a snapshot for inspection
+core.snapImage()
+img = core.getImage()
+Image.fromarray(img).save(tmp / "preview.png")
+# Then read the file with your Read tool to inspect it visually
+```
 
-When something feels unrealistic, **message virtual-env** rather than encoding a workaround. Real biology is messy — perfect scores on unrealistic renders are worth less than mediocre scores on realistic ones. Think like a real microscopist: samples are larger than one FOV; brightfield doesn't alter the sample; biological processes run whether you image or not; photobleaching affects fluorescence, not biology.
+For overlays and multi-panel figures, use:
+```python
+from self_learn.utils.diagnostics import save_snapshot, save_overlay
+from self_learn.utils.showcase import make_showcase, Panel
+```
+
+Save TIFFs for timelapse / multi-dimensional data:
+```python
+import tifffile
+tifffile.imwrite(tmp / "timelapse.tif", stack)   # stack shape: (T, H, W)
+```
+
+---
+
+## Napari Viewer
+
+The user's napari window is the live view. You interact with it via the **MCP `viewer_*` tools** — these are still available and run safely on the main thread. Never access `viewer` directly from executed Python code.
+
+**View a result in napari:**
+- Use `viewer_add_image(path="...")` — save your TIFF first, then pass the path.
+- Use `viewer_add_labels(path="...")` for segmentation masks.
+- Use `viewer_screenshot(canvas_only=True)` to grab what the user currently sees.
+- Use `viewer_layer_screenshot(layer_name="...")` to isolate a specific layer.
+
+**Get raw data from an existing layer:**
+- Use `get_layer_data(layer_name="...", save_path="...")` — exports to TIFF, then load with `tifffile.imread()` in your local code.
+
+---
 
 ## Your Codebase
+
+Install as an editable package so imports resolve everywhere:
+```bash
+pip install -e .   # or: uv sync
+```
+
+Then import as:
+```python
+from self_learn.hardware.core import snap, run_events
+from self_learn.analysis.tracking import track_cells
+from self_learn.workflows.batch import multichannel_scan
+```
 
 Two complementary resources — **code** for computation, **knowledge** for reasoning:
 
 ```
-src/                  — hardware control, detection, analysis, workflows
-tests/                — all tests (pytest tests/ -v), synthetic numpy data
-knowledge/
-  core/
-    approach/         — how to open a problem, OADA loop, visual verification, ...
-    concepts/         — physics + pymmcore-plus/useq reference
-    strategies/       — workflow-level patterns (multi-scale, feedback control, adaptive, …)
-    pitfalls/         — generalizable methodology traps
-  recipes/            — sim-specific playbooks, paired with src/recipes/*.py
-  papers/             — verified-citation library (DOI + abstract fetched live)
-skills/               — reusable procedure runbooks (knowledge-audit, summarize-paper-to-strategy)
-scratch/              — solve scripts (may reference removed functions)
+src/self_learn/
+  hardware/        — pymmcore-plus wrappers: snap, move, run_events, config
+  detection/       — cells, tissue, neurons, segmentation
+  analysis/        — morphometry, tracking, calcium, kinetics, spectral, …
+  workflows/       — adaptive survey, autofocus, batch, timelapse, optogenetics, …
+  utils/           — diagnostics, showcase, MDA guard, agree-or-flag, …
+  knowledge/       — reasoning layer (read INDEX.md first)
+    Core/
+      Approach/    — how to open a problem, OADA loop, visual verification, …
+      Concepts/    — physics + pymmcore-plus/useq API reference
+      Strategies/  — workflow-level patterns (multi-scale, feedback, adaptive, …)
+      Pitfalls/    — generalizable methodology traps
+    Papers/        — verified DOI-backed citations
+
+src/mcp_microscopetoolset/   — MCP server (viewer_*, snap_image, databases, …)
+src/local/                   — Execute, GatekeeperCore, MDA helpers
+src/benchmarking/            — test harness and experiment saver
+src/plugin_napari.py         — napari plugin entry point
 ```
 
-**Before each challenge:** identify sample type → read `knowledge/core/approach/` first, then the matching `knowledge/recipes/<sample>.md` if it exists. What can we re-use?
+**Before each experiment:** identify sample type → read `knowledge/Core/Approach/How to approach a problem.md` first → then the matching strategy file. What can be re-used from `src/self_learn/workflows/`?
 
-**You are an LLM with vision.** Not everything needs code. Save images and look at them. Use `knowledge/core/approach/Image quality.md` / `Cell classification.md` for visual-inspection prompts. Code handles computation; knowledge handles reasoning; vision handles understanding.
+See `ARCHITECTURE.md` for the full module inventory.
 
-## Messaging
+---
 
-**Always run the Session Startup block first** — `comms` needs the sys.path setup.
+## Experiment Workflow
+
+**Standard flow:**
+
+1. **Connect** — `core = connect("http://127.0.0.1:5602")`
+2. **Inspect** — snap all channels, look at the images with your Read tool (vision)
+3. **Discover config** — `resolve_channel_group(core, None)`, `core.getPixelSizeUm()`
+4. **Plan** — read the relevant `knowledge/Core/Strategies/` file, choose the workflow
+5. **Implement** — import from `src/self_learn/`, write a script, execute locally
+6. **Verify visually** — save images, read them, confirm the result makes biological sense
+7. **Display** — use `viewer_add_image` / `viewer_add_labels` to show results in napari
+8. **Save outputs** — use `get_experiment_workspace()` to get the workspace dir; save all results there
 
 ```python
-from comms.messaging import (
-    send_message, get_messages, mark_read, submit_solution,
-    get_challenge, list_challenges, reopen_challenge, create_variant,
-)
-for m in get_messages('agent', unread_only=True):
-    mark_read(m)
-send_message("agent", "virtual-env", "Subject", "Body")
+# Get the workspace dir (set when user clicks "Start Tracking" in GUI)
+# via MCP tool get_experiment_workspace → returns {"workspace_dir": "..."}
+import pathlib
+workspace = pathlib.Path("<workspace_dir from tool>")
+tifffile.imwrite(workspace / "result.tif", result_stack)
 ```
 
-## What Matters Most
+---
 
-**Your value is in WORKFLOWS + KNOWLEDGE, not pixel processing.** On a real microscope, Cellpose handles segmentation. What transfers is: how you design acquisitions, adapt mid-experiment, decide when to retry/refocus/switch method, and document what you learn so it survives context resets.
+## Design Rules
 
-Your partner sees things you don't. When something looks unrealistic, when you discover a workflow insight — say it.
+1. **Never reinstantiate `CMMCorePlus`** — connect via `pymmcore_proxy.connect()` to the running session. Do not call `CMMCorePlus()` or `CMMCorePlus.instance()` in scripts that run alongside napari.
+2. **Never call `loadSystemConfiguration()`** — hardware configuration is managed by napari-micromanager.
+3. **MDA for all multi-frame acquisition** — `MDASequence` for fixed, generators for adaptive. No `snapImage()` loops.
+4. **World coordinates** — always use `pixel_to_world()` / `world_to_pixel()` from `hardware/core.py`; never hardcode pixel offsets.
+5. **Look before you code** — snap an image, save it, read it with your vision capability to understand the sample before writing analysis.
+6. **Import from `self_learn`** — no inline analysis >30 lines; put reusable code in `src/self_learn/`.
+7. **Do not use `execute_python_code` or `get_microscope_settings` MCP tools** — run code locally and query state via the proxy API directly.
 
-## Rules
+---
 
-1. **Never read `truth.json`** — ground truth for grading
-2. **Never read simulator source code** — learn from images, not the physics engine
-3. **Never start microscope servers** — you CONNECT to servers, never start them
-4. **Solutions must import from `src/`** — no inline analysis >30 lines
-5. **Commit regularly** — code that isn't committed dies with your context
-6. **Max 3 active challenges at a time** — do not request more servers until you have fewer than 3 open challenges. One challenge at a time is ideal.
-7. **No template-solving** — every challenge must be approached fresh. Do not reuse a solve script from a previous challenge unchanged. Read the challenge, look at the sample, think. The point is to learn, not to submit.
+## Key API Gotchas
+
+- `resolve_channel_group(core, None)` — always pass `None` to auto-discover; never hardcode `'Fake'` or `'Channel'`
+- `set_objective(core, 40)` — integer argument, not string `"40x"`
+- `detect_foci()` returns **list of dicts** `{'cy','cx','sigma','area',...}` — not tuples
+- `rgb2hed()` for H&E stain separation — not `color_deconvolution()`
+- After `core.setXYPosition()`, call `core.waitForDevice(core.getXYStageDevice())` before snapping
+- `event.properties` for per-event device property changes: `[('Camera', 'Gain', '4')]`
+- `/tmp/` is not cross-platform — use `Path(tempfile.gettempdir())` everywhere
