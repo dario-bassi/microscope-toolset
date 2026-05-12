@@ -1,7 +1,7 @@
 # Microscope Toolset
 
 [![CI](https://github.com/ddd42-star/microscope-toolset/actions/workflows/ci.yml/badge.svg)](https://github.com/ddd42-star/microscope-toolset/actions/workflows/ci.yml)
-[![Python](https://img.shields.io/badge/python-3.11%20|%203.12%20|%203.13-blue)](https://www.python.org)
+[![Python](https://img.shields.io/badge/python-%203.12%20|%203.13-blue)](https://www.python.org)
 [![License](https://img.shields.io/badge/license-BSD%203--Clause-green)](LICENSE)
 
 **Microscope Toolset** is a research platform that connects a Claude Code AI agent to a **real** or **virtual** microscope through an [MCP](https://modelcontextprotocol.io) server embedded in a [napari](https://napari.org) GUI. The agent can control real or simulated hardware, execute image-analysis code, query a curated knowledge database, and track complete experiment sessions — all from a natural-language prompt.
@@ -127,7 +127,7 @@ The model is downloaded automatically on first run.
 
 Run the following command for starting the Napari GUI
 ```
-python -m src.plugin_napari
+microscope-toolset
 ```
 On the right there is the panel control that will start or stop the MCP Microscope Toolset server.
 
@@ -238,10 +238,10 @@ Tests are launched from the **Benchmarking** panel in the MCPServer GUI, or from
 
 ```bash
 # Start a test server on port 5602
-python -m src.benchmarking.test_server test_1 --port 5602
+python -m benchmarking.test_server test_1 --port 5602
 
 # List all available tests
-python -m src.benchmarking.test_runner
+python -m benchmarking.test_runner
 ```
 
 To add a new test, see [Benchmark Tests](docs/benchmark_test_authoring.md).
@@ -281,16 +281,16 @@ src/benchmarking/experiments/<name>_<timestamp>/
 
 ```bash
 # Start (creates the experiment folder immediately)
-python -m src.benchmarking.experiment_saver start "my_experiment"
+python -m benchmarking.experiment_saver start "my_experiment"
 
 # Stop and save the conversation slice
-python -m src.benchmarking.experiment_saver end
+python -m benchmarking.experiment_saver end
 
 # List all saved experiments
-python -m src.benchmarking.experiment_saver list
+python -m benchmarking.experiment_saver list
 
 # Check whether an experiment is currently active
-python -m src.benchmarking.experiment_saver status
+python -m benchmarking.experiment_saver status
 ```
 
 #### Reviewing a saved experiment
@@ -298,7 +298,7 @@ python -m src.benchmarking.experiment_saver status
 Pass the path to a saved `conversation.jsonl` to the napari launcher to open the interactive dashboard:
 
 ```bash
-python -m src.plugin_napari --review src/benchmarking/experiments/<name>/conversation.jsonl
+microscope-toolset --review src/benchmarking/experiments/<name>/conversation.jsonl
 ```
 
 The dashboard shows a full timeline of the session: user messages, agent reasoning, every tool call with its inputs and outputs, hardware events from the microscope log, subagent conversations, estimated token cost, and duration.
@@ -306,7 +306,7 @@ The dashboard shows a full timeline of the session: user messages, agent reasoni
 You can optionally merge in the pymmcore-plus hardware log for a combined view of software and hardware events:
 
 ```bash
-python -m src.plugin_napari --review <path_to_conversation.jsonl> --log <path_to_pymmcore-plus.log>
+microscope-toolset --review <path_to_conversation.jsonl> --log <path_to_pymmcore-plus.log>
 ```
 
 ---
@@ -321,6 +321,6 @@ python -m src.plugin_napari --review <path_to_conversation.jsonl> --log <path_to
 - [ ] Plan to create additional metadata from the microscope session
 - [x] Build a chatbox for visualising user-agent conversation, including time, tool calls, ect.
 - [ ] Switch local virtual simulation to virtual simulation from the package virtual_microscope
-- [ ] Add `console_scripts` entry point so the toolset can be launched with `microscope-toolset` instead of `python -m src.plugin_napari` (add `[project.scripts]` to `pyproject.toml` and wrap startup in a `main()` function)
+- [x] Add `console_scripts` entry point so the toolset can be launched with `microscope-toolset` instead of `python -m src.plugin_napari`
 - [ ] Switch off mcp tool to run python tool and instead use local env from claude
 - [ ] Introduce Claude Sandbox or Sandobx

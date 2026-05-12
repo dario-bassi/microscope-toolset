@@ -26,17 +26,17 @@ from PyQt6.QtWidgets import (
     QWidget,
 )
 
-from src.benchmarking import BenchmarkLogger
-from src.databases.es_server import _start_server, _stop_server, wait_for_es
-from src.mcp_microscopetoolset import (
+from benchmarking import BenchmarkLogger
+from databases.es_server import _start_server, _stop_server, wait_for_es
+from mcp_microscopetoolset import (
     NapariViewerMC,
     create_mcp_server,
     get_user_information,
     initialize_agents,
 )
-from src.microscope import MicroscopeEventCache
-from src.utils import CoreProxyWorker
-from src.utils import classify_cfg as _classify_cfg
+from microscope import MicroscopeEventCache
+from utils import CoreProxyWorker
+from utils import classify_cfg as _classify_cfg
 
 logger = logging.getLogger("MCPServer")
 
@@ -282,7 +282,7 @@ class PostgreSQLWorker(QObject):
     @pyqtSlot()
     def run(self):
         try:
-            from src.postqrl import DBConnection
+            from postqrl import DBConnection
 
             self._db_conn = DBConnection()
             host = os.getenv("DB_HOST", "localhost")
@@ -1048,7 +1048,7 @@ class MCPServer(QWidget):
     def _refresh_bench_tests(self):
         """Populate the test combo from src/benchmarking/test_*/."""
         try:
-            from src.benchmarking import list_tests
+            from benchmarking import list_tests
 
             tests = list_tests()
         except Exception:
@@ -1158,7 +1158,7 @@ class MCPServer(QWidget):
     # ── Experiment tracking ─────────────────────────────────────────────────
 
     def _start_tracking(self):
-        from src.benchmarking import start_experiment
+        from benchmarking import start_experiment
 
         name = self._track_name_edit.text().strip() or None
         try:
@@ -1183,7 +1183,7 @@ class MCPServer(QWidget):
             logger.exception(f"Tracking start failed: {e}")
 
     def _stop_tracking(self):
-        from src.benchmarking import end_experiment
+        from benchmarking import end_experiment
 
         self._track_dot.setStyleSheet(_DOT_BUSY)
         self._track_stop_btn.setEnabled(False)

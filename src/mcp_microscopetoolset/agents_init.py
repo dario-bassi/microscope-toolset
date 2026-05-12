@@ -8,12 +8,12 @@ from pymmcore_plus import CMMCorePlus
 from sentence_transformers import SentenceTransformer
 from transformers import AutoModelForSequenceClassification, AutoTokenizer
 
-from src.agentsNormal import DatabaseAgent
-from src.databases import ElasticSearchDB
-from src.local import Execute
-from src.mcp_microscopetoolset.utils import get_user_information, logger_database_exists
-from src.microscope import MicroscopeStatus
-from src.postqrl import DBConnection, LoggerDB
+from agentsNormal import DatabaseAgent
+from databases import ElasticSearchDB
+from local import Execute
+from .utils import get_user_information, logger_database_exists
+from microscope import MicroscopeStatus
+from postqrl import DBConnection, LoggerDB
 
 #  logger
 logger = logging.getLogger("Initialize Agent")

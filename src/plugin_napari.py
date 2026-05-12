@@ -2,7 +2,6 @@ import argparse
 import logging
 import sys
 
-#  logger
 logger = logging.getLogger("NapariMicroscopeTool")
 if not logger.handlers:
     logger.setLevel(logging.INFO)
@@ -17,7 +16,7 @@ if not logger.handlers:
     logger.addHandler(fh)
 
 
-if __name__ == "__main__":
+def main():
     parser = argparse.ArgumentParser(description="Microscope Toolset - napari + MCP server")
     parser.add_argument(
         "--review",
@@ -39,7 +38,7 @@ if __name__ == "__main__":
     args, _unknown = parser.parse_known_args()
 
     if args.review:
-        from src.benchmarking import (
+        from benchmarking import (
             default_log_path,
             launch_dashboard,
             merge_logs,
@@ -55,7 +54,6 @@ if __name__ == "__main__":
                 f"tool calls: {stats.num_tool_calls} | cost: ${stats.estimated_cost_usd:.4f}"
             )
 
-            # Merge hardware logs
             log_path = args.log or default_log_path()
             if log_path:
                 try:
@@ -75,16 +73,14 @@ if __name__ == "__main__":
             logger.error(str(e))
         except Exception as e:
             logger.info(e)
-        # return
     else:
-        # Resolve test / auto_config before importing napari
         if args.test is not None and args.test == "":
-            from src.benchmarking import print_tests
+            from benchmarking import print_tests
 
             print_tests()
             sys.exit(0)
         elif args.test:
-            from src.benchmarking import run_test
+            from benchmarking import run_test
 
             logger.info(f"Setting up test: {args.test}")
             auto_config = str(run_test(args.test))
@@ -95,7 +91,7 @@ if __name__ == "__main__":
         try:
             import napari
 
-            from src.mcp_server_gui import MCPServer
+            from mcp_server_gui import MCPServer
 
             logger.info("Start napari window")
             viewer = napari.Viewer()
@@ -112,3 +108,7 @@ if __name__ == "__main__":
             logger.info("Napari finished")
         except Exception as e:
             logger.info(f"Error starting napari: {e}")
+
+
+if __name__ == "__main__":
+    main()

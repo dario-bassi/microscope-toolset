@@ -15,7 +15,7 @@ CLI:
     python -m src.benchmarking.test_server --list
 
 From Python (e.g. launched as a subprocess by the GUI):
-    from src.benchmarking.test_server import serve_test
+    from .test_server import serve_test
     serve_test("test_1", host="127.0.0.1", port=5601)
 """
 
@@ -84,7 +84,7 @@ def serve_test(test_name: str, host: str = "127.0.0.1", port: int = 5601) -> Non
     """
     from pymmcore_plus import CMMCorePlus
 
-    from src.benchmarking.test_runner import _load_test_module, run_test
+    from .test_runner import _load_test_module, run_test
 
     print(f"[test_server] Loading test '{test_name}' ...")
     module = _load_test_module(test_name)
@@ -144,7 +144,7 @@ def _main() -> None:
     args = parser.parse_args()
 
     if args.list:
-        from src.benchmarking.test_runner import print_tests
+        from .test_runner import print_tests
 
         print_tests()
         sys.exit(0)

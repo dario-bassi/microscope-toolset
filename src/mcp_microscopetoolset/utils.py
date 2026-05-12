@@ -5,7 +5,7 @@ from mcp.types import Tool
 
 # from agentsNormal.classify_user_intent import ClassifyAgent
 # from agentsNormal.structuredOutput import ClassificationAgentOutput
-from src.postqrl import LoggerDB
+from postqrl import LoggerDB
 
 
 def user_message(message):

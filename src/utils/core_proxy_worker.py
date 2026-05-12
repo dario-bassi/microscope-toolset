@@ -11,7 +11,7 @@ import time
 
 from PyQt6.QtCore import QObject, pyqtSignal, pyqtSlot
 
-from src.utils.cfg_utils import classify_cfg
+from .cfg_utils import classify_cfg
 
 logger = logging.getLogger("CoreProxyWorker")
 

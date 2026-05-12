@@ -1,7 +1,7 @@
 import ast
 import re
 
-from src.local.execute import Execute
+from local.execute import Execute
 
 
 class MicroscopeStatus:

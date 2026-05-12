@@ -9,9 +9,9 @@ from io import StringIO
 
 from pymmcore_plus import CMMCorePlus
 
-from src.local.gatekeeper_core import GatekeeperCore
-from src.local.mda_helpers import run_mda_with_feedback
-from src.local.microscopy_utils import (
+from .gatekeeper_core import GatekeeperCore
+from .mda_helpers import run_mda_with_feedback
+from .microscopy_utils import (
     center_on_cell,
     detect_cells,
     find_bright_centroid,
@@ -77,7 +77,7 @@ class Execute:
             import json as _json
             from pathlib import Path as _Path
 
-            from src.benchmarking.experiment_saver import MARKER_FILE
+            from benchmarking.experiment_saver import MARKER_FILE
 
             if MARKER_FILE.exists():
                 _marker = _json.loads(MARKER_FILE.read_text(encoding="utf-8"))

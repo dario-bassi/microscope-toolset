@@ -1,6 +1,6 @@
 """Tests for src/utils/cfg_utils.classify_cfg."""
 
-from src.utils import classify_cfg
+from utils import classify_cfg
 
 # ── helpers ──────────────────────────────────────────────────────────────────
 

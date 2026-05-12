@@ -5,8 +5,8 @@ from typing import Any
 import anthropic
 import torch
 
-from src.databases import ElasticSearchDB
-from src.postqrl import LoggerDB
+from databases import ElasticSearchDB
+from postqrl import LoggerDB
 
 from .base_agent import BaseAgent
 from .structuredOutput import ExtractKeywordOutput, RephraseOutput

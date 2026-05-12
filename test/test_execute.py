@@ -5,7 +5,7 @@ from unittest.mock import patch
 import pytest
 from pymmcore_plus import CMMCorePlus
 
-from src.local import Execute
+from local import Execute
 
 # ---------------------------------------------------------------------------
 # Fixture
@@ -268,7 +268,7 @@ import ast as _ast  # noqa: E402
 
 import numpy as np  # noqa: E402
 
-from src.local.execute import (  # noqa: E402
+from local.execute import (  # noqa: E402
     _CELLPOSE_SIZE_THRESHOLD,
     _cellpose_cellprob_threshold_guard,
     _cellpose_channels_guard,

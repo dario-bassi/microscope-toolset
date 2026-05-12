@@ -13,8 +13,8 @@ from mcp.server.fastmcp import Context, FastMCP
 from mcp.types import ImageContent, TextContent
 from pydantic import BaseModel, BeforeValidator, Field, PlainSerializer, WithJsonSchema
 
-from src.benchmarking import BenchmarkLogger
-from src.local import GatekeeperCore
+from benchmarking import BenchmarkLogger
+from local import GatekeeperCore
 
 #  logger
 logger = logging.getLogger("ServerSetup")
@@ -1674,7 +1674,7 @@ def create_mcp_server(
         try:
             import json as _json
 
-            from src.benchmarking import MARKER_FILE
+            from benchmarking import MARKER_FILE
 
             if not MARKER_FILE.exists():
                 return {"active": False, "workspace_dir": None, "experiment_name": None}

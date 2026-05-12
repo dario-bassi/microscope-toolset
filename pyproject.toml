@@ -71,9 +71,18 @@ dev = [
     "coverage>=7.0",
 ]
 
+[project.scripts]
+microscope-toolset = "plugin_napari:main"
+
 [build-system]
 requires = ["setuptools", "wheel"]
 build-backend = "setuptools.build_meta"
+
+[tool.setuptools]
+py-modules = ["plugin_napari", "mcp_server_gui"]
+
+[tool.setuptools.package-dir]
+"" = "src"
 
 [tool.setuptools.packages.find]
 where = ["src"]

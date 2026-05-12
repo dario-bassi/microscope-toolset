@@ -3,7 +3,7 @@ import logging
 from psycopg2.extras import Json
 
 from pgvector.psycopg2 import register_vector
-from src.postqrl.connection import DBConnection
+from .connection import DBConnection
 
 logger = logging.getLogger(__name__)
 

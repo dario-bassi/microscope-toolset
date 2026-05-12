@@ -42,7 +42,7 @@ from PyQt6.QtWidgets import (
 
 _BENCHMARKING_DIR = Path(__file__).parent
 
-from src.benchmarking.review_conversation import (  # noqa: E402
+from .review_conversation import (  # noqa: E402
     ConversationStats,
     ParsedAssistantMessage,
     ParsedFileSnapshot,
