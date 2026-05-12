@@ -180,16 +180,15 @@ cython_debug/
 # markdown
 *.md
 # Documentation files (always track)
-!microscope_tool.md
-!tracking.md
-!src/CLAUDE.md
-!src/ARCHITECTURE.md
-!src/self-learn/knowledge/**/*.md
+!CLAUDE.md
+!ARCHITECTURE.md
+!README.md
 !docs/benchmark_test_authoring.md
 !docs/experiment_workflow_guidelines.md
 !docs/mcp_server_gui.md
 !src/self_learn/knowledge/INDEX.md
 !src/self_learn/knowledge/Papers index.md
+!src/self_learn/knowledge/MODULE_REVIEW.md
 !src/self_learn/knowledge/Core/*.md
 !src/self_learn/knowledge/Core/Approach/*.md
 !src/self_learn/knowledge/Core/Concepts/*.md
@@ -251,5 +250,13 @@ vector-database/ca151909-59c6-4a6a-ba00-a2e1652f5669/data_level0.bin
 # mp4
 *.mp4
 
-# self-learn
-#src/self-learn/knowledge/
+# Runtime / generated files
+agent/
+benchmark_logs/
+microscope_toolset_runs.jsonl
+
+# Local clones of external packages (installed via uv sources / pip)
+napari-micromanager/
+pymmcore-proxy/
+pymmcore-widgets/
+virtual-microscope/
