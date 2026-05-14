@@ -112,12 +112,6 @@ _PRIMARY = {
         "high-entropy speckle field → wave-source pacemaker scout.",
         {"requires_timelapse": True, "requires_objective_states": True},
     ),
-    "sim_protocol": (
-        "src.recipes.sim_protocol",
-        "run_sim_protocol",
-        "Archetype=sim → 3-phase demod + fringe-orientation FFT.",
-        {},
-    ),
     "lightsheet_align": (
         "src.recipes.lightsheet_align",
         "align_descent",
@@ -319,7 +313,6 @@ _ARCHETYPE_TO_CLASS = {
     "voronoi": "voronoi_monolayer",
     "hemocytometer": "sparse_cells",
     "plate_reader": "plate_reader_grid",
-    "sim": "sim_protocol",
     "lightsheet_align": "lightsheet_align",
     "lightsheet_drift": "lightsheet_drift",
     "cytokinesis": "cytokinesis_kinetics",
@@ -346,19 +339,13 @@ def auto_recipe(
             full table). All probes are read-only.
         channel: Optional channel index passed through to
             :func:`extract_features` for multi-channel inputs.
-        brief_archetype: Legacy short-form override — pass
-            ``brief.archetype`` (or just the archetype string). Prefer
-            ``brief=`` for the full brief-aware path.
-        brief: A :class:`StructuredBrief`, a challenge.json dict, or
-            the raw description text. When supplied, this both drives
-            the archetype override AND pre-fills ``default_kwargs``
-            from disclosed numeric facts and coordinate priors via
-            :func:`self_learn.utils.brief_parse.kwargs_from_brief`.
-            Disclosed values override feature-derived heuristics —
-            the brief author chose to surface them. Sprint #41
-            (2026-04-28) closes the ch651 gap where the GT-adjacent
-            coord ``(144, 116)`` was in the brief and three rounds
-            were lost not propagating it.
+        brief_archetype: Short-form archetype override — pass the
+            archetype string directly (e.g. ``"frap"``). Takes
+            precedence over ``brief["archetype"]`` when both are set.
+        brief: Optional dict with an ``"archetype"`` key that overrides
+            the image-feature classifier. Example:
+            ``brief={"archetype": "frap"}``. When supplied, the
+            archetype drives recipe selection above image-feature scores.
 
     Returns:
         :class:`RecipeSuggestion`. When the classifier returns
@@ -368,19 +355,10 @@ def auto_recipe(
     feats = extract_features(image, channel=channel)
     ranked = classify_sample(image, channel=channel)
 
-    # Resolve the brief argument: accept StructuredBrief, dict, or str.
-    structured = None
-    if brief is not None:
-        from .brief_parse import StructuredBrief, parse_brief as _parse_brief
-        if isinstance(brief, StructuredBrief):
-            structured = brief
-        else:
-            structured = _parse_brief(brief)
-
-    # Archetype override resolution: explicit brief_archetype wins over
-    # brief.archetype for backward compatibility, but either path lands
-    # in the same _ARCHETYPE_TO_CLASS map.
-    archetype_str = brief_archetype or (structured.archetype if structured else None)
+    # Archetype override: explicit brief_archetype wins, then brief["archetype"].
+    archetype_str = brief_archetype
+    if archetype_str is None and isinstance(brief, dict):
+        archetype_str = brief.get("archetype")
 
     if archetype_str:
         key = archetype_str.lower().split()[0]

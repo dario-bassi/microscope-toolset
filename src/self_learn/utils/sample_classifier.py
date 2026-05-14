@@ -1,7 +1,7 @@
 """First-contact sample classifier.
 
 Cheap heuristic routing primitive: takes a fresh snap from an unknown
-challenge and returns a confidence-ranked list of guesses. Pre-recipe,
+sample and returns a confidence-ranked list of guesses. Pre-recipe,
 pre-segmentation; runs in < 200 ms on a 512×512 frame so it can be
 the first call after ``connect()``.
 

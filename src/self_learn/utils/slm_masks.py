@@ -23,10 +23,9 @@ Convention notes called out in the public API:
   centre value of an isolated centre. Overlapping centres sum
   then clip to ``peak``, matching SLM physics: pixel value caps at
   ``MAX_VAL``, overlap adds light up to the cap.
-- **Single scalar radius for now.** No per-cell variable radii — the
-  ch613 call sites all use a uniform value. Generalising the
-  broadcast to ``(N, 1, 1)`` radii is a 1-line change when a future
-  challenge demands it.
+- **Single scalar radius for now.** No per-cell variable radii.
+  Generalising the broadcast to ``(N, 1, 1)`` radii is a 1-line
+  change when needed.
 
 This module is intentionally NOT registered in
 :mod:`self_learn.utils.auto_recipe`: SLM availability + centroid

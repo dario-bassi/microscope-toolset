@@ -1,29 +1,22 @@
-"""Render-vs-submit numerical guard.
+"""Re-derivation numerical guard.
 
-Last-mile pre-submit check: re-run the recipe's own detector on the
-*rendered* image, compare the re-derived value to what's about to be
-submitted, and surface a structured ``RenderSubmitCheck`` so the caller
-can log + ship, abort and re-derive, or escalate.
+Pre-commit check: re-run the workflow's own detector on the final
+image, compare the re-derived value to the value about to be recorded,
+and surface a structured ``RenderSubmitCheck`` so the caller can log,
+abort and re-derive, or escalate.
 
-Catches the agent-side flavour of the pitfall described in
-``knowledge/core/pitfalls/Sim-state vs rendered count asymmetry.md``:
-the agent submits a value the *underlying constructor* would yield
-("config says 192 cells were placed") while the *rendered image*
-carries a different one ("the visible field has 187"). The
-``pre-submit-review`` skill catches this in an LLM-driven visual pass;
-this utility catches it deterministically and numerically. The two are
-complementary.
+Catches the pitfall described in
+``knowledge/Core/Pitfalls/Sim-state vs rendered count asymmetry.md``:
+a value derived from a source other than the image (config, upstream
+state) may differ from what the actual pixels show.
 
 What this does NOT do:
 
 - No LLM, no subagent dispatch (deterministic numpy/scipy only).
 - No overlay rendering / matplotlib import.
-- No ``submit_solution`` call. Returns the dataclass and stops.
-- No file I/O. ``pre-submit-review`` owns ``/tmp/ch<N>_pre_submit/``.
+- No file I/O. Returns the dataclass and stops.
 - No silent exceptions. Detector errors become severity="error".
-- No re-import of the recipe module. Detector is passed in.
-
-Sprint #21 (counter=51).
+- No re-import of the workflow module. Detector is passed in.
 """
 
 from __future__ import annotations

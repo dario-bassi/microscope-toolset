@@ -1,26 +1,19 @@
 """useq-MDA-driven axis sweep + coordinate descent for state-device alignment.
 
-Sprint #46 (2026-04-28). Lifts the ch657 / ch658 light-sheet AutoPilot
-shape into a transferable primitive that sits cleanly above the
-2026-04-27 transferability contract: every snap is delivered through a
-:class:`useq.MDAEvent`, with state-device set-points carried in
-``MDAEvent.properties`` rather than via inline ``setState`` + ``snap``
-loops.
+Every snap is delivered through a :class:`useq.MDAEvent`, with
+state-device set-points carried in ``MDAEvent.properties`` rather than
+via inline ``setState`` + ``snap`` loops.
 
 Why this exists separate from
 :func:`self_learn.utils.sensorless_ao.sweep_state_device`:
 
-- ``sensorless_ao.sweep_state_device`` is the legacy AO sweep — inline
-  ``setState`` → ``waitForDevice`` → ``snap``. Trips the submission gate
-  (NON_NEGOTIABLES rule 4, ``logs/comms/submission_gate.py``) on any
-  newly-authored solve, so callers who reach for it from inside a
-  fresh solve hit a ``SubmissionRejected`` raise.
-- ``axis_sweep.sweep_axis_mda`` builds a useq event sequence; one
-  event per state, with ``MDAEvent.properties = [(axis, "State", k)]``.
-  ``run_events`` dispatches them, and on a real microscope the same
-  sequence object lands on the hardware MDA runner.
+- ``sensorless_ao.sweep_state_device`` uses an inline ``setState`` →
+  ``waitForDevice`` → ``snap`` loop, bypassing the MDA engine.
+- ``axis_sweep.sweep_axis_mda`` builds a useq event sequence — one
+  event per state with ``MDAEvent.properties = [(axis, "State", k)]``.
+  ``run_events`` dispatches them through the hardware MDA runner.
 - The shape generalises to: filter-wheel sweep, objective-turret
-  sweep, dichroic sweep, electronic-galvo offset sweep, anything
+  sweep, dichroic sweep, electronic-galvo offset sweep — anything
   that's a categorical state-device with N positions.
 
 Sister to:
@@ -33,13 +26,6 @@ Sister to:
 Composes with:
 - :func:`self_learn.hardware.core.run_events`
 - :class:`useq.MDAEvent` ``properties`` field
-
-Tested on:
-- ch657 r1 = 10/10 (3 axes × 5 states independent sweep)
-- ch658 r1 = 10/10 (3 axes × 5 states coordinate descent)
-
-Both shipped inline before extraction; this module is the agent-portable
-substrate so future alignment / categorical-sweep challenges auto-route.
 """
 
 from __future__ import annotations

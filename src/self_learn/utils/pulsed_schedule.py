@@ -1,12 +1,10 @@
 """Pulsed-schedule trajectory planner — closed-form per-segment forward model.
 
-Lifted from ch624 r1 → 10/10 (counter=148, sprint #37). The grader
-explicitly flagged the win shape as a planning primitive:
+Closed-form per-segment forward model for ON/OFF pulsed drives under a
+saturating rate law + first-order decay:
 
-    "Save the closed-form per-segment forward model
-        expr_after = max - (max - prev) · exp(-rate · N_on)
-    followed by ``expr · exp(-decay · N_off)`` as a planning
-    primitive — composes with any rate-limited drive."
+    expr_after = max - (max - prev) · exp(-rate · N_on)
+    followed by: expr · exp(-decay · N_off)
 
 Three functions, no scenario-specific assumptions:
 
@@ -162,8 +160,6 @@ def plan_n_on_for_waypoint(
             n_off=segment_len - n_on,
             rate=rate, decay=decay, max=max,
         )
-        if end < closest_overall_dist:
-            pass  # placeholder no-op; closest tracked below by midpoint distance
         d_band = abs(end - midpoint)
         if lo <= end <= hi:
             if d_band < best_in_band_dist:

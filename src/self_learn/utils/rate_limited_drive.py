@@ -1,14 +1,11 @@
 """Rate-limited drive — forward-model + early-stop primitive.
 
-Lifted from ch621 r1 → 10/10 (counter=134). The grader explicitly
-flagged the win shape as a planning primitive:
+Forward-model + early-stop pattern for monotonic saturating rate laws:
+    N_predict = ln(1 / (1 - target/max)) / rate
+    early_stop when measurement enters [target_lo, target_lo + slack]
 
-    "The forward-model + early-stop pattern composes with any
-    rate-limited drive: photoconversion, ablation damage
-    accumulation, FUCCI phase progression. Same shape:
-        N_predict = ln(1/(1-target/max)) / rate
-        early_stop when measurement enters [target_lo, target_lo+slack]
-    Save this as a planning primitive."
+Applies to any process following ``state(N) = max·(1 - exp(-rate·N))``:
+photoconversion, ablation dose accumulation, FUCCI phase progression.
 
 Two functions, no scenario-specific assumptions:
 
@@ -126,7 +123,7 @@ def drive_to_band(
     if slack > band_width:
         raise ValueError(
             f"slack {slack} exceeds band width {band_width} "
-            f"(early-stop ceiling > grader's band ceiling)"
+            f"(early-stop ceiling > band ceiling)"
         )
     if max_steps < 1:
         raise ValueError(f"max_steps must be >= 1; got {max_steps}")

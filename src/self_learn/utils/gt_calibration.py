@@ -1,35 +1,26 @@
-"""Pre-submit GT-calibration preflight checks.
+"""GT-calibration preflight checks.
 
-Detects three failure modes that have repeatedly cost the agent points
-in challenges where the simulator's published GT measures a *different
-quantity* than what the rendered pixels can recover:
+Detects three failure modes where a measurement derived from image
+pixels diverges from a ground-truth quantity:
 
-  - **Shared-feature segmentation fusion** (ch599 Kaede / cadherin
-    membranes): connected-component labels span multiple expected
-    cells. No threshold tuning closes the gap; the GT records
-    per-object sim state but the render fuses adjacent objects.
+  - **Shared-feature segmentation fusion**: connected-component labels
+    span multiple expected objects. No threshold tuning closes the gap;
+    the reference count records per-object state but adjacent objects
+    fuse under segmentation.
 
-  - **Sub-pixel artefact fragmentation** (ch599 Voronoi vertex
-    pixels): a sample is rendered with thousands of small bright
-    artefacts that pass an under-tuned segmentation, inflating the
-    count well past the density-implied population.
+  - **Sub-pixel artefact fragmentation**: bright rendering artefacts
+    (Voronoi vertices, speckle) pass an under-tuned segmentation,
+    inflating the count well past the density-implied population.
 
-  - **Noise-floor degeneracy** (ch593 free-bottom IC50, ch348 FRAP
-    half-life): a metric is dominated by render-stochasticity rather
-    than the underlying physical quantity, so re-running on a fresh
-    server gives wildly different values.
+  - **Noise-floor degeneracy**: a metric is dominated by measurement
+    stochasticity rather than the underlying physical quantity, so
+    repeat acquisitions give wildly different values (FRAP half-life,
+    IC50 at low signal).
 
-Each detector returns a structured ``{flag, message, details}`` dict
-that the agent can paste into ``method_summary``. Recipes with a
-flagged result should escalate to v-env for an apparent-GT
-republication (the ch593-style fix) rather than submitting silently-
-wrong numbers.
-
-Designed to compose cleanly with ``skills/pre-submit-review.md`` —
-add a step 5b that imports this module and runs the relevant
-detectors against the agent's intermediate artefacts.
-
-Sprint #13 (2026-04-26).
+Each detector returns a structured ``{flag, message, details}`` dict.
+Compose with :func:`self_learn.utils.preflight.run_preflight` and
+:func:`self_learn.utils.render_vs_submit.render_vs_submit_check` for
+a full pre-acquisition validation pipeline.
 """
 
 from __future__ import annotations

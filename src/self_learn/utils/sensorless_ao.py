@@ -59,9 +59,8 @@ def default_axis_for_label(label: str) -> tuple[str, int]:
         ``"astig_x_-0.5"`` → ``("astig_x", -1)``
         ``"unknown_label"`` → ``("other", 0)``
 
-    Same convention as ``scratch/solve_610.py``. Extend the prefix
-    table when a future challenge ships non-Zernike action sets;
-    don't generalise pre-emptively.
+    Extend the prefix table when a future experiment uses non-Zernike
+    action sets; don't generalise pre-emptively.
     """
     if label == "flat":
         return ("flat", 0)
@@ -188,11 +187,9 @@ def infer_baseline_axes(
     Returns ``[]`` when nothing exceeds flat by ``margin`` — the
     legitimate ch607-shape no-aberration case.
 
-    Grader endorsement (ch610): "BIG win on inference: an axis is in
-    the baseline iff its best ± state exceeds flat by >3% Brenner —
-    that's a sound a-priori test for which axes have non-zero baseline
-    contribution. Identified [defocus, astig_x] from the curve —
-    exactly the ground-truth baseline."
+    An axis is in the baseline if its best ± state exceeds flat by
+    ``margin`` Brenner — a sound a-priori test for which axes have
+    non-zero baseline contribution.
     """
     flat_score = scores.get(flat_label)
     if flat_score is None:
