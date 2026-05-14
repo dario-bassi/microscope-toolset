@@ -435,6 +435,8 @@ def assign_conditions(well_names, condition_map):
     Returns:
         dict mapping well_name -> condition_label.
     """
+    if not condition_map:
+        return {}
     # Check if it's condition -> [wells] or well -> condition
     first_val = next(iter(condition_map.values()))
     if isinstance(first_val, (list, tuple)):

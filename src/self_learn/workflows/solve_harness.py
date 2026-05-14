@@ -1,26 +1,25 @@
-"""Solve harness — standardized experiment startup workflow.
+"""Standardized experiment startup workflow.
 
 Wraps the mandatory first steps of every experiment:
-connect → snap all channels → characterize → suggest.
+connect → snap all channels → characterize → return context dict.
 
 Usage:
-    from self_learn.workflows.solve_harness import challenge_setup
-    setup = challenge_setup(core)
+    from self_learn.workflows.solve_harness import experiment_setup
+    setup = experiment_setup(core)
     # setup['channels'] = dict of channel→image
-    # setup['pixel_size'] = 1.0  (at 10x)
-    # setup['sample_info'] = characterize_image result
-    # setup['channel_group'] = 'Channel'
+    # setup['pixel_size'] = float µm/px at current objective
+    # setup['channel_group'] = auto-discovered config group name
 
 Functions:
-    challenge_setup  -- Full startup: snap all channels, characterize, suggest
+    experiment_setup  -- Snap all channels, compute stats, return context dict
 """
 
 import numpy as np
 from ..hardware.core import snap, snap_all_channels, get_pixel_size
 
 
-def challenge_setup(core, save_dir=None):
-    """Run standardized challenge startup workflow.
+def experiment_setup(core, save_dir=None):
+    """Run standardized experiment startup workflow.
 
     Steps:
     1. Detect config group and channels

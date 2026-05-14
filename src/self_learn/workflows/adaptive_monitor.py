@@ -305,11 +305,6 @@ def adaptive_monitor(
             if len(captured_events) >= max_captures:
                 break
 
-            # Skip positions in cooldown
-            if ps.triggered and (round_idx - ps.scores[-1 if not ps.scores else 0]) < cooldown_rounds:
-                # Simple cooldown: skip if triggered recently
-                pass  # still visit, just don't trigger again
-
             # Patrol: acquire one frame at this position
             patrol_event = MDAEvent(
                 x_pos=ps.xy[0],

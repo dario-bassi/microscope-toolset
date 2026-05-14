@@ -261,10 +261,8 @@ def track_focus_brownian(
 ):
     """Closed-loop focus tracker for pure-Brownian (zero-mean) Z drift.
 
-    AO closed-loop pattern proven on ch592 r4 (10/10): no velocity model,
-    coarse+fine sweep with widen-on-drop, parabolic sub-step peak as an
-    estimator independent of the grid argmax. The grader explicitly asked
-    for this to be a reusable AO recipe.
+    No velocity model — coarse+fine sweep with widen-on-drop, parabolic
+    sub-step peak as an estimator independent of the grid argmax.
 
     Protocol:
         1. Initial coarse sweep around ``initial_z`` (default = current Z),

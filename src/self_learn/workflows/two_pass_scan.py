@@ -306,7 +306,7 @@ def survey_nuclei_pass(
                 thresh = gray.mean()
 
             nuc_mask = gray > thresh
-            nuc_mask = morphology.remove_small_objects(nuc_mask, max_size=min_nucleus_area)
+            nuc_mask = morphology.remove_small_objects(nuc_mask, min_size=min_nucleus_area)
             nuc_mask = ndimage.binary_fill_holes(nuc_mask)
 
             labeled, _ = ndimage.label(nuc_mask)
