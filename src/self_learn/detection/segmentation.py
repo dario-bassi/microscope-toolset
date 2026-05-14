@@ -80,7 +80,7 @@ def adaptive_threshold(image, block_size=51, offset=0, method='gaussian',
     binary = img > thresh
 
     if min_area > 0:
-        binary = morphology.remove_small_objects(binary, min_size=min_area)
+        binary = morphology.remove_small_objects(binary, max_size=min_area)
 
     labeled = measure.label(binary)
     n_objects = labeled.max()
@@ -122,7 +122,7 @@ def segment_by_markers(intensity_image, marker_image, threshold=None,
 
     marker_binary = markers_img > threshold
     if min_area > 0:
-        marker_binary = morphology.remove_small_objects(marker_binary, min_size=min_area)
+        marker_binary = morphology.remove_small_objects(marker_binary, max_size=min_area)
 
     markers = measure.label(marker_binary)
 
@@ -179,7 +179,7 @@ def separate_touching(binary_mask, erosion_radius=2, min_area=20):
 
     # Remove small fragments
     if min_area > 0:
-        eroded = morphology.remove_small_objects(eroded, min_size=min_area)
+        eroded = morphology.remove_small_objects(eroded, max_size=min_area)
 
     # Label eroded regions
     markers = measure.label(eroded)

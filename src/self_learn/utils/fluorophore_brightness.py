@@ -113,12 +113,15 @@ def measure_brightness_ranking(
         except Exception:  # noqa: BLE001
             prior_exposure = None
 
+    from ..hardware.config import resolve_channel_group
+    ch_group = resolve_channel_group(core, None) or "Channel"
+
     measured: Dict[str, float] = {}
     try:
         for ch in channels:
-            core.setConfig("Channel", ch)
+            core.setConfig(ch_group, ch)
             try:
-                core.waitForConfig("Channel", ch)
+                core.waitForConfig(ch_group, ch)
             except Exception:  # noqa: BLE001 — older proxies
                 pass
             if exposure_ms is not None:

@@ -768,7 +768,7 @@ def count_nuclei_adaptive(image, block_size=31, offset=-2, min_area=8,
 
     # Clean small objects
     if min_area > 0:
-        binary = morphology.remove_small_objects(binary, min_size=min_area)
+        binary = morphology.remove_small_objects(binary, max_size=min_area)
 
     # Step 2: Watershed splitting
     if binary.any():
