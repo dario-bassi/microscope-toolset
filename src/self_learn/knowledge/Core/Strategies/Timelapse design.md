@@ -1,5 +1,7 @@
 ﻿# Timelapse Design
 
+> **When to use:** When designing a timelapse acquisition and needing to derive frame rate, duration, and exposure budget from the biological timescale.
+
 ## Backward Design
 
 Start with WHAT to measure, derive HOW to acquire:

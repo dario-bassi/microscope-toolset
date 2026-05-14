@@ -49,7 +49,7 @@ If the feature spans `Δz` axially and DOF is smaller, one frame won't capture i
 | Organoid (100-500 µm) | 300 µm | 10× (survey) + 40× (tile) | 2 µm |
 | Whole zebrafish | >1 mm | 4× light-sheet | 2 µm |
 
-See ``../../../src/core/hardware/zstack.py``.
+See ``self_learn.hardware.zstack``.
 
 ### Single-plane acquisitions on thin samples
 
@@ -79,8 +79,8 @@ A 10× DOF of ~10 µm means the sample plane can drift half that before your bes
 - `[[Core/Concepts/Nyquist sampling]]` — the lateral-resolution counterpart.
 - `[[Core/Concepts/Exposure and photodamage]]` — higher-NA objectives gather more light per µm² but image less thick volume.
 - `[[Core/Strategies/Closed-loop autofocus]]` — Z-drift control.
-- ``../../../src/core/hardware/zstack.py`` — `acquire_zstack`, `detect_cells_zstack`.
-- ``../../../src/core/workflows/autofocus.py`` — focus metrics, sweep, corrector.
+- ``self_learn.hardware.zstack`` — `acquire_zstack`, `detect_cells_zstack`.
+- ``self_learn.workflows.autofocus`` — focus metrics, sweep, corrector.
 
 ## Further reading
 

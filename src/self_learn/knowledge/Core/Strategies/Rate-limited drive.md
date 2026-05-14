@@ -1,7 +1,9 @@
 # Rate-limited drive
 
+> **When to use:** When driving a population to a single target band under a monotonic saturating rate law — use `predict_n_steps` for the open-loop burst then `drive_to_band` for closed-loop fine control.
+
 Drive a population to a SETPOINT BAND under a monotonic-saturating
-rate law. Two functions in [`utils.rate_limited_drive`](../../../src/core/utils/rate_limited_drive.py)
+rate law. Two functions in `self_learn.utils.rate_limited_drive`
 (sprint #35, lifted from ch621 r1 → 10/10):
 
 - `predict_n_steps(target, *, rate, max=1.0)` — closed-form forward

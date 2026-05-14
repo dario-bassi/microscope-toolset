@@ -1,5 +1,7 @@
 # Simultaneous SLM targeting over sequential firing
 
+> **When to use:** When multiple spatial targets must be stimulated with an SLM and sequential firing is failing — fire all spots simultaneously.
+
 ## Principle
 
 When a closed-loop scenario asks for N spatial targets to be stimulated, fire all N simultaneously via a multi-spot SLM mask, not sequentially target-by-target. Sequential firing wastes sim-time between targets (each firing window lets earlier targets' waves propagate and disturb later targets' baselines); simultaneous firing uses every control step to build up stimulation at every target at once.

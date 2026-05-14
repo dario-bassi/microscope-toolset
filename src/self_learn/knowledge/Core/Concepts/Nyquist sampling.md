@@ -51,7 +51,7 @@ Feature size → lowest sensible magnification
 
 ## The trap: sim-specific recipes with fixed pixel sizes
 
-A segmentation threshold like `min_area = 30 px` is silently tied to one pixel size. Run the same code at 40× and it rejects real nuclei; at 4× it accepts noise speckles. **Every pixel-space threshold should either be derived from a physical-size parameter (`min_area_um2 / pixel_size_um²`) or be documented as valid only at a specific magnification.** The refactor in ``../../../src/core/analysis/histology.py`` and ``../../../src/core/analysis/lipid_droplet.py`` is an example of the right pattern — see `[[Core/Strategies/Physical-unit thresholds]]`.
+A segmentation threshold like `min_area = 30 px` is silently tied to one pixel size. Run the same code at 40× and it rejects real nuclei; at 4× it accepts noise speckles. **Every pixel-space threshold should either be derived from a physical-size parameter (`min_area_um2 / pixel_size_um²`) or be documented as valid only at a specific magnification.** The refactor in ``self_learn.analysis.histology`` and ``self_learn.analysis.lipid_droplet`` is an example of the right pattern — see `[[Core/Strategies/Physical-unit thresholds]]`.
 
 ## Practical calibration
 
@@ -91,7 +91,7 @@ nyquist_ok = cfg.pixel_size_um <= 0.3 * 0.550 / 0.75   # e.g. 40x/0.75 obj
 - `[[Core/Approach/Coordinate systems]]` — the px↔µm↔world-coord conversion rules.
 - `[[Core/Strategies/Physical-unit thresholds]]` — anatomy-scaled segmentation parameters.
 - `[[Core/Pitfalls/FOV vs well coverage]]` — "you can't see something that isn't in the FOV".
-- ``../../../src/core/hardware/config.py`` — `pixel_size_um`, `_mag_to_pixel_size` fallback.
+- ``self_learn.hardware.config`` — `pixel_size_um`, `_mag_to_pixel_size` fallback.
 
 ## Further reading
 

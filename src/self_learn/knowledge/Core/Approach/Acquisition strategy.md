@@ -1,5 +1,11 @@
 # Decision Pattern: Acquisition Strategy
 
+> **TL;DR** — Choose magnification and snap count from the task requirement, not habit.
+> Survey at 10x first; zoom to 40x only when sub-cellular detail is needed. One snap
+> per channel is enough for static stains. Query `core.getPixelSizeUm()` and
+> `core.getImageWidth()` at runtime — never hardcode FOV values. Leave 50% snap
+> budget as reserve for focus recovery and retries.
+
 ## When to Survey vs Zoom
 
 ```

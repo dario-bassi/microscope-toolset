@@ -1,5 +1,11 @@
 ﻿# Pattern: MDA-Based Acquisition
 
+> **TL;DR** — Use MDA for all multi-frame acquisitions; `snap()` only for single exploratory frames.
+> Simplest timelapse: `timelapse(core, n_frames, interval_s, channel)`.
+> Device changes between phases: separate `MDASequence` calls with state changes between them.
+> SLM per-frame control: generator that sets the mask between yields.
+> **Never** embed `SLMImage` inside `MDAEvent` when using pymmcore-proxy — serialisation fails.
+
 > **Import note:** Install with `pip install -e .` or `uv sync`, then import as `self_learn.*`
 
 ## Why Use MDA

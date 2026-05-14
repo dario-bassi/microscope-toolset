@@ -1,5 +1,7 @@
 # Multi-Position Survey
 
+> **When to use:** When the sample spans more than one FOV and objects must be detected and catalogued across a multi-tile grid.
+
 > **Note**: Code examples below use conceptual pseudocode. All multi-position
 > loops MUST use `MDASequence(stage_positions=[...])` + `run_events()` in practice.
 
@@ -74,7 +76,7 @@ These become targets for follow-up at higher magnification.
 - [[Core/Strategies/Multi-scale morphometry]] — survey at 10x, zoom at 40x.
 - [[Core/Pitfalls/FOV vs well coverage]] — sizing the tile grid.
 - [[Core/Approach/Coordinate systems]] — world vs tile-pixel coordinates.
-- `../../../src/core/workflows/batch.py` — production implementation.
+- `self_learn.workflows.batch` — production implementation.
 
 ## Literature
 

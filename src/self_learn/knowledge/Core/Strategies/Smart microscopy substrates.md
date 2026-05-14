@@ -1,5 +1,7 @@
 # Smart-microscopy substrates
 
+> **When to use:** When selecting the computational framework or hardware substrate for implementing a closed-loop microscopy experiment.
+
 Most strategy notes here describe **what to do in the loop**: the score function, the trigger, the survey-then-zoom decision. This note describes **what holds the loop together** — the open-source frameworks that supply the device adapters, the streaming dataflow, the GUI on top of it, and the plugin slots where decisions hang. Picking the right substrate up front is the difference between "a closed-loop demo on one rig" and "a routine pipeline running thousands of chambers in parallel".
 
 The four substrate papers below cluster on a single axis: **how is closed-loop authoring exposed to the experimenter?** Pure-Python (Pycro-Manager), Qt-widget GUI on a single process (ImSwitch), streaming multi-process orchestration (Arkitekt), GUI-editable feature-graphs (Navigate), event-driven middleware for production microfluidics (EAP4EMSIG), or a still-paper multi-agent vision (Kesavan).

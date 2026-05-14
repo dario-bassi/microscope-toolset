@@ -1,5 +1,7 @@
 ﻿# Axis-sweep alignment via useq-MDA state-device sweeps
 
+> **When to use:** When finding the optimal state of a categorical device (filter wheel, dichroic, objective) by sweeping N states and picking the best by a scalar signal metric.
+
 **Pattern**: a categorical state device (filter wheel, light-sheet alignment encoder, dichroic, objective turret, electronic galvo offset) has N positions. The sample's response to that device is unimodal in state index — there's a single "best" position and signal falls off either way. Find the argmax in N snaps with no inline `setState → snap` loop.
 
 The transferable substrate: every state visited is delivered through a `useq.MDAEvent` whose `properties` field carries the set-point. The MDA runner sets the device, waits, snaps, and a callback reduces each frame to a scalar. Same shape on real hardware.
@@ -27,11 +29,11 @@ The light-sheet AutoPilot lineage:
 
 ## Why this exists separate from `sensorless_ao.sweep_state_device`
 
-`sensorless_ao.sweep_state_device` was extracted in sprint #25 from the DM AO challenges (ch607/608/610). It uses an inline `for k in range(N): setState(k); waitForDevice; snap(); reduce(img)` loop. That pattern trips the submission gate (`logs/comms/submission_gate.py`, NON_NEGOTIABLES rule 4): more than 2 `snapImage` calls in a `for/while` block with no `MDASequence / run_events / on_frame` evidence in the same script raises `SubmissionRejected` before the env sees the answer.
+`sensorless_ao.sweep_state_device` uses an inline `for k in range(N): setState(k); waitForDevice; snap(); reduce(img)` loop. That pattern bypasses the MDA engine, losing hardware-native sequencing, structured event metadata, and clean cancellation.
 
-`axis_sweep` builds a useq event sequence and dispatches via `run_events`. The gate sees the MDA references and lets the submission through. On a real microscope the same `MDAEvent` list lands directly on the hardware MDA runner — same code path either way.
+`axis_sweep` builds a useq event sequence and dispatches via `run_events`. The same `MDAEvent` list lands directly on the hardware MDA runner on any pymmcore-plus backend — same code path on real hardware and simulated cores.
 
-When solving with `sweep_state_device` is preferred — never. Pick the recipe layer that matches your archetype: AO sharpness sweeps still wrap `sensorless_ao` because the recipe layer hides the inline loop. New solves should reach for `axis_sweep` directly.
+For new code, prefer `axis_sweep` over `sweep_state_device`. AO sharpness sweeps can still compose `axis_sweep` with the `sensorless_ao` inference helpers.
 
 ## Reduce hooks
 
@@ -50,7 +52,7 @@ The reducer runs inside `on_frame`, so each result is a scalar paired with its s
 ## Anti-patterns
 
 - **Inline `setState → snap` loops** in fresh solves — see above; replace with `sweep_axis_mda`.
-- **Cached state maps when descent might re-enter** — read `core.getProperty(axis, "State")` at every sweep boundary. Stale state caches caused ch658's reported `initial_mean_signal = 7.03` discrepancy: the dry run had already descended, so the live run's "initial" snap saw post-descent state. Predicate-graded answer was still 10/10 because only the final-state predicates count, but the diagnostic field was wrong.
+- **Cached state maps when descent might re-enter** — read `core.getProperty(axis, "State")` at every sweep boundary. If a prior sweep already descended, the next sweep's "initial" snap sees post-descent state, corrupting the baseline diagnostic even when the final argmax is correct.
 - **Skipping per-axis pin** — `sweep_axis_mda(core, "Y")` without `pin={"TiltX": 2, "TiltY": 2}` lets the OTHER axes drift if the framework's default is non-zero. Always pass `pin` or rely on the descent helper.
 
 ## Composes with
@@ -63,7 +65,7 @@ The reducer runs inside `on_frame`, so each result is a scalar paired with its s
 
 - `[[Core/Strategies/Closed-loop state device]]` — per-frame-update version of state-device control. Use when the controller decides each next state from the previous frame's measurement, not when the search is a one-shot argmax.
 - `[[Core/Strategies/Closed-loop autofocus]]` — Z-plane analogue; same shape but a continuous axis, so the right tool is a Brenner sweep + parabolic-peak interp rather than a state-device argmax.
-- `[[Recipes/Sensorless AO]]` — pre-bridge inline-snap variant; kept for AO-specific sharpness inference (per-axis-presence / residual-axis decomposition). New solves should compose `axis_sweep` with the AO inference helpers rather than reaching for `sweep_state_device`.
+- `sensorless_ao.sweep_state_device` — kept for AO-specific sharpness inference (per-axis-presence / residual-axis decomposition). New code should compose `axis_sweep` with the AO inference helpers rather than calling `sweep_state_device` directly.
 
 ## Literature
 

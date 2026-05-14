@@ -21,7 +21,7 @@ event = MDAEvent(
 ```
 
 Both `run_events()` and `core.mda.run()` handle `slm_image` automatically —
-no custom engine subclass needed. See `knowledge/workflows/SLM optogenetics.md`.
+no custom engine subclass needed. See `[[Core/Strategies/SLM optogenetics]]`.
 
 ## When to Subclass
 

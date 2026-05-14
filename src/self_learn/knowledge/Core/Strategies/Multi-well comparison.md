@@ -1,5 +1,7 @@
 # Multi-Well Comparison
 
+> **When to use:** When comparing phenotype or signal intensity across multiple wells relative to a control condition.
+
 > **Note**: Code examples below use conceptual pseudocode. All multi-position
 > loops MUST use `MDASequence(stage_positions=[...])` + `run_events()` in practice.
 

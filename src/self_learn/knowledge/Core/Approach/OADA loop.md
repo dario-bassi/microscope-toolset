@@ -1,5 +1,13 @@
 ﻿# The OADA Loop
 
+> **TL;DR** — Every closed-loop experiment is Observe → Analyze → Decide → Act.
+> Canonical pattern: `run_events(core, gen(), on_frame=callback)` where `gen()` yields
+> `MDAEvent`s and `on_frame` runs analysis and updates shared state.
+> SLM variant: attach `slm_image=SLMImage(data=mask, device="SLM")` to each event —
+> `run_events()` applies the mask automatically before each snap.
+> Always set a `max_steps` guard. Operate at the right feedback timescale
+> (per-frame / per-tile / per-phase / per-experiment).
+
 **Observe -- Analyze -- Decide -- Act**
 
 The core adaptive acquisition cycle. Every closed-loop microscopy experiment

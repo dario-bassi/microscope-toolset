@@ -14,7 +14,7 @@ Two forms:
 
 ### Co-localization
 
-Two proteins at identical positions in two channels can show a false displacement entirely due to LCA. Before reporting a co-localization distance of < 200 nm (typical fluorescence resolution), measure the chromatic shift with a multi-colour bead slide and register out the offset. See ``../../../src/core/analysis/colocalization.py``.
+Two proteins at identical positions in two channels can show a false displacement entirely due to LCA. Before reporting a co-localization distance of < 200 nm (typical fluorescence resolution), measure the chromatic shift with a multi-colour bead slide and register out the offset. See ``self_learn.analysis.colocalization``.
 
 ### Centroid metrology (spot localization, FISH, SMLM)
 
@@ -84,8 +84,8 @@ def register_channels(img_green, img_red, shift_xy=(0.0, 0.0), shift_z=0.0):
 
 - `[[Core/Concepts/Fluorophore basics]]` — channel choice also affects Stokes-shift bleedthrough, a related source of cross-channel error.
 - `[[Core/Concepts/Nyquist sampling]]` — if you under-sample, you can't resolve sub-pixel shifts anyway, so LCA becomes irrelevant.
-- ``../../../src/core/analysis/colocalization.py`` — Pearson / Manders co-localization metrics.
-- ``../../../src/core/analysis/registration.py`` — image registration primitives (if applicable).
+- ``self_learn.analysis.colocalization`` — Pearson / Manders co-localization metrics.
+- ``self_learn.analysis.registration`` — image registration primitives (if applicable).
 
 ## Further reading
 

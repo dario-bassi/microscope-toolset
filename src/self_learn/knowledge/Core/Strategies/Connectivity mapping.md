@@ -1,5 +1,7 @@
 ﻿# Workflow: Neural Circuit Connectivity Mapping
 
+> **When to use:** When mapping functional neural circuits by combining SLM optogenetic stimulation with simultaneous calcium imaging.
+
 ## Overview
 Map functional connectivity in a neural network using optogenetic stimulation
 (ChR2) and calcium imaging (GCaMP). Systematically stimulate each neuron via

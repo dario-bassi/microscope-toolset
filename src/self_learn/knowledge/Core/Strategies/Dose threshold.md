@@ -1,8 +1,10 @@
 ﻿# Dose threshold
 
+> **When to use:** When finding the minimum effective dose at which a binary biological response (wave nucleates, cell dies, reporter activates) first occurs — not a full Hill fit, just the threshold.
+
 Find the **minimum effective dose** — the dose at which a binary
 response crosses a threshold — without fitting the full dose-response
-curve. Two functions in [`utils.dose_threshold`](../../../src/core/utils/dose_threshold.py)
+curve. Two functions in `self_learn.utils.dose_threshold`
 (sprint #43, lifted from ch632 r1 → 10/10 / 264 inline lines):
 
 - `sweep_threshold(*, doses, apply_dose, measure_response, response_threshold, reset=None)`
@@ -107,9 +109,9 @@ knowing the actuator name.
 
 ## See also
 
-- `src/core/utils/sensorless_ao.py::sweep_state_device` — same
+- `self_learn.utils.sensorless_ao: sweep_state_device` — same
   primitive shape, ranks by **scalar metric** instead of binary
   outcome. Use when you have a continuous quality metric (Brenner,
   intensity), `dose_threshold` when you have a hard yes/no.
-- `src/core/analysis/population.py::dose_response_curve` — for
-  full-curve dose-response with Hill fits.
+- `self_learn.workflows.dose_response` — for full-curve dose-response
+  with Hill fits.

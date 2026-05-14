@@ -1,11 +1,11 @@
-<!-- audit 2026-04-24: "Failure Analysis" framing is incident-specific. Content is good (Z-scan perturbs the system it measures; per-position vs global drift). Consider reframing as "Pitfall: Z-scan feedback disturbs the drift it's measuring" or merging with strategies/closed_loop_autofocus.md. -->
+# Pitfall: Z-scan feedback disturbs the drift it's measuring
 
-# Failure Analysis: Z-Drift Autofocus
+> **When to use:** When Z-drift correction diverges in a multi-position timelapse — fast-drifting positions spiral out of control.
 
-## Challenge Type
-Multi-position timelapse with independent Z-drift per position.
+## Symptom
+Multi-position timelapse where drift correction diverges — the corrected Z drifts further rather than stabilizing. Slow-drifting positions behave normally; fast-drifting positions spiral out of control.
 
-## What Went Wrong
+## What Goes Wrong
 
 ### Error 1: Global vs per-position drift
 - **Error**: Computed drift_rate = Δz / total_snaps_across_all_positions

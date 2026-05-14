@@ -1,6 +1,8 @@
 ﻿# Auto recipe selection
 
-When you connect to an unknown challenge, the first thing to do — even before deciding on the workflow — is **look at the sample**. The sample-classifier (`src/core/utils/sample_classifier.py`) extracts 8 cheap features (entropy, FFT periodicity, edge density, CC stats, sparsity) and ranks 7 sample classes. The `auto_recipe()` selector turns that ranking into a concrete recipe pick + pre-filled kwargs.
+> **When to use:** When connecting to an unknown sample and needing to automatically classify it and dispatch to the right workflow before writing any experiment code.
+
+When you connect to an unknown sample, the first thing to do — even before deciding on the workflow — is **look at the sample**. The sample-classifier (`self_learn.utils.sample_classifier`) extracts 8 cheap features (entropy, FFT periodicity, edge density, CC stats, sparsity) and ranks 7 sample classes. The `auto_recipe()` selector turns that ranking into a concrete recipe pick + pre-filled kwargs.
 
 ## When to call
 
@@ -53,18 +55,24 @@ When `core` is supplied, the selector also reads `MicroscopeConfig` (channel lis
 - MAP2 / synaptic-marker channel → unlock `neuron_puncta` fallback.
 - Any `min_area_px` kwarg is mirrored into `min_area_um2` using `pixel_size_um²` so the recipe can pick whichever unit it prefers (see [[Core/Strategies/Physical-unit thresholds]]).
 
-## Brief-aware dispatch (`brief=` parameter)
+## Archetype hint (`brief=` parameter)
 
-Sprint #41 wired `parse_brief` → `auto_recipe` so disclosed values
-in the brief drive both the archetype override AND the
-`default_kwargs` pre-fill:
+The `brief=` parameter accepts a `dict`, `str`, or `StructuredBrief` to
+drive both the archetype override AND the `default_kwargs` pre-fill.
+Use it when the experiment type is already known:
 
 ```python
-from self_learn.utils.brief_parse import parse_brief
 from self_learn.utils.auto_recipe import auto_recipe
 
-brief = parse_brief(challenge)               # StructuredBrief / dict / str all OK
-suggestion = auto_recipe(image, core=core, brief=brief)
+# Override image-classifier dispatch when experiment type is known:
+suggestion = auto_recipe(image, core=core, brief={"archetype": "frap"})
+
+# Pass numeric experiment parameters alongside the archetype:
+suggestion = auto_recipe(image, core=core, brief={
+    "archetype": "modality_switch",
+    "n_burst": 40,
+    "primary_position_prior": (128, 128),
+})
 ```
 
 What the brief drives:
@@ -72,21 +80,15 @@ What the brief drives:
 - **Archetype override** (`_ARCHETYPE_TO_CLASS` map): `frap` →
   `single_bright_spot`, `voronoi` → `voronoi_monolayer`, `hemocytometer`
   → `sparse_cells`, `plate_reader` → `plate_reader_grid`,
-  `modality_switch` → `wide_dynamic_range_field`, `sim` → `sim_protocol`.
-  Beats the image classifier when the brief explicitly says so.
+  `modality_switch` → `wide_dynamic_range_field`. Beats the image
+  classifier when the experiment type is known in advance.
 - **Recipe-specific kwargs** (via `kwargs_from_brief`): each class has
-  its own extractor — disclosed coords (`primary_position_prior` for
-  modality_switch), numeric facts (`n_burst`, `n_baseline`,
-  `n_cells`, `dilution_factor`), and submit-shape mode picks
-  (`mode=demod_3phase` vs `mode=orientation` for `sim_protocol`).
-- **Image-coord-vs-PDE-grid disambiguation** (`_find_image_space_coord`
-  matches the literal `image (X, Y)` pattern). The ch651 trap was
-  reading `PRIMARY pacemaker at PDE grid (32, 32)` as an image
-  prior; the disambiguation keeps PDE coords out.
+  its own extractor — spatial coordinates (`primary_position_prior` for
+  modality_switch), numeric parameters (`n_burst`, `n_baseline`,
+  `n_cells`, `dilution_factor`).
 
-Disclosed > inferred — when a brief surfaces a value, it overrides
-the feature heuristic on the same key. The brief author chose to
-surface it.
+Explicit > inferred — when a value is provided in the brief dict, it
+overrides the feature heuristic on the same key.
 
 ## Out of scope
 
@@ -105,5 +107,5 @@ See `tests/test_auto_recipe.py` (26 tests). Each synthetic-image generator is pa
 
 - [[Core/Strategies/Adaptive acquisition]] — what to do once a recipe is picked.
 - [[Core/Strategies/Physical-unit thresholds]] — why `min_area_um2` mirrors `min_area_px` when a pixel size is known.
-- `src/core/utils/sample_classifier.py` — upstream feature extractor.
-- `src/self_learn/workflows/` — the canonical location of workflow implementations.
+- `self_learn.utils.sample_classifier` — upstream feature extractor.
+- `self_learn.workflows` — the canonical location of workflow implementations.

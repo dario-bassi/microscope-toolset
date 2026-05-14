@@ -1,5 +1,7 @@
 ﻿# Multi-Scale Morphometry Workflow
 
+> **When to use:** When population-level morphometry (nuclear size, shape, classification) requires a low-mag survey followed by high-mag measurement tiles.
+
 ## When to Use
 Tissue pathology, nuclear size surveys, dysplasia screening, any challenge
 requiring population-level measurements at cellular resolution.

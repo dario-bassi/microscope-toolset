@@ -1,8 +1,10 @@
 # Adaptive Acquisition
 
+> **When to use:** When the experiment requires survey-then-zoom to find regions of interest, or continuous patrol for rare events that occur at unpredictable times or positions.
+
 > **Note**: Code examples below use conceptual pseudocode. All multi-frame
 > loops MUST use `run_events(core, generator(), on_frame=callback)` in practice.
-> See `knowledge/pymmcore/mda_patterns.md` for the correct MDA patterns.
+> See `[[Core/Concepts/MDA generators]]` for the correct MDA patterns.
 
 ## Pattern: Survey -> Decide -> Zoom -> Measure
 
@@ -64,9 +66,11 @@ survey = MDASequence(
     channels=["BF", "nucleus"],
 )
 
-def adaptive_generator(survey_results):
-    for roi in rank_rois(survey_results):
-        yield AcquisitionEvent(x=roi.x, y=roi.y, objective=40)
+def detail_gen(top_rois):
+    for (wx, wy, _) in top_rois:
+        core.setXYPosition(wx, wy)
+        core.waitForDevice(core.getXYStageDevice())
+        yield MDAEvent(channel={"config": "BF"})
 ```
 
 ## Magnification Selection

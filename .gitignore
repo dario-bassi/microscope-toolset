@@ -188,7 +188,6 @@ cython_debug/
 !docs/mcp_server_gui.md
 !src/self_learn/knowledge/INDEX.md
 !src/self_learn/knowledge/Papers index.md
-!src/self_learn/knowledge/MODULE_REVIEW.md
 !src/self_learn/knowledge/Core/*.md
 !src/self_learn/knowledge/Core/Approach/*.md
 !src/self_learn/knowledge/Core/Concepts/*.md

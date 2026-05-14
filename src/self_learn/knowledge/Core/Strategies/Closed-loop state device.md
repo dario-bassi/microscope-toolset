@@ -1,5 +1,7 @@
 # Closed-loop control via a state device
 
+> **When to use:** When a discrete state device (perfusion valve, temperature controller, electrode) drives a biological response that must be measured each frame and fed back to update the device state.
+
 A general pattern: a discrete state device (enum) sets a condition on the sample, the sample responds, and you measure the response and update the state on each frame.
 
 Examples of the state device on real microscopes: a field-emitting electrode array, a perfusion valve selector, a temperature controller, a shutter wheel, an SLM pattern register.
@@ -45,7 +47,7 @@ Before designing the control, compute what's actually achievable: `max_achievabl
   `predict_n_steps` for the open-loop horizon + `drive_to_band` for
   the closed-loop early-stop. Sprint #35 utility, lifted from
   ch621 r1 win.
-- ``../../../src/core/workflows/stage_tracking.py`` — the follow-with-stage alternative.
+- ``self_learn.workflows.stage_tracking`` — the follow-with-stage alternative.
 
 ## Literature
 

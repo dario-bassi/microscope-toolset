@@ -52,24 +52,7 @@ run_mda(core, my_generator, on_frame_cb=callback)
 run_events(core, my_generator(), on_frame=callback)
 ```
 
-### 4. `run_bacteria_trap()` removed and module relocated to `src.recipes.bacteria_trap`
-
-Old code may call:
-```python
-from self_learn.workflows.bacteria_trap import run_bacteria_trap   # MODULE no longer exists
-result = run_bacteria_trap(core, cx, cy, radius, ...)
-```
-
-**Replace with `run_bacteria_trap_mda()` from the new location:**
-```python
-from recipes.bacteria_trap import run_bacteria_trap_mda
-result = run_bacteria_trap_mda(core, cx, cy, radius, ...)
-```
-
-The module moved from `workflows/` to `recipes/` during
-the two-tier core/recipes split; the function rename happened in the same pass.
-
-### 5. `metadata={'properties': {...}}` pattern no longer works
+### 4. `metadata={'properties': {...}}` pattern no longer works
 
 Old code may set per-event device properties via metadata:
 ```python

@@ -1,6 +1,8 @@
 # Pitfall: Run-and-Tumble Tracking
 
-When analyzing trajectories of organisms (or motile cells) that alternate between directed motion and brief reorientation events, two compounding methodology errors can turn a well-detected population into a thoroughly wrong frequency measurement. See `[[Recipes/Motile organism tracking]]` for sample-specific parameter values.
+> **When to use:** When motility tracking produces far more tracks than objects, or tumble frequency is much higher than expected.
+
+When analyzing trajectories of organisms (or motile cells) that alternate between directed motion and brief reorientation events, two compounding methodology errors can turn a well-detected population into a thoroughly wrong frequency measurement.
 
 ## Failure modes
 
@@ -30,4 +32,4 @@ The two parameters (`angle_threshold`, `min_tumble_frames`) were tuned for a dif
 3. **Always validate track counts** against expected unique-object counts. A track-to-detection ratio >2 means fragmentation is eating the analysis.
 4. **Gap tolerance.** Brief detection dropouts during state transitions (tumbling, dividing, z-drifting) are normal. Allow 1-frame gaps in track building.
 
-Organism-specific parameter values live in `[[Recipes/Motile organism tracking]]` and `[[Recipes/Bacteria growth]]`.
+Organism-specific parameter tuning: start with `angle_threshold` at twice the expected single-frame noise angle and require `min_tumble_frames=2`.

@@ -1,13 +1,15 @@
 # Sample-class auto-detection
 
-The first thing to do on an unknown challenge is **identify what kind of sample is in front of you**. If you don't, you spend the snap budget tuning a recipe that was never going to work — phase-contrast tessellations get treated as plate-reader grids because both look "structured", FRAP samples get treated as sparse-cell counts because there happens to be one bright spot, etc. This note describes the strategy and points at where it sits on the literature axis.
+> **When to use:** When the sample type is unknown and must be classified before selecting a workflow — always run this right after the first snap.
+
+The first thing to do on an unknown sample is **identify what kind of sample is in front of you**. If you don't, you spend the snap budget tuning a recipe that was never going to work — phase-contrast tessellations get treated as plate-reader grids because both look "structured", FRAP samples get treated as sparse-cell counts because there happens to be one bright spot, etc. This note describes the strategy and points at where it sits on the literature axis.
 
 ## The strategy
 
 Two parts, deliberately separated:
 
-1. **Classifier.** Cheap features → discrete sample class. Runs in <200 ms on a 512×512 frame. Implemented in `src/core/utils/sample_classifier.py` (sprint #17). The current implementation extracts 8 hand-crafted features (entropy, FFT periodicity, edge density, CC count + size, sparsity) and uses ranked decision rules over 7 classes (`plate_reader_grid`, `voronoi_monolayer`, `phase_contrast_tessellation`, `sparse_cells`, `single_bright_spot`, `wide_dynamic_range_field`, `unknown`). Returns a confidence-ranked list — *not* a single label, because borderline samples should keep optionality.
-2. **Dispatcher.** Class → recipe pick + parameter prefill + hardware-gated fallbacks. Implemented in `src/core/utils/auto_recipe.py` (sprint #18). Optional core probe (channel list, magnification, SLM device, objective state labels) refines the pick — see [[Core/Strategies/Auto recipe selection]] for the full mapping table.
+1. **Classifier.** Cheap features → discrete sample class. Runs in <200 ms on a 512×512 frame. Implemented in `self_learn.utils.sample_classifier`. The current implementation extracts 8 hand-crafted features (entropy, FFT periodicity, edge density, CC count + size, sparsity) and uses ranked decision rules over 7 classes (`plate_reader_grid`, `voronoi_monolayer`, `phase_contrast_tessellation`, `sparse_cells`, `single_bright_spot`, `wide_dynamic_range_field`, `unknown`). Returns a confidence-ranked list — *not* a single label, because borderline samples should keep optionality.
+2. **Dispatcher.** Class → recipe pick + parameter prefill + hardware-gated fallbacks. Implemented in `self_learn.utils.auto_recipe`. Optional core probe (channel list, magnification, SLM device, objective state labels) refines the pick — see [[Core/Strategies/Auto recipe selection]] for the full mapping table.
 
 The dispatcher is the *image-level* layer of first-contact. Scenario-level signals (dose budgets, per-cell state) used to come from a sibling `bridge_preflight` probe, but the bridge RPC surface was closed 2026-04-27 — those signals must now be re-derived from the brief text + camera frames. See [[Core/Approach/Transferability contract]].
 

@@ -1,5 +1,7 @@
 ﻿# Wave Propagation Analysis Workflow
 
+> **When to use:** When analyzing calcium waves, cAMP waves, cardiac activation, or any spreading biological wavefront.
+
 ## When to use
 Calcium waves, cAMP waves (Dictyostelium), cardiac activation waves,
 reaction-diffusion patterns, any expanding/periodic wavefront.

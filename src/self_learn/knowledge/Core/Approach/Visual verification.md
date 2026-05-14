@@ -1,5 +1,12 @@
 # Visual Verification
 
+> **TL;DR** — Save images and read them with LLM vision; this is not optional.
+> Always verify: first detection on a new sample, count differs >30% from expectation,
+> after changing detection parameters, before final submission.
+> Save overlays to `Path(tempfile.gettempdir())` using `matplotlib.use("Agg")` (no display).
+> Use DPI=150, red circles on grayscale, yellow text. Label objects with IDs for debugging.
+> Vision is for qualitative confirmation — not for pixel-level measurement or high-throughput counts.
+
 The agent is an LLM with vision. Use this superpower to sanity-check automated
 results, classify ambiguous objects, and catch errors that pure numerical
 analysis would miss.

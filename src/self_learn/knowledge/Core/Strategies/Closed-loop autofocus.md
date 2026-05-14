@@ -1,5 +1,7 @@
 # Closed-loop autofocus during Z drift
 
+> **When to use:** When a timelapse sample drifts in Z and needs active per-frame focus correction to stay within the depth of field.
+
 A timelapse where the sample drifts in Z needs active focus tracking:
 the depth of field at moderate magnifications (~6 µm at 10×, ~2 µm at
 40×) is often less than the cumulative drift, so within 10-20 frames
@@ -30,7 +32,7 @@ re-verify with a narrow 3-point sweep and update `v_drift`.
 - Cheapest in snaps.
 - Degrades gracefully if drift is noisy.
 
-## `src/core/workflows/autofocus.py` helpers
+## `self_learn.workflows.autofocus` helpers
 
 | Helper | Use |
 |--------|-----|
@@ -96,7 +98,7 @@ mid-run verification unless drift is genuinely noisy.
 - `Recipes/Sensorless AO.md` — the **quantised-action**
   sibling: argmax + per-axis-presence inference + residual axis on
   state-device sweeps (DM / SLM / Modality), paired with
-  `src/recipes/sensorless_ao.py` (ch607/608/610 → 10/10 ×3).
+  `self_learn.utils.sensorless_ao` (sweep_state_device).
 
 ## Literature
 

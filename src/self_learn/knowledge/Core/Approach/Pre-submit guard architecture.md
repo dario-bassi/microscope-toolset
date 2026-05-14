@@ -1,5 +1,13 @@
 ﻿# Measurement Verification Architecture
 
+> **TL;DR** — Three-tier verification ladder in increasing cost order.
+> **2a preflight** (µs): NaN / Inf / missing key / sign checks on the answer dict.
+> **2b render_vs_submit** (ms): re-runs your own detector on the final image; catches
+> apparent-vs-underlying count disagreement.
+> **2c visual review** (s): LLM vision confirms rendered overlay matches the reported value.
+> Apply in order; a block at any tier stops the ladder. See `Pre-submission checklist.md`
+> for the procedural walkthrough.
+
 This note describes a layered architecture for verifying experiment
 results before reporting them. The goal: catch cases where the
 answer *feels* right but the rendered image disagrees.

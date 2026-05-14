@@ -1,5 +1,7 @@
 ﻿# Imaging Parameter Optimization
 
+> **When to use:** When fluorescence images are too dim, saturated, or the optimal exposure/gain for a channel has not yet been calibrated.
+
 ## When to Use
 - Fluorescence image is too dim or saturated at default settings
 - Need to find optimal exposure/gain balance for SNR

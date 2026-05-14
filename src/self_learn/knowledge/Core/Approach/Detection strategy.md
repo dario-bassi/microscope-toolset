@@ -1,5 +1,12 @@
 ﻿# Decision Pattern: Detection Strategy Selection
 
+> **TL;DR** — Look at the image before writing detection code; method must match morphology.
+> Confluent tissue → threshold + CC (NOT LoG, which overcounts 10×+).
+> Small bright dots → `count_blobs_log` / `peak_local_max`.
+> Touching circles → watershed. Use `suggest_*` from `self_learn.analysis.parameter_advisor`
+> for all pixel-domain parameters — hardcoded values that work at 10x fail at 40x.
+> Detection returns 0: sweep sigma [1.0–3.0], check focus/exposure, try a different channel.
+
 ## CRITICAL First Step: Match Method to Morphology
 
 Before choosing any method, LOOK at the image and classify the cell morphology:

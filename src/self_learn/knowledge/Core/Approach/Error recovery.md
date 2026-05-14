@@ -1,5 +1,12 @@
 # Error Recovery
 
+> **TL;DR** — When something goes wrong, follow diagnostic trees — do not guess randomly.
+> **0 cells**: check image is not black → try all channels → sweep sigma [1.0–3.0] → check focus.
+> **Too many cells**: LoG on confluent tissue? → switch to threshold+CC. Raise `min_area`.
+> **Black image**: check channel name, exposure (set to 100 ms), Z-position, SLM mask.
+> **Wrong coordinates**: use `pixel_to_world()`; check (col, row) vs (x, y) ordering.
+> Retry is cheap; a wrong answer costs verification time. Build retry into every workflow.
+
 > **Note**: Code examples below use conceptual pseudocode for diagnostics.
 > In production code, use `snap(core, channel=ch)` for single frames and
 > `run_events()` for all multi-frame loops.

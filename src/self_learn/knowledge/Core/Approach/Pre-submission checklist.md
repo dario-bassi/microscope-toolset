@@ -1,5 +1,11 @@
 ﻿# Experiment Verification Checklist
 
+> **TL;DR** — Before recording any result: render the detection overlay, Read it, then run guards.
+> 1. Render overlay → Read PNG → visually confirm detections (mandatory, every time).
+> 2. `run_preflight(answer, ...)` — catches NaN / Inf / missing keys / sign errors.
+> 3. `render_vs_submit_check(image, submitted_value, re_detect_fn)` — catches apparent-vs-underlying mismatch.
+> Do not reroll a passing result. Null results (`wave_speed=0`, `onset_frame=None`) are valid science.
+
 Run through this BEFORE recording or reporting any experiment results.
 
 ## 0. Render the overlay and Read it (non-negotiable)
@@ -86,7 +92,7 @@ match the answer, code using the wrong primitive.
 
 **Do not skip 2a or 2b.** 2c is a gentler net.
 
-### 2d. Orchestrated guard (all three composed)
+### 2d. Orchestrated guard (2a + 2b composed)
 
 ```python
 from self_learn.utils.presubmit import run_presubmit_guards
@@ -97,7 +103,6 @@ result = run_presubmit_guards(
     image=final_snap,
     submitted_value=answer["count"],
     recipe_re_detect_fn=lambda img: len(detect_cells(img, **kw)),
-    run_review=True,
 )
 if result.severity == "block":
     raise SystemExit(result.rationale)

@@ -1,5 +1,7 @@
 ﻿# MDA silent truncation on the proxy
 
+> **When to use:** When an MDA timelapse returns fewer frames than requested with no exception raised.
+
 ## What goes wrong
 
 You ask the proxy for a 30-frame `MDASequence` timelapse with `interval=3.0`. The runner logs `t=0..29` cleanly. Your `on_frame` callback collected 19 frames. No exception. No visible warning unless you look hard. Downstream analysis (FRAP recovery curve, drift trajectory, growth rate) is fit to the truncated series and the answer is wrong by exactly the right amount to look plausible.
@@ -35,10 +37,10 @@ from self_learn.utils.mda_diagnostics import run_events_checked
 results, report = run_events_checked(
     core, list(seq), expected_frames=30, on_frame=on_frame,
 )
-if report.is_truncated:
+if not report["complete"]:
     raise RuntimeError(
-        f"MDA truncated: asked {report.expected_frames}, "
-        f"got {report.actual_frames} ({report.truncation_report})"
+        f"MDA truncated: asked {report['expected']}, "
+        f"got {report['actual']} ({report['ratio']:.0%})"
     )
 ```
 

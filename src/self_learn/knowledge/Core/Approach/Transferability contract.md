@@ -1,5 +1,11 @@
 # Real-Microscope Contract
 
+> **TL;DR** — A protocol is transferable to real hardware only if all its inputs come from
+> camera frames + standard device properties. No simulation-internal state allowed.
+> Allowed: `snapImage()`, `getProperty()`, `setXYPosition()`, `mda.run()`, any standard MM API.
+> Forbidden: sim ground truth, per-frame physics accounting, custom bridge RPC layers.
+> Rule: *"How would I measure this on a real microscope?"* — that answer is the protocol.
+
 A measurement protocol is *transferable* to real hardware iff every input
 it consumes and every action it issues would exist on a real
 pymmcore-plus microscope. If a protocol reads a quantity that only

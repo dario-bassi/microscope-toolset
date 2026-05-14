@@ -1,11 +1,11 @@
-"""Pre-submission preflight checks.
+"""Pre-recording preflight checks.
 
-Converts the text-based pre-submission checklist into a code-callable
-function that enforces parameter advisor usage, validates answers,
-and catches common pitfalls before submission.
+Code-callable guard that enforces parameter advisor usage, validates
+result dicts, and catches common pitfalls before recording or reporting
+any experiment result.
 
 Functions:
-    run_preflight  -- Run all preflight checks on an answer dict
+    run_preflight  -- Run all preflight checks on a result dict
     check_nc_psf   -- Warn about PSF compression at low magnification
     check_tracking -- Warn about track fragmentation or low track count
 """
@@ -15,10 +15,10 @@ import numpy as np
 from .validation import validate_answer
 
 
-def run_preflight(answer, pixel_size_um=None, challenge_notes=None,
+def run_preflight(answer, pixel_size_um=None,
                   rules=None, required_keys=None, sample_type=None,
                   n_visible_objects=None):
-    """Run all preflight checks before submitting a challenge answer.
+    """Run all preflight checks before recording an experiment result.
 
     Combines validate_answer checks with domain-specific warnings:
     - NaN / Inf / numpy type checks
@@ -29,11 +29,10 @@ def run_preflight(answer, pixel_size_um=None, challenge_notes=None,
     - Parameter advisor reminder
 
     Args:
-        answer: dict of key-value pairs to submit.
+        answer: dict of result key-value pairs.
         pixel_size_um: float or None, current pixel size (for PSF checks).
-        challenge_notes: str or None, challenge description text.
         rules: dict mapping keys to (min, max) ranges.
-        required_keys: list of required answer keys.
+        required_keys: list of required result keys.
         sample_type: str or None (e.g. 'bacterium', 'nucleus', 'c_elegans').
         n_visible_objects: int or None, approximate number of visible objects
             in the image (for tracking sanity checks).

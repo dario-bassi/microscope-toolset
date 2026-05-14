@@ -1,5 +1,7 @@
 ﻿# Feedback Control (Closed-Loop Experiments)
 
+> **When to use:** When each frame's observation must drive a real-time parameter adjustment — the output of one frame determines what the next frame does.
+
 > **Note**: Code examples below use conceptual pseudocode. All multi-frame
 > loops MUST use `run_events(core, generator(), on_frame=callback)` in practice.
 > The `on_frame` callback is where feedback logic (adjust exposure, SLM, etc.) lives.

@@ -1,5 +1,7 @@
 ﻿# Per-cell measurement from frames
 
+> **When to use:** When per-cell quantities (position, intensity, morphology) must be derived from camera frames by segmentation rather than read from internal simulator state.
+
 The modern (post-2026-04-27) substitute for "read sim ground truth via
 `bridge.get_cell_state`". Every per-cell quantity an experiment needs —
 position, intensity in channel A, intensity in channel B, area, shape
@@ -17,7 +19,6 @@ For a single FOV:
 
 ```python
 from self_learn.detection.cells import detect_cells
-from self_learn.detection.fluorescence import measure_intensity
 
 core.setConfig("Channel", reporter_channel)
 core.snapImage()
@@ -25,10 +26,8 @@ img_reporter = core.getImage()
 
 cells = detect_cells(img_reporter, threshold_sigma=2.5, min_area_px=50,
                      pixel_size_um=core.getPixelSizeUm())
-# cells = [{centroid_px, area_px, bbox, ...}, ...]
-
-per_cell = measure_intensity(img_reporter, cells)
-# per_cell = [{cell_id, mean, max, integrated, ...}, ...]
+# cells = [{centroid_px, area_px, bbox, mean_intensity, max_intensity, ...}, ...]
+# detect_cells already computes per-cell intensity stats from the image masks.
 ```
 
 For a multi-channel measurement (the typical replacement for the
@@ -102,10 +101,8 @@ measurements at high cadence:
   `Population.filter`).
 - [[Core/Strategies/Measurement methodology]] — broader
   intensity / counting / sweep-vs-snapshot heuristics.
-- `src/core/detection/cells.py` — `detect_cells`, `find_bright_centroid`.
-- `src/core/detection/fluorescence.py` — `measure_intensity`,
-  `crossmatch_channels`.
-- `src/core/analysis/features.py` — `classify_cells`,
-  `nearest_neighbor_distances`.
-- `src/core/workflows/adaptive.py` — `pixel_to_world`,
+- `self_learn.detection.cells` — `detect_cells`, `find_bright_centroid`.
+- `self_learn.analysis.fluorescence` — fluorescence correction, background subtraction.
+- `self_learn.analysis.morphometry` — `measure_objects`, shape descriptors.
+- `self_learn.workflows.adaptive` — `pixel_to_world`,
   `survey_cells` for tying detections to stage coordinates.

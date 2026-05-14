@@ -1,5 +1,11 @@
 # Vision Prompts: Image Quality Assessment
 
+> **TL;DR** — Ready-to-paste LLM vision prompts for assessing image quality before analysis.
+> Four prompts: **focus quality** (in-focus / slightly defocused / out-of-focus + direction),
+> **exposure** (under / well / over-exposed + adjustment suggestion), **detection validation**
+> (count correct? false positives/negatives? splitting quality?), and **artifact identification**
+> (dust, bubbles, illumination gradient, debris, photobleaching).
+
 ## Focus Quality
 
 > Examine this microscopy image and assess focus quality:

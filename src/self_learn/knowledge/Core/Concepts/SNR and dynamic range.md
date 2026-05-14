@@ -77,7 +77,7 @@ If you're parameter-sweeping exposure/gain (`[[Core/Strategies/Imaging parameter
 - `[[Core/Concepts/Exposure and photodamage]]` — how to trade SNR for dose.
 - `[[Core/Concepts/Nyquist sampling]]` — the *other* axis of image quality (spatial).
 - `[[Core/Strategies/Imaging parameter optimization]]` — automated sweeps.
-- ``../../../src/core/analysis/image_quality.py`` — `assess_quality`, `focus_score`, `noise_estimate`, `check_saturation`, `dynamic_range`.
+- ``self_learn.analysis.image_quality`` — `assess_quality`, `focus_score`, `noise_estimate`, `check_saturation`, `dynamic_range`.
 
 ## Further reading
 

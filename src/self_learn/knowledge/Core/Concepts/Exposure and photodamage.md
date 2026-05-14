@@ -18,7 +18,7 @@ The practical rule follows: **reduce intensity until SNR is marginal, then back 
 from useq import MDAEvent
 
 # Sweep exposure at constant intensity, pick the lowest exposure that
-# still exceeds the SNR floor. See src/core/workflows/optimization.py
+# still exceeds the SNR floor. See self_learn.workflows.optimization
 # for the full sweep + analyze workflow.
 events = [
     MDAEvent(channel={"config": ch}, exposure=e)
@@ -62,8 +62,8 @@ Some experiments have bright references (beads, fiducials, autofluorescent debri
 - `[[Core/Strategies/Imaging parameter optimization]]` — the full workflow for exposure/gain sweeps with SNR measurement.
 - `[[Core/Strategies/Gentle imaging]]` — dose-minimization patterns for long timelapses.
 - [[Papers/Weigert 2018]] — CARE reshapes the dose-SNR trade-off: acquire at ~60× lower photon budgets, recover SNR offline with a trained deep-learning prior.
-- ``../../../src/core/analysis/intensity.py`` — `compute_snr()` implementation.
-- ``../../../src/core/workflows/optimization.py`` — `optimize_exposure()`, parameter sweep workflow.
+- ``self_learn.analysis.intensity`` — `compute_snr()` implementation.
+- ``../../../self_learn.workflows.optimization`` — `optimize_exposure()`, parameter sweep workflow.
 
 ## Further reading
 

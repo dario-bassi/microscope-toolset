@@ -1,5 +1,12 @@
 # Decision Framework: When to Use What
 
+> **TL;DR** — Decision trees for acquisition method, detection method, analysis, and magnification.
+> Fixed params → `MDASequence`. Closed-loop → adaptive generator. Grid with per-tile decisions → `adaptive_scan`.
+> Confluent tissue → threshold+CC. Bright dots → LoG. Touching circles → watershed.
+> Always use `parameter_advisor.suggest_*` for pixel-domain parameters.
+> Default start: 10x overview even for non-counting tasks. After every objective change,
+> call `core.getPixelSizeUm()` to verify the switch actually happened.
+
 ## Acquisition Method Selection
 
 ```
@@ -14,14 +21,13 @@ What kind of experiment?
 │       └── Combined → compose all plans in one MDASequence
 │
 ├── Adaptive / closed-loop (decisions depend on data)
-│   └── USE: adaptive_generator() from oada.py
-│       ├── Early stopping → state.stop = True
-│       ├── Event injection → state.extra_events.append(...)
-│       ├── Exposure adaptation → state.next_exposure = X
-│       └── Measurement tracking → state.measurements.append(...)
+│   └── USE: Python generator yielding MDAEvent + run_events(core, gen(), on_frame=cb)
+│       ├── Early stopping → return from generator when condition met
+│       ├── Exposure adaptation → yield MDAEvent(..., exposure=new_val)
+│       └── Measurement tracking → shared dict updated in on_frame callback
 │
 ├── Grid scan with per-tile decisions
-│   └── USE: adaptive_scan() from oada.py
+│   └── USE: tile_and_analyze() from self_learn.workflows.batch
 │       └── Survey + selective zoom pattern
 │
 ├── Event-driven (poll/burst)
@@ -195,6 +201,6 @@ Always use parameter_advisor for pixel-domain params:
 
 1. `Core/Approach/How to approach a problem.md` — Always read first
 2. `Core/Approach/Backward design.md` — Before designing any experiment
-3. Relevant workflow from `knowledge/workflows/` — For the experiment category
-4. Relevant playbook from `knowledge/playbooks/` — For the sample type
-5. `knowledge/pymmcore/` — When unsure about API patterns
+3. Relevant strategy from `Core/Strategies/` — For the experiment category
+4. Relevant concept from `Core/Concepts/` — For physics or API questions
+5. `Core/Pitfalls/` — For known failure modes

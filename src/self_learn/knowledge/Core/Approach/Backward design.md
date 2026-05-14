@@ -1,5 +1,11 @@
 # Backward Design
 
+> **TL;DR** — Start from what you need to measure and work backward to acquisition
+> parameters. Smallest feature → minimum objective → pixel size → channel → frame count.
+> Use 10x for whole-cell counting (cell = ~15 px at 1.0 µm/px), 40x only for
+> sub-cellular detail. BF before fluorescence — it is free and non-destructive.
+> If a parameter cannot be justified by a downstream analysis need, remove it.
+
 Start from the analysis requirement and work backward to the acquisition
 parameters. This prevents over-acquiring (wasting photons and time) and
 under-acquiring (missing the data you need).

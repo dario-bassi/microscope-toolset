@@ -1,5 +1,7 @@
 ﻿# Pitfall: FOV does not cover the whole well
 
+> **When to use:** When cell counts are consistently lower than expected across all wells, or dose-response curves are compressed.
+
 ## The symptom
 
 You measure a count-based quantity (total cells, fraction of X, etc.) and
@@ -30,8 +32,8 @@ FOV_area_um2 = (cfg.image_width * cfg.pixel_size_um) * (cfg.image_height * cfg.p
 expected_cell_count_per_FOV = expected_seed_count * FOV_area_um2 / well_area_um2
 ```
 
-If the challenge hints at ~40 cells per well, and you see ~10 at the
-current mag, you are seeing ~1/4 of the well.
+If you expect ~40 cells per well based on seeding density, and you see ~10 at the
+current magnification, you are seeing ~1/4 of the well.
 
 Also: after segmenting, compare `n_cells` across wells. Variable
 counts that don't track dose (e.g. 12, 21, 16, 30, 17 for 5 wells)

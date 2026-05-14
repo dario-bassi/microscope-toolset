@@ -1,5 +1,7 @@
 ﻿# Multi-channel, multi-position MDA survey
 
+> **When to use:** When acquiring multiple fluorescence channels at multiple stage positions in a single coordinated MDA sequence.
+
 ## The pattern
 
 Most "scan N positions × M channels, then analyze per-position" workflows

@@ -51,7 +51,7 @@ When in doubt: always do a **brightfield** pass first. It's non-destructive and 
 
 ### Match the filter to the fluorophore, not by name
 
-Excitation/emission filters are typically written as `WAVELENGTH/BANDWIDTH` (e.g., `470/40` = 450-490 nm passes). A "GFP filter set" usually has ex `470/40`, dichroic `495 LP`, em `525/50`. If your microscope has the wrong filter for your fluorophore the image will look dim and ugly — not because there's no signal, but because most of the emission is blocked. Query ``../../../src/core/hardware/config.py`` for the actual filter config if in doubt.
+Excitation/emission filters are typically written as `WAVELENGTH/BANDWIDTH` (e.g., `470/40` = 450-490 nm passes). A "GFP filter set" usually has ex `470/40`, dichroic `495 LP`, em `525/50`. If your microscope has the wrong filter for your fluorophore the image will look dim and ugly — not because there's no signal, but because most of the emission is blocked. Query ``self_learn.hardware.config`` for the actual filter config if in doubt.
 
 ### Exposure scaling per channel
 
@@ -67,21 +67,19 @@ Two fluorophores with overlapping emission spectra will appear in each other's c
 A cheap substitute: pick fluorophores with well-separated bands (DAPI + AF488 + AF568 + AF647 is the textbook 4-colour set — each peak is 50+ nm from the next).
 
 **When single-stain controls aren't available** (e.g. co-stained
-samples only), `src/core/utils/spectral_leak.py` ships a
+samples only), `self_learn.utils.spectral_leak` provides a
 spatial-segmentation-as-control proxy: top-percentile mask in
 channel A pixels stand in for "pure A signal" when measuring leak
-into other channels. Compose with `src/recipes/spectral_unmix.py::measure_leak_matrix`
-to build the N×N leak matrix; `unmix(observed, K)` solves
-`K @ true = observed` per pixel/ROI/cell. ch614 r1 → 10/10 used
-this directly. Paired note: [[Recipes/Spectral unmixing]].
+into other channels. It builds the N×N leak matrix and
+`unmix(observed, K)` solves `K @ true = observed` per pixel/ROI/cell.
 
 ## Related
 
 - `[[Core/Concepts/Exposure and photodamage]]` — phototoxicity scales with cumulative dose across all channels.
 - `[[Core/Concepts/SNR and dynamic range]]` — dim fluorophores demand longer exposures → lower temporal resolution.
 - `[[Core/Strategies/Imaging parameter optimization]]` — per-channel sweep workflows.
-- ``../../../src/core/analysis/colocalization.py`` — Pearson / Manders co-localization metrics.
-- ``../../../src/core/analysis/fluorescence.py`` — bleach correction, background subtraction.
+- ``self_learn.analysis.colocalization`` — Pearson / Manders co-localization metrics.
+- ``self_learn.analysis.fluorescence`` — bleach correction, background subtraction.
 
 ## Further reading
 

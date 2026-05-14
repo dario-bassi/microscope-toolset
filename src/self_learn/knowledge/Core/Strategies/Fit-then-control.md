@@ -1,5 +1,7 @@
 # Fit-then-control
 
+> **When to use:** When the system's response law is unknown but the law family is disclosed, requiring a system identification phase before applying closed-loop control.
+
 A two-phase pattern for control problems where the **target law is
 unknown** but the **law family** is disclosed. Sister to
 [[Core/Strategies/Rate-limited drive]] (forward-model + early-stop) and

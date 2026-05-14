@@ -1,5 +1,7 @@
 # Reinforcement learning in acquisition
 
+> **When to use:** When acquisition decisions depend on experiment history, involve hysteresis, or require exploration that tabular rules cannot capture.
+
 When the **next acquisition action depends on history** — not just on the current image — the parameter-vector regression that powers most adaptive-optics work breaks down. RL is the right tool exactly when (a) the response of the actuator or the sample is **non-Markovian** (hysteresis, memory, drift), (b) the **reward signal is discrimination, not reconstruction** (you only need enough photons to tell A from B, not to fill a pixel grid), or (c) the **environment offers no extrinsic reward** and exploration itself is the goal.
 
 This note groups the three RL papers in the library along that "what does RL bring to acquisition that regression doesn't?" axis. The cluster is small but well-defined; if you're tempted to add a fourth, ask whether the actuator/sample/sample-question genuinely needs an MDP framing or whether a simpler regressor would do.

@@ -1,5 +1,7 @@
 ﻿# Measurement Methodology
 
+> **When to use:** When designing what and how to measure to ensure statistical validity and the right methodology for the biological question.
+
 ## Principle
 Detection accuracy alone doesn't determine score. **HOW** you measure is as important
 as **WHAT** you detect. Session 15 showed perfect detection with 5-6/10 scores due to

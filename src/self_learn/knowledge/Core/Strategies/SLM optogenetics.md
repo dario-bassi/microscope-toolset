@@ -1,5 +1,7 @@
 ﻿# SLM Optogenetics
 
+> **When to use:** When using a spatial light modulator for photostimulation, closed-loop tracking, photoconversion, or dose-response experiments.
+
 ## SLM Basics
 
 `np.uint8` mask matching SLM resolution, in viewport/camera space. 255 = light on, 0 = light off.
@@ -137,19 +139,24 @@ Colony swims TOWARD light. Place mask at TARGET position, not on colony.
 
 ```python
 from useq import MDAEvent, SLMImage
-from self_learn.workflows.mda import adaptive_phase_events
+from self_learn.hardware.core import run_events
 
 mask = make_slm_circle((target_x, target_y), radius=40)
 slm = SLMImage(data=mask, device="SLM")
 
-base = [MDAEvent(channel={"config": "GFP"}, slm_image=slm) for _ in range(30)]
+shared = {"stop": False}
 
-def on_decide(image, event, state):
+def on_frame(image, event):
     pos = detect_colony(image)
     if distance(pos, (target_x, target_y)) < 10:
-        state.stop = True
+        shared["stop"] = True
 
-gen, on_frame, state = adaptive_generator(base, on_decide=on_decide)
+def gen():
+    for _ in range(30):
+        if shared["stop"]:
+            return
+        yield MDAEvent(channel={"config": "GFP"}, slm_image=slm)
+
 run_events(core, gen(), on_frame=on_frame)
 ```
 
@@ -192,19 +199,18 @@ Conversion may not be visible same frame -- check NEXT frame.
 For dynamic masks that change each frame (e.g., tracking a moving target):
 
 ```python
-def on_decide(image, event, state):
-    target = detect_target(image)
-    new_mask = make_slm_circle(target, radius=30)
-    # Inject event with updated SLM mask
-    state.extra_events.append(
-        MDAEvent(channel={"config": "GFP"},
-                 slm_image=SLMImage(data=new_mask, device="SLM"))
-    )
+shared = {"mask": initial_mask}
 
-gen, on_frame, state = adaptive_generator(
-    [MDAEvent(channel={"config": "GFP"}, slm_image=initial_slm)],
-    on_decide=on_decide, max_frames=50,
-)
+def on_frame(image, event):
+    target = detect_target(image)
+    shared["mask"] = make_slm_circle(target, radius=30)
+
+def gen():
+    for _ in range(50):
+        slm = SLMImage(data=shared["mask"], device="SLM")
+        yield MDAEvent(channel={"config": "GFP"}, slm_image=slm)
+
+run_events(core, gen(), on_frame=on_frame)
 ```
 
 ## ChR2 + GCaMP functional imaging

@@ -1,5 +1,7 @@
 ﻿# Segmentation backend (Cellpose / StarDist / sigma)
 
+> **When to use:** When choosing between deep-learning instance segmentation (Cellpose/StarDist) and sigma thresholding — decision depends on sample morphology and speed budget.
+
 How to choose between deep-learning instance segmentation and
 sigma-tuned thresholding inside a smart-microscope recipe — and the
 pluggable abstraction that lets a single recipe call site serve both
@@ -29,7 +31,7 @@ without forking the code path.
 
 ## The pluggable abstraction
 
-`src/core/detection/segmentation_backend.py` (sprint #10) exposes:
+`self_learn.detection.segmentation_backend` exposes:
 
 ```python
 from self_learn.detection.segmentation_backend import (
@@ -49,7 +51,7 @@ through to sigma. A `LabeledMask` carries `backend_used` and
 `inference_ms` so the agent can record which path actually ran.
 
 Recipes opt in at the boundary they care about. The `detect_cells`
-function in `src/core/detection/cells.py` accepts a `backend=`
+function in `self_learn.detection.cells` accepts a `backend=`
 kwarg; default `"sigma"` preserves all existing behaviour.
 
 ## The four-tier fallback ladder
@@ -74,7 +76,7 @@ sprint-#10 follow-ups.
 ## Adapter contract
 
 `labels_to_centroid_dicts(mask, image=...)` reproduces the dict shape
-that the existing `src/core/detection/cells.detect_cells` returns
+that the existing `self_learn.detection.cells.detect_cells` returns
 (centroid_px, area_px, plus optional mean / max intensity). Recipes
 that work on the dict shape don't notice the backend swap. Sigma-
 specific extras (`circularity`, `solidity`, `eccentricity`) are not
@@ -83,13 +85,11 @@ descriptors stay on the sigma path.
 
 ## Composing in a recipe
 
-Pilot migration: `src/recipes/two_population_stain.detect_all_cells`
-took a `backend=` kwarg without changing its existing call sites.
-The non-default backends invert the phase-contrast image first
-(Cellpose / StarDist / sigma all expect bright-on-dark), then the
-recipe re-applies its `pc_dark_max` validation on each label's
-centroid — preserving the ch597 lesson that real nuclei sit darker
-than cell-body artefacts.
+The migration shape: add a `backend=` kwarg to any `detect_*` function
+without changing its existing call sites. The non-default backends
+invert the phase-contrast image first (Cellpose / StarDist / sigma all
+expect bright-on-dark), then re-apply morphology validation on each
+label's centroid.
 
 The same migration shape will work for `blood_smear_wbc`,
 `hemocytometer`, and `fibroblast_focal_adhesions` — all
@@ -104,11 +104,11 @@ phase-contrast / brightfield + per-cell morphology workflows.
 - **Don't use Cellpose for sub-diffraction puncta detection.** The
   default `cyto` model is trained on cell-body morphology; small
   bright spots are below its diameter range. Use `blob_log` or LoG
-  thresholding instead (`src/core/analysis/puncta.py`).
+  thresholding instead (`self_learn.analysis.puncta`).
 
 ## See also
 
-- [[../../Recipes/Two population stain]] — pilot migration target.
+- [[Core/Approach/Detection strategy]] — choosing the right primitive first.
 - [[Core/Pitfalls/Sim-state vs rendered count asymmetry]] — when no
   backend can close the gap.
 - [[Core/Approach/Detection strategy]] — choosing a primitive for the

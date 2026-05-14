@@ -1,5 +1,11 @@
 # Vision Prompts: Cell State Classification
 
+> **TL;DR** — Ready-to-paste LLM vision prompts for cell-state classification.
+> Use these when automated metrics are ambiguous or when a human-level description
+> is needed. Four prompts: general cell state (healthy / mitotic / apoptotic),
+> mitotic stage (prophase through cytokinesis), multi-channel state (BF + nucleus +
+> membrane), and sample-type identification.
+
 Use these prompts with the LLM vision API when classifying individual cells from microscopy images.
 
 ## General Cell State

@@ -1,5 +1,7 @@
 # Apparent vs Underlying Count Asymmetry
 
+> **When to use:** When segmentation count never matches the expected object count regardless of threshold tuning.
+
 ## What goes wrong
 
 You set up a clean segmentation pipeline (threshold → connected components,

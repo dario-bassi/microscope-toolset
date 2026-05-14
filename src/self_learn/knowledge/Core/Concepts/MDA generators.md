@@ -38,21 +38,30 @@ def survey_then_zoom():
 
 ## OADA — On-line Adaptive Decision Architecture
 
+Use a plain generator with a shared-state dict and a `frameReady` callback.
+The engine delivers each frame (updating shared state) before requesting the
+next event from the generator.
+
 ```python
-from self_learn.workflows.oada import adaptive_generator, FeedbackState
+from useq import MDAEvent
 
-def on_decide(image, event, state: FeedbackState):
-    intensity = image.mean()
-    if intensity > 1000:
-        state.stop = True                     # stop acquisition
-    state.extra_events.append(                # inject events dynamically
-        MDAEvent(channel={"config": "GFP"}, exposure=200))
-    state.next_exposure = 100 if intensity < 500 else 20  # adjust exposure
-    state.measurements.append({"mean": float(intensity)})
+shared = {"last_intensity": 0.0, "measurements": []}
 
-base_events = MDASequence(time_plan={"loops": 50, "interval": 0.5})
-gen = adaptive_generator(base_events, on_decide=on_decide)
-core.mda.run(gen)
+def on_frame(image, event):
+    shared["last_intensity"] = float(image.mean())
+    shared["measurements"].append(shared["last_intensity"])
+
+def adaptive_gen():
+    for step in range(50):
+        yield MDAEvent(channel={"config": "BF"}, min_start_time=0.5)
+        if shared["last_intensity"] > 1000:
+            return  # early stop
+
+core.mda.events.frameReady.connect(on_frame)
+try:
+    core.mda.run(adaptive_gen())
+finally:
+    core.mda.events.frameReady.disconnect(on_frame)
 ```
 
 ## Common Adaptive Patterns
@@ -76,7 +85,7 @@ core.mda.run(gen)
 - [[Core/Concepts/Event-driven acquisition]] — poll/burst as a generator pattern.
 - [[Core/Strategies/Adaptive acquisition]] — decide where to image next from the frame you just saw.
 - [[Core/Strategies/Feedback control]] — closed-loop interventions.
-- `../../../src/core/hardware/core.py::run_events` — consumes the generator.
+- `self_learn.hardware.core: run_events` — project wrapper around `core.mda.run()` with `on_frame` kwarg.
 
 ## References
 

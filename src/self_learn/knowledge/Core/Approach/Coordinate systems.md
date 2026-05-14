@@ -1,5 +1,11 @@
 ﻿# Reference: Coordinate Systems
 
+> **TL;DR** — Always convert to world coordinates before reporting positions measured
+> at non-10x magnification. Use `pixel_to_world(px, py, stage_x, stage_y, core=core)`
+> from `self_learn.hardware.core`. `centroid_px` is (col, row) = (x, y); NumPy indexing
+> is [row, col] — the axes are swapped. Query `core.getPixelSizeUm()` at runtime;
+> never hardcode pixel size or image centre.
+
 ## Pixel Coordinates
 
 - Origin: top-left corner of image
@@ -74,4 +80,4 @@ Higher magnification = smaller pixel size = smaller FOV. Always verify before co
 - [[Core/Concepts/Nyquist sampling]] — the pixel-size decision sets everything downstream.
 - [[Core/Strategies/Physical-unit thresholds]] — parameterise detection in µm²/µm, not pixels.
 - [[Core/Strategies/SLM optogenetics]] — SLM coordinate alignment and when to re-apply the mask.
-- `../../../src/core/hardware/config.py` — runtime `pixel_size_um` source of truth.
+- `self_learn.hardware.config` — runtime `pixel_size_um` source of truth.

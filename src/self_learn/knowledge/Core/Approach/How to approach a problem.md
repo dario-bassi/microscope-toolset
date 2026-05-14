@@ -1,5 +1,15 @@
 ﻿# How to Approach a Problem
 
+> **TL;DR** — Run all 7 steps for every experiment; skipping steps is the #1 error source.
+> 1. Understand (what measurement, what units, what output format?)
+> 2. Discover hardware (`getAvailableConfigGroups`, `getPixelSizeUm`, snap every channel)
+> 3. Find sample at 10x
+> 4. Design MDA (`MDASequence` for fixed, generator for adaptive)
+> 5. Test detection on 1 frame
+> 6. Execute with `run_events()`
+> 7. Verify visually — overlay detections, read the image, confirm biological sense.
+> Print channel names and look at each channel before committing to an analysis channel.
+
 Follow these 7 steps for every experiment. Skipping steps is the #1 source of errors.
 
 ## Step 1: Understand the Question

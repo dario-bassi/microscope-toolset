@@ -1,5 +1,7 @@
 # Physical-unit thresholds in detection parameters
 
+> **When to use:** When setting detection thresholds (min area, min distance, sigma) that must remain biologically valid across different magnifications or pixel sizes.
+
 ## The pattern
 
 Detection and segmentation functions routinely expose thresholds in
@@ -68,7 +70,7 @@ Not every constant is magnification-dependent. Keep the pixel API when:
   local thresholding — tied to image noise, not object size).
 - The parameter is a **relative** quantity (percentile, fraction).
 - The function is only ever called with the same pixel size (e.g. a
-  specific recipe in `src/recipes/`).
+  workflow hard-scoped to a single objective).
 
 **Anti-pattern: a module-level pixel-size constant.** Worse than a
 default kwarg because it propagates implicitly into every call across

@@ -1,8 +1,10 @@
 # Pulsed schedule trajectory
 
+> **When to use:** When driving an ensemble along a sequence of waypoint bands under a saturating rate law — the brief gives multiple target levels in order, not a single floor.
+
 Drive an ensemble along a multi-waypoint REFERENCE TRAJECTORY under
 a saturating rate law (rate) + first-order decay. Three functions
-in [`utils.pulsed_schedule`](../../../src/core/utils/pulsed_schedule.py)
+in `self_learn.utils.pulsed_schedule`
 (sprint #37, lifted from ch624 r1 → 10/10):
 
 - `predict_segment_end(prev, *, n_on, n_off, rate, decay, max=1.0)`

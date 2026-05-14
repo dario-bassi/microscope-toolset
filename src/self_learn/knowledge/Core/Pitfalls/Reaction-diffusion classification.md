@@ -1,12 +1,12 @@
-<!-- audit 2026-04-24: framed as post-mortem ("Failure Analysis"); content is generalisable (static vs temporal features for pattern classification). Consider reframing title + opening to "Pattern: classify from temporal behaviour, not snapshots" and keeping as a core pitfall, OR moving to strategies/ as a positive workflow. -->
+# Pitfall: Classifying dynamic patterns from a single snapshot
 
-# Failure Analysis: Reaction-Diffusion Pattern Classification
+> **When to use:** When classifying a dynamic spatial pattern (waves, spirals, spots, mitosis) from imaging data.
 
-## Challenge Type
-Classify reaction-diffusion pattern into types (waves, spirals, spots, stripes, mitosis, coral).
+## Symptom
+Pattern classification (waves vs spirals vs spots vs mitosis vs coral) is wrong or ambiguous when derived from one frame — different patterns look identical in a snapshot.
 
-## What Went Wrong
-Misclassified mitosis as coral based on a single static frame.
+## What Goes Wrong
+Single-frame misclassification — e.g., mitotic spots and coral-like branching structures are visually indistinguishable from one static frame.
 - **Visual**: Dense branching labyrinthine structures — looks like brain coral in a snapshot
 - **Ground truth**: "mitosis" — spots that split and divide over time
 

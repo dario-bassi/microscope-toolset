@@ -1,5 +1,7 @@
 # Gentle Imaging
 
+> **When to use:** When phototoxicity or photobleaching is a concern and the photon budget must be minimized while preserving necessary signal.
+
 Minimize photon dose while maximizing information. Every unnecessary photon
 is phototoxicity with no benefit. The gentlest experiment that answers the
 question is the best experiment.

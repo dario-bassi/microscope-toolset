@@ -1,5 +1,11 @@
 # Information-Driven Acquisition
 
+> **TL;DR** — Acquire only data that changes your conclusions; spend photons where they matter.
+> Survey phase: BF at 10x (cheap, non-destructive). Target phase: fluorescence at 40x only on ROIs.
+> Cost hierarchy: BF < phase contrast < low-power fluor < high-power fluor < UV.
+> Budget allocation: 30% survey / 50% primary / 10% verify / 10% reserve.
+> Stop when measurement converges (CV < 2% over last 5 frames), not when the budget runs out.
+
 > **Note**: Code examples below use conceptual pseudocode. All multi-frame
 > loops MUST use `run_events(core, generator(), on_frame=callback)` in practice.
 

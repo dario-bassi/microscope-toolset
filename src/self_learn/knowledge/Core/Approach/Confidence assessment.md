@@ -1,5 +1,11 @@
 # Decision Pattern: Confidence Assessment
 
+> **TL;DR** — Three-tier confidence ladder for detection results.
+> **High** (submit directly): count stable across sigmas, SNR > 10, visually confirmed.
+> **Medium** (verify first): ±20% variation across sigmas, SNR 3–10 → save overlay, inspect.
+> **Low** (retry): wild variation, SNR < 3, visual disagreement → refocus / re-expose /
+> change method. Always check count plausibility for the FOV before submitting.
+
 ## When to Trust Detection Results
 
 ### High Confidence (submit directly)

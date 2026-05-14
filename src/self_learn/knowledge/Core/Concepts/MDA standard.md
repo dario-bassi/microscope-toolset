@@ -68,7 +68,7 @@ core.mda.events.frameReady.disconnect(on_frame)
 - [[Core/Concepts/MDA engine]] — custom hardware actions inside MDA events.
 - [[Core/Concepts/Event-driven acquisition]] — poll/burst state machines as a special case of generators.
 - [[Core/Approach/MDA solve pattern]] — canonical `MDASequence + run_events` usage.
-- `../../../src/core/hardware/core.py::run_events` — the runtime dispatcher.
+- `self_learn.hardware.core: run_events` — project wrapper; delegates to `core.mda.run()`.
 
 ## Literature
 
