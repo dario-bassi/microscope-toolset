@@ -99,7 +99,6 @@ The single entry point for all hardware interaction.
 | `morphometry.py` | Cell size, shape, roundness, aspect ratio |
 | `morphological_dynamics.py` | Shape change and morphological transitions over time |
 | `sphere_3d.py` | 3D spheroid / organoid morphometry |
-| `drug_penetration.py` | Drug penetration depth in tumor spheroids (3-zone model) |
 | `contour.py` | Contour and shape analysis with Fourier descriptors |
 | `ring.py` | Ring / annular structure analysis (organoids, ZOI) |
 | `network.py` | Branching / tubular / vascular / dendritic structure analysis |
@@ -149,7 +148,6 @@ The single entry point for all hardware interaction.
 ### Tissue & Population
 | Module | What it measures |
 |--------|-----------------|
-| `blood_smear.py` | WBC morphology and differential cell counting |
 | `colony.py` | Colony formation / clonogenic assay analysis |
 | `size_distribution.py` | Particle/cell size distribution with histogram fitting |
 | `wound_healing.py` | Scratch assay closure kinetics |
@@ -176,6 +174,8 @@ The single entry point for all hardware interaction.
 | `sample_characterizer.py` | Auto-determine sample type, staining, and appropriate workflow |
 | `measurement_validator.py` | Validate measurements against biological priors |
 | `classifier.py` | Morphological cell classifier (k-means or rule-based) |
+| `parameter_advisor.py` | Suggest acquisition parameters from image statistics |
+| `parasitology.py` | Parasite detection and life-stage classification |
 
 ---
 
@@ -298,8 +298,8 @@ src/self_learn/knowledge/
     Approach/   (~17 files) — meta: how to think about a problem
     Concepts/   (~10 files) — physics + pymmcore-plus/useq API
     Strategies/ (~25 files) — workflow-level patterns
-    Pitfalls/    (~6 files) — generalizable methodology traps
-  Papers/        (58 files) — verified DOI-backed citations
+    Pitfalls/    (~9 files) — generalizable methodology traps
+  Papers/        (~49 files) — verified DOI-backed citations
 ```
 
 **Entry point:** `src/self_learn/knowledge/INDEX.md` — start here.

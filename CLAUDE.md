@@ -78,11 +78,13 @@ results = run_events(core, list(seq))
 ```python
 from useq import MDASequence
 from self_learn.hardware.core import run_events
+from self_learn.hardware.config import resolve_channel_group
 
+group = resolve_channel_group(core, None)
 seq = MDASequence(
     time_plan={"loops": 20, "interval": 2.0},
     stage_positions=[{"x": 100, "y": 200}, {"x": 300, "y": 400}],
-    channels=[{"config": "brightfield", "group": "Channel"}],
+    channels=[{"config": "brightfield", "group": group}],
     axis_order="tpc",   # time → position → channel
 )
 results = run_events(core, list(seq))
@@ -93,7 +95,9 @@ results = run_events(core, list(seq))
 ```python
 from useq import MDAEvent
 from self_learn.hardware.core import run_events
+from self_learn.hardware.config import resolve_channel_group
 
+group = resolve_channel_group(core, None)
 shared = {"cell_count": 0}
 
 def on_frame(img, event):
@@ -104,7 +108,7 @@ def my_generator():
     for i in range(50):
         if shared["cell_count"] > 100:   # early stop
             return
-        yield MDAEvent(channel={"config": "BF", "group": "Channel"})
+        yield MDAEvent(channel={"config": "BF", "group": group})
 
 results = run_events(core, my_generator(), on_frame=on_frame)
 ```
@@ -222,6 +226,24 @@ See `ARCHITECTURE.md` for the full module inventory.
 2. **Inspect** — snap all channels, look at the images with your Read tool (vision)
 3. **Discover config** — `resolve_channel_group(core, None)`, `core.getPixelSizeUm()`
 4. **Plan** — read the relevant `knowledge/Core/Strategies/` file, choose the workflow
+
+Steps 1–3 are wrapped in a single call:
+```python
+from self_learn.workflows.solve_harness import experiment_setup
+setup = experiment_setup(core)
+# setup['channels']        — dict of channel_name → numpy array (all channels snapped)
+# setup['channel_group']   — auto-discovered config group name
+# setup['pixel_size']      — µm/px at current objective
+# setup['brightest_channel'] — channel with highest signal range
+```
+
+**If the sample type is unknown**, use `auto_recipe` before choosing a workflow:
+```python
+from self_learn.utils.auto_recipe import auto_recipe
+suggestion = auto_recipe(setup['channels'][setup['brightest_channel']], core=core)
+# suggestion.recipe_module, suggestion.rationale, suggestion.classifier_class
+# Override with a known archetype: auto_recipe(img, core=core, brief={"archetype": "frap"})
+```
 5. **Implement** — import from `src/self_learn/`, write a script, execute locally
 6. **Verify visually** — save images, read them, confirm the result makes biological sense
 7. **Display** — use `viewer_add_image` / `viewer_add_labels` to show results in napari
@@ -258,3 +280,4 @@ tifffile.imwrite(workspace / "result.tif", result_stack)
 - After `core.setXYPosition()`, call `core.waitForDevice(core.getXYStageDevice())` before snapping
 - `event.properties` for per-event device property changes: `[('Camera', 'Gain', '4')]`
 - `/tmp/` is not cross-platform — use `Path(tempfile.gettempdir())` everywhere
+- `run_events_checked()` returns a **dict** — check `report["complete"]`, `report["actual"]`, `report["expected"]`; not object attributes
