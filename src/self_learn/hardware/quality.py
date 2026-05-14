@@ -89,7 +89,7 @@ def check_focus_quality(core, z_range=5.0, z_step=1.0):
     from useq import MDAEvent
     from .core import run_events, set_z
 
-    current_z = float(core.getPosition('ZStage'))
+    current_z = float(core.getPosition(core.getFocusDevice()))
     z_positions = np.arange(
         current_z - z_range / 2,
         current_z + z_range / 2 + z_step / 2,

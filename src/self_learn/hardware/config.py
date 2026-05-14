@@ -439,4 +439,6 @@ def _mag_to_pixel_size(mag: int, image_width: int = 512) -> float:
     if mag in _ZOOM:
         return image_width / (_ZOOM[mag] * image_width)
     # Fallback for unusual magnifications: 10/mag (approximate)
+    if mag <= 0:
+        return 1.0
     return 10.0 / mag

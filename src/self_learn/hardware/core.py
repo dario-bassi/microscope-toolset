@@ -38,7 +38,7 @@ def snap_all_channels(core, exposure=None):
     """Snap an image in every available channel.
 
     Discovers channels from the microscope config and returns a dict
-    mapping channel name to image array.  Useful for the pre-challenge
+    mapping channel name to image array.  Useful for the initial
     step "snap ALL channels, look at each".
 
     Args:
@@ -532,7 +532,8 @@ def timelapse(core, n_frames, interval_s=1.0, channel=None, exposure=None,
     }
     if channel is not None:
         cfg = get_config(core)
-        group = cfg.channel_group or 'Channel'
+        from .config import resolve_channel_group
+        group = cfg.channel_group or resolve_channel_group(core, None)
         seq_kwargs['channels'] = [{'config': channel, 'group': group}]
     if exposure is not None:
         if 'channels' in seq_kwargs:
