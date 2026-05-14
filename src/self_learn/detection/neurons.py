@@ -6,10 +6,8 @@ MAP2/synaptophysin immunostaining.
 
 Note: ``detect_somata`` here uses distance-transform local maxima,
 which works but can over-detect in dense dendritic arbors. For
-position-graded submissions on a sample/scale where you've calibrated
-soma size, prefer the opening-based
-``src.recipes.neuron_puncta.segment_soma_cores`` and the end-to-end
-``src.recipes.neuron_puncta.count_puncta_per_neuron``.
+calibrated soma sizes, an opening-based approach (erode with a disc of
+radius ≈ soma_radius_px, then label local maxima) gives cleaner splits.
 
 All defaults in this module are pixel-scale; pair with
 ``parameter_advisor`` or pass explicit px values when off

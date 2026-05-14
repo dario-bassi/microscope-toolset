@@ -24,10 +24,9 @@ The default ``backend="auto"`` is **conservative**: it falls through
 to ``"sigma"`` whenever Cellpose isn't available or the budget is
 tight. Recipes can opt-in explicitly with ``backend="cellpose"``.
 
-Sprint #10 (2026-04-26) plan-pass deliverable. Pilot rollout is on
-``src.recipes.two_population_stain.detect_all_cells``; the existing
-``detect_cells`` and ``count_*`` helpers remain on the sigma path
-until validated.
+The existing ``detect_cells`` and ``count_*`` helpers in
+:mod:`self_learn.detection.cells` remain on the sigma path until
+Cellpose is explicitly requested.
 """
 
 from __future__ import annotations

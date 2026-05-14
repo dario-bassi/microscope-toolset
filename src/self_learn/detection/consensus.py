@@ -11,7 +11,6 @@ Functions:
 """
 
 import numpy as np
-from scipy.spatial.distance import cdist
 
 
 def consensus_count(image, methods, weights=None):
