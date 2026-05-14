@@ -1,0 +1,26 @@
+# TEST_CONFIG is injected from test.yaml by test_runner.py
+
+
+def create_sim_override():
+    from virtual_microscope.pipeline.optical_pipeline import OpticalPipeline
+    from virtual_microscope.sims.cell.sim import ScatteredCellSim
+
+    sim = ScatteredCellSim(
+        width=TEST_CONFIG["width"],
+        height=TEST_CONFIG["height"],
+        n_cells=TEST_CONFIG["n_cells"],
+        cell_type=TEST_CONFIG["cell_type"],
+        seed=TEST_CONFIG["seed"],
+    )
+    for cell in sim._cells:
+        cell.brownian_d = TEST_CONFIG["brownian_d"]
+
+    noisy_cfg = {
+        "photon_scale": TEST_CONFIG["photon_scale"],
+        "read_std": TEST_CONFIG["read_std"],
+        "dark_current": TEST_CONFIG["dark_current"],
+        "banding_std": TEST_CONFIG["banding_std"],
+    }
+    sim._pipeline[1] = OpticalPipeline(psf_sigma=0.6, noise=noisy_cfg)
+    sim._pipeline[2] = OpticalPipeline(psf_sigma=0.6, noise=noisy_cfg)
+    return sim

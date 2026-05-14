@@ -1,7 +1,7 @@
 import json
 import os
 from datetime import datetime
-from typing import Any, Optional
+from typing import Any
 
 
 class BenchmarkLogger:
@@ -40,7 +40,7 @@ class BenchmarkLogger:
         os.makedirs("benchmark_logs", exist_ok=True)
 
         self.log_file = f"benchmark_logs/benchmark_{run_id}.jsonl"
-        self.current_query: Optional[str] = None
+        self.current_query: str | None = None
 
     def set_query(self, query: str) -> None:
         """
@@ -59,7 +59,7 @@ class BenchmarkLogger:
         tool_name: str,
         input_params: dict[str, Any],
         result: dict[str, Any] | str,
-        execution_time_ms: float
+        execution_time_ms: float,
     ) -> None:
         """
         Log a single MCP tool call (auto-flushed immediately to file).
@@ -79,14 +79,14 @@ class BenchmarkLogger:
             "input_params": input_params,
             "result": result,
             "execution_time_ms": execution_time_ms,
-            "timestamp": datetime.now().isoformat()
+            "timestamp": datetime.now().isoformat(),
         }
 
         record = {
             "agent_type": self.agent_type,
             "run_id": self.run_id,
             "user_query": self.current_query,
-            "mcp_call": call_entry
+            "mcp_call": call_entry,
         }
 
         try:

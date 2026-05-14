@@ -1,0 +1,29 @@
+title: "Multi-channel fluorescence — photobleaching, 80 cells, 1500x1500 µm"
+description: |
+  Same setup as test_6. Photobleaching is enabled: signal decays cumulatively
+  with each exposure.
+
+  photobleach_rate controls fractional signal loss per exposure:
+    0.001 = slow (barely visible over 100 frames)
+    0.005 = moderate (clearly visible over ~20-50 frames)
+    0.01  = fast (obvious within ~10 frames)
+
+backend: particle
+cell_type: normal
+n_cells: 80
+seed: 42
+width: 1500
+height: 1500
+brownian_d: 0.0
+focal_plane: 0.0
+photobleach_rate: 0.005
+initial_properties:
+  - [ZStage, Position, "50.0"]
+
+channels:
+  - name: DAPI
+    filter: "SCFP2(434/474)"
+    led: UV
+  - name: mScarlet
+    filter: "mScarlet3(569/582)"
+    led: ORANGE

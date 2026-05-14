@@ -1,0 +1,38 @@
+# Run manually:   pre-commit run --all-files
+# Install hooks:  pre-commit install
+
+repos:
+
+  # ── file hygiene ─────────────────────────────────────────────────────
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v5.0.0
+    hooks:
+      - id: trailing-whitespace
+      - id: end-of-file-fixer
+      - id: mixed-line-ending
+        args: [--fix=lf]
+      - id: check-yaml
+      - id: check-json
+      - id: check-toml
+      - id: check-merge-conflict
+      - id: check-ast                 # syntax-check every .py before commit
+      - id: debug-statements          # block accidental pdb / breakpoint()
+      - id: check-added-large-files
+        args: [--maxkb=500]           # block large binaries / data files
+
+  # ── ruff: lint + format (napari standard) ───────────────────────────
+  - repo: https://github.com/astral-sh/ruff-pre-commit
+    rev: v0.8.0
+    hooks:
+      - id: ruff                      # lint, with auto-fix where safe
+        args: [--fix, --exit-non-zero-on-fix]
+      - id: ruff-format               # formatter (replaces black)
+
+  # ── security: flag dangerous patterns in src/ ────────────────────────
+  - repo: https://github.com/PyCQA/bandit
+    rev: 1.8.0
+    hooks:
+      - id: bandit
+        args: [-c, pyproject.toml]
+        files: ^src/
+        exclude: ^src/benchmarking/experiments/

@@ -1,0 +1,18 @@
+title: "Out-of-focus brightfield start — DIC, normal cells"
+description: |
+  Same as test_1 but brightfield channel instead of fluorescence.
+  The focal plane starts 50 µm above the tissue plane, well outside the 10x DOF.
+  The agent must move the Z stage toward 0 µm to bring cells into focus.
+
+backend: particle
+cell_type: normal
+n_cells: 50
+seed: 0
+focal_plane: 0.0
+initial_properties:
+  - [ZStage, Position, "50.0"]
+
+channels:
+  - name: DIC
+    filter: "Electra1(402/454)"
+    led: CYAN

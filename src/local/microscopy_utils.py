@@ -4,15 +4,13 @@ Available in the execute_python_code namespace for MCP agent use.
 """
 
 import logging
-import time
 
 import numpy as np
 
 logger = logging.getLogger("MicroscopyUtils")
 
 
-def find_bright_centroid(image: np.ndarray, threshold_sigma: float = 2.5,
-                         window: int = 64):
+def find_bright_centroid(image: np.ndarray, threshold_sigma: float = 2.5, window: int = 64):
     """Find the centroid of the brightest region in a grayscale image.
 
     Strategy: find the peak pixel, then compute the intensity-weighted
@@ -69,10 +67,13 @@ def find_bright_centroid(image: np.ndarray, threshold_sigma: float = 2.5,
     return cy, cx, area_px, peak
 
 
-def center_on_cell(mmc, pixel_size_um: float = 0.25,
-                   threshold_sigma: float = 2.5,
-                   min_peak_above_bg: float = 30.0,
-                   max_iterations: int = 2):
+def center_on_cell(
+    mmc,
+    pixel_size_um: float = 0.25,
+    threshold_sigma: float = 2.5,
+    min_peak_above_bg: float = 30.0,
+    max_iterations: int = 2,
+):
     """Snap an image, find the brightest region, and re-center the stage on it.
 
     Iteratively adjusts the stage position so the bright region is centered
@@ -96,7 +97,7 @@ def center_on_cell(mmc, pixel_size_um: float = 0.25,
     xy_device = mmc.getXYStageDevice()
     total_dx, total_dy = 0.0, 0.0
 
-    for iteration in range(max_iterations):
+    for _iteration in range(max_iterations):
         mmc.snapImage()
         img = mmc.getImage()
 
@@ -106,8 +107,11 @@ def center_on_cell(mmc, pixel_size_um: float = 0.25,
         # Check if there's real signal
         if cy is None or (peak - mean_val) < min_peak_above_bg:
             return {
-                "image": img, "centered": False, "peak": peak,
-                "offset_um": (total_dx, total_dy), "centroid_px": (None, None),
+                "image": img,
+                "centered": False,
+                "peak": peak,
+                "offset_um": (total_dx, total_dy),
+                "centroid_px": (None, None),
             }
 
         h, w = img.shape[:2]
@@ -125,7 +129,9 @@ def center_on_cell(mmc, pixel_size_um: float = 0.25,
         fov = w * pixel_size_um
         if abs(dx_um) < fov * 0.05 and abs(dy_um) < fov * 0.05:
             return {
-                "image": img, "centered": True, "peak": peak,
+                "image": img,
+                "centered": True,
+                "peak": peak,
                 "offset_um": (total_dx, total_dy),
                 "centroid_px": (cx, cy),
             }
@@ -145,16 +151,22 @@ def center_on_cell(mmc, pixel_size_um: float = 0.25,
     cy, cx, area_px, peak = find_bright_centroid(img, threshold_sigma)
 
     return {
-        "image": img, "centered": (cx is not None), "peak": peak,
+        "image": img,
+        "centered": (cx is not None),
+        "peak": peak,
         "offset_um": (total_dx, total_dy),
         "centroid_px": (cx, cy),
     }
 
 
-def detect_cells(image: np.ndarray, threshold_sigma: float = 2.5,
-                 min_area_px: int = 50, pixel_size_um: float = 1.0,
-                 fill_holes: bool = True,
-                 global_stats: tuple[float, float] | None = None):
+def detect_cells(
+    image: np.ndarray,
+    threshold_sigma: float = 2.5,
+    min_area_px: int = 50,
+    pixel_size_um: float = 1.0,
+    fill_holes: bool = True,
+    global_stats: tuple[float, float] | None = None,
+):
     """Detect cells in a grayscale image using thresholding + hole filling.
 
     Args:
@@ -187,9 +199,7 @@ def detect_cells(image: np.ndarray, threshold_sigma: float = 2.5,
     thresh = mean_val + threshold_sigma * std_val
 
     binary = (img > thresh).astype(np.uint8)
-    num_labels, labels, stats, centroids = cv2.connectedComponentsWithStats(
-        binary, connectivity=8
-    )
+    num_labels, labels, stats, centroids = cv2.connectedComponentsWithStats(binary, connectivity=8)
 
     cells = []
     for i in range(1, num_labels):  # skip background (label 0)
@@ -211,15 +221,17 @@ def detect_cells(image: np.ndarray, threshold_sigma: float = 2.5,
 
         region_vals = img[region_mask]
 
-        cells.append({
-            "centroid_px": (float(cx), float(cy)),
-            "centroid_um": (float(cx * pixel_size_um), float(cy * pixel_size_um)),
-            "area_px": int(area_px),
-            "area_um2": float(area_px * pixel_size_um ** 2),
-            "peak": float(region_vals.max()),
-            "mean_intensity": float(region_vals.mean()),
-            "bbox": (int(x), int(y), int(w), int(h)),
-        })
+        cells.append(
+            {
+                "centroid_px": (float(cx), float(cy)),
+                "centroid_um": (float(cx * pixel_size_um), float(cy * pixel_size_um)),
+                "area_px": int(area_px),
+                "area_um2": float(area_px * pixel_size_um**2),
+                "peak": float(region_vals.max()),
+                "mean_intensity": float(region_vals.mean()),
+                "bbox": (int(x), int(y), int(w), int(h)),
+            }
+        )
 
     # Sort by area descending
     cells.sort(key=lambda c: c["area_px"], reverse=True)
