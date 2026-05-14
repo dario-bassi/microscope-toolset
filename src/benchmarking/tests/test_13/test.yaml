@@ -1,0 +1,25 @@
+title: "Optogenetics — cell path-following, 15 cells, 2000x2000 µm"
+description: |
+  The agent's goal is to guide one cell along a pre-determined geometric path
+  (e.g. spiral, square, circle) using SLM illumination. With only 15 cells in a
+  large 2000x2000 µm arena the target cell is easy to isolate.
+
+backend: particle
+cell_type: optogenetic
+n_cells: 15
+seed: 4579
+width: 2000
+height: 2000
+radius_min: 17.0
+radius_max: 22.0
+brownian_d: 0.5
+time_scale: 5.0
+tick_hz: 10
+focal_plane: 0.0
+phase_contrast: true
+slm: true
+
+channels:
+  - name: stimulation
+    filter: "mScarlet3(569/582)"
+    led: ORANGE

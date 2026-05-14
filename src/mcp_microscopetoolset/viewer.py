@@ -1,23 +1,23 @@
-from mcp.types import ImageContent
+import base64
+import contextlib
+import logging
+import os
+import re
+import sys
+import tempfile
+from io import BytesIO
+from pathlib import Path
+from typing import Any
+
 import imageio.v3 as iio
 import numpy as np
-import logging
-import sys
-import re
-import base64
-from pathlib import Path
-from io import BytesIO
-from PIL import Image
-from napari import Viewer
-from typing import Any
-import contextlib
 import tifffile
+import torch
 from cellpose import models
 from cellpose.io import imread, imsave
-import torch
-import tempfile
-import os
-
+from mcp.types import ImageContent
+from napari import Viewer
+from PIL import Image
 
 #  logger
 logger = logging.getLogger("Viewer")
@@ -25,41 +25,46 @@ if not logger.handlers:
     logger.setLevel(logging.INFO)
     logger.addHandler(logging.StreamHandler(sys.stdout))
     fh = logging.FileHandler("microscope_toolset.log", encoding="utf-8")
-    fh.setFormatter(logging.Formatter(
-        "%(asctime)s [%(levelname)s] %(name)s: %(message)s",
-        datefmt="%Y-%m-%d %H:%M:%S",
-    ))
+    fh.setFormatter(
+        logging.Formatter(
+            "%(asctime)s [%(levelname)s] %(name)s: %(message)s",
+            datefmt="%Y-%m-%d %H:%M:%S",
+        )
+    )
     logger.addHandler(fh)
 
 
 class NapariViewerMC:
-
     def __init__(self, viewer: Viewer) -> None:
         self._viewer = viewer
 
-
     def session_information(self):
         """
-        Returning information regarding the viewer session of napari micromanager. 
+        Returning information regarding the viewer session of napari micromanager.
         """
         if self._viewer is None:
-            return {
-                "status": "error",
-                "message": "No Viewer exist! Somenthing went wrong."
-            }
-        
+            return {"status": "error", "message": "No Viewer exist! Somenthing went wrong."}
+
         # Get information about the Viewer
         viewer_infos = {
-            "title": self._viewer.title, 
-            "n_layers": len(self._viewer.layers), # number of layers (layers is a List)
-            "layers_names": [layer.name for layer in self._viewer.layers], # get the name of each layers
+            "title": self._viewer.title,
+            "n_layers": len(self._viewer.layers),  # number of layers (layers is a List)
+            "layers_names": [
+                layer.name for layer in self._viewer.layers
+            ],  # get the name of each layers
             "selected_layers": [layer.name for layer in self._viewer.layers.selection],
-            "current_step": dict(enumerate(self._viewer.dims.current_step)) if hasattr(self._viewer.dims, "current_step") else {}, # current step for each dimension
-            "ndisplay": self._viewer.dims.ndisplay, # number of displayed dimensions
-            "camera_center": list(self._viewer.camera.center), #Center of rotation for the camera. In 2D viewing the last two values are used.
-            "camera_zoom": float(self._viewer.camera.zoom), # Scale from canvas pixels to world pixels.
+            "current_step": dict(enumerate(self._viewer.dims.current_step))
+            if hasattr(self._viewer.dims, "current_step")
+            else {},  # current step for each dimension
+            "ndisplay": self._viewer.dims.ndisplay,  # number of displayed dimensions
+            "camera_center": list(
+                self._viewer.camera.center
+            ),  # Center of rotation for the camera. In 2D viewing the last two values are used.
+            "camera_zoom": float(
+                self._viewer.camera.zoom
+            ),  # Scale from canvas pixels to world pixels.
             "camera_angles": list(self._viewer.camera.angles) if self._viewer.camera.angles else [],
-            "grid_enabled": self._viewer.grid.enabled
+            "grid_enabled": self._viewer.grid.enabled,
         }
 
         # Layers information
@@ -72,7 +77,7 @@ class NapariViewerMC:
                 "opacity": getattr(layer, "opacity", 1.0),
                 "blending": getattr(layer, "blending", ""),
                 "data_shape": list(layer.data.shape),
-                "data_dtype": str(layer.data.dtype)
+                "data_dtype": str(layer.data.dtype),
             }
 
             # Layers specific propertied
@@ -90,11 +95,8 @@ class NapariViewerMC:
                 layers_detail["gamma"] = float(getattr(layer, "gamma", 1.0))
 
             layers_details.append(layers_detail)
-        return {
-            "viewer": viewer_infos,
-            "layers": layers_details
-        }
-    
+        return {"viewer": viewer_infos, "layers": layers_details}
+
     def list_of_layers(self):
         """
         Return a list of all the layers
@@ -108,25 +110,28 @@ class NapariViewerMC:
                 "type": lyr.__class__.__name__,
                 "visible": getattr(lyr, "visible", True),
                 "opacity": getattr(lyr, "opacity", 1.0),
-                "blending": getattr(lyr, "blending", "")
+                "blending": getattr(lyr, "blending", ""),
             }
 
             if hasattr(lyr, "colormap") and getattr(lyr, "colormap", "") != "":
-                entry["colormap"] = getattr(lyr.colormap, "name", "") or str(lyr.colormap) # to check
-            
+                entry["colormap"] = getattr(lyr.colormap, "name", "") or str(
+                    lyr.colormap
+                )  # to check
 
-            if hasattr(lyr, "contrast_limits") and getattr(lyr, "contrast_limits", None) is not None:
+            if (
+                hasattr(lyr, "contrast_limits")
+                and getattr(lyr, "contrast_limits", None) is not None
+            ):
                 try:
                     cl = list(lyr.contrast_limits)
                     entry["contrast_limits"] = [float(cl[0]), float(cl[1])]
                 except Exception:
                     pass
 
-            
             result.append(entry)
 
         return {"layers": result}
-    
+
     def screenshot(self, canvas_only: bool):
         """
         Return a screenshot from the current viewer.
@@ -135,9 +140,9 @@ class NapariViewerMC:
         it will return a screenshot from the all window of napari micromanager.
         """
         img_arr = self._viewer.screenshot(canvas_only=canvas_only)
-        
+
         return self._transform_array_to_image_content(img_arr)
-    
+
     def layer_screenshot(self, layer_name: str):
         """
         Return a screenshot of a single layer rendered by napari.
@@ -149,7 +154,7 @@ class NapariViewerMC:
         if layer_name not in [layer.name for layer in self._viewer.layers]:
             return {
                 "status": "error",
-                "message": "The layer_name doesn't exist! Please check the name."
+                "message": "The layer_name doesn't exist! Please check the name.",
             }
 
         # Save visibility state of all layers
@@ -158,7 +163,7 @@ class NapariViewerMC:
         try:
             # Hide all layers except the target
             for layer in self._viewer.layers:
-                layer.visible = (layer.name == layer_name)
+                layer.visible = layer.name == layer_name
 
             # Use napari's own renderer — always produces RGBA uint8
             img_arr = self._viewer.screenshot(canvas_only=True)
@@ -169,7 +174,7 @@ class NapariViewerMC:
                     layer.visible = visibility_state[layer.name]
 
         return self._transform_array_to_image_content(img_arr)
-    
+
     def get_layer_data(self, layer_name: str, save_path: str | None = None):
         """
         Export raw numpy data from a napari layer to a TIFF file on disk.
@@ -183,7 +188,7 @@ class NapariViewerMC:
         if layer_name not in [layer.name for layer in self._viewer.layers]:
             return {
                 "status": "error",
-                "message": f"Layer '{layer_name}' not found. Use viewer_list_of_layers to see available layers."
+                "message": f"Layer '{layer_name}' not found. Use viewer_list_of_layers to see available layers.",
             }
 
         layer = self._viewer.layers[layer_name]
@@ -192,23 +197,20 @@ class NapariViewerMC:
         if layer_type not in ("Image", "Labels"):
             return {
                 "status": "error",
-                "message": f"Unsupported layer type '{layer_type}'. Only Image and Labels layers are supported."
+                "message": f"Unsupported layer type '{layer_type}'. Only Image and Labels layers are supported.",
             }
 
         data = np.asarray(layer.data)
 
         # Build default save path from sanitized layer name
         if save_path is None:
-            sanitized = re.sub(r'[^\w\-.]', '_', layer_name)
-            save_path = f"/tmp/{sanitized}.tif"
+            sanitized = re.sub(r"[^\w\-.]", "_", layer_name)
+            save_path = f"/tmp/{sanitized}.tif"  # nosec B108
 
         try:
             tifffile.imwrite(save_path, data)
         except Exception as e:
-            return {
-                "status": "error",
-                "message": f"Failed to write TIFF: {e}"
-            }
+            return {"status": "error", "message": f"Failed to write TIFF: {e}"}
 
         result = {
             "status": "success",
@@ -229,13 +231,13 @@ class NapariViewerMC:
 
         return result
 
-    def _transform_array_to_image_content(self, arr: np.ndarray) -> dict[str, Any]:#ImageContent
+    def _transform_array_to_image_content(self, arr: np.ndarray) -> dict[str, Any]:  # ImageContent
         """Helper function to transfor the array in a ImageContent"""
 
         # Ensure array is a NumPy array with proper dtype
         if not isinstance(arr, np.ndarray):
             arr = np.asarray(arr)
-        
+
         # Convert to uint8 if needed, allowing copy when necessary
         if arr.dtype != np.uint8:
             arr = arr.astype(np.uint8)
@@ -247,26 +249,21 @@ class NapariViewerMC:
 
         base64_img = base64.b64encode(enc).decode("utf-8")
 
-        return ImageContent(
-            type="image",
-            data=base64_img,
-            mimeType="image/png"
-        )
-    
+        return ImageContent(type="image", data=base64_img, mimeType="image/png")
+
     def add_image(
-            self,
-            path: str | None = None,
-            img_data: np.ndarray | list[np.ndarray] | None = None,
-            name: str | None = None,
-            colormap: str | None = None,
-            blending: str | None = None,
-            channel_axis: int | str | None = None
-            ):
+        self,
+        path: str | None = None,
+        img_data: np.ndarray | list[np.ndarray] | None = None,
+        name: str | None = None,
+        colormap: str | None = None,
+        blending: str | None = None,
+        channel_axis: int | str | None = None,
+    ):
         """
         Add an image to a layer in the current viewer session
         """
         try:
-            
             if path is not None:
                 img_data = iio.imread(path)
             else:
@@ -274,30 +271,16 @@ class NapariViewerMC:
 
             # add image
             layer = self._viewer.add_image(
-                img_data,
-                name=name,
-                colormap=colormap,
-                blending=blending,
-                channel_axis=channel_axis
+                img_data, name=name, colormap=colormap, blending=blending, channel_axis=channel_axis
             )
 
-            return {
-                "status": "success",
-                "name": layer.name,
-                "shape": list(np.shape(img_data))
-            }
+            return {"status": "success", "name": layer.name, "shape": list(np.shape(img_data))}
         except Exception as e:
-            return {
-                "status": "error",
-                "message": f"Failed to add image from {path}: {e}"
-            }
-        
+            return {"status": "error", "message": f"Failed to add image from {path}: {e}"}
+
     def add_labels(
-            self, 
-            path: str | None = None,
-            img_data: np.ndarray | None = None, 
-            name: str | None = None
-            ):
+        self, path: str | None = None, img_data: np.ndarray | None = None, name: str | None = None
+    ):
         """
         Add an label layer from a file
         """
@@ -306,57 +289,31 @@ class NapariViewerMC:
                 p = Path(path).expanduser().resolve(strict=False)
                 img = iio.imread(str(p))
                 layer = self._viewer.add_labels(img, name=name)
-                return {
-                "status": "success",
-                "name": layer.name,
-                "hsape": list(np.shape(img))
-            }
+                return {"status": "success", "name": layer.name, "shape": list(np.shape(img))}
             elif path is None and img_data is not None:
                 layer = self._viewer.add_labels(img_data, name=name)
 
-                return {
-                    "status": "success",
-                    "name": layer.name,
-                    "hsape": list(np.shape(img_data))
-                }
+                return {"status": "success", "name": layer.name, "shape": list(np.shape(img_data))}
         except Exception as e:
-            return {
-                "status": "error",
-                "message": f"Failed to add labels from {path}: {e}"
-            }
-        
+            return {"status": "error", "message": f"Failed to add labels from {path}: {e}"}
 
-    def add_points(
-            self,
-            points: list[list[float]], 
-            name: str | None = None,
-            size: int | str = 10
-            ):
+    def add_points(self, points: list[list[float]], name: str | None = None, size: int | str = 10):
         """
         Add a points layers
         """
         try:
-
             arr = np.asarray(points, dtype=float)
             layer = self._viewer.add_points(arr, name=name, size=int(size))
 
-            return {
-                "status": "success",
-                "name": layer.name,
-                "n_points": int(arr.shape[0])
-            }
-        
-        except Exception as e:
-            return {
-                "status": "error",
-                "message": f"Failed to add points layer: {e}"
-            }
+            return {"status": "success", "name": layer.name, "n_points": int(arr.shape[0])}
 
+        except Exception as e:
+            return {"status": "error", "message": f"Failed to add points layer: {e}"}
 
     def remove_layer(self, name: str):
         """
         Docstring for remove_layer
-        
+
         :param self: Description
         :param name: Description
         :type name: str
@@ -365,31 +322,24 @@ class NapariViewerMC:
         """
         if name in self._viewer.layers:
             self._viewer.layers.remove(name)
-            return {
-                "status": "success", 
-                "message": f"The layer {name} was successfully removed."
-            }
-        
-        return {
-            "status": "error",
-            "message": f"The layer {name} doesn't exists."
-        }
+            return {"status": "success", "message": f"The layer {name} was successfully removed."}
 
+        return {"status": "error", "message": f"The layer {name} doesn't exists."}
 
     def set_layer_properties(
-            self,
-            name: str, 
+        self,
+        name: str,
         visible: bool | None = None,
         opacity: float | None = None,
         colormap: str | None = None,
         blending: str | None = None,
         contrast_limits: list[float] | None = None,
         gamma: float | str | None = None,
-        new_name: str | None = None
+        new_name: str | None = None,
     ):
         """
         Docstring for set_layer_properties
-        
+
         :param self: Description
         :param name: Description
         :type name: str
@@ -411,10 +361,7 @@ class NapariViewerMC:
         set a layer with specific properties
         """
         if name not in self._viewer.layers:
-            return {
-                "status": "error",
-                "message": f"The layer {name} doesn't exist."
-            }
+            return {"status": "error", "message": f"The layer {name} doesn't exist."}
         selected_layers = self._viewer.layers[name]
 
         if visible is not None and hasattr(selected_layers, "visible"):
@@ -429,29 +376,25 @@ class NapariViewerMC:
             with contextlib.suppress(Exception):
                 selected_layers.contrast_limits = [
                     float(contrast_limits[0]),
-                    float(contrast_limits[1])
+                    float(contrast_limits[1]),
                 ]
         if gamma is not None and hasattr(selected_layers, "gamma"):
             selected_layers.gamma = float(gamma)
         if new_name is not None:
             selected_layers.name = new_name
 
-        return {
-            "status": "success",
-            "message": f"Common properties were set for layer {new_name}"
-        }
-    
+        return {"status": "success", "message": f"Common properties were set for layer {new_name}"}
 
     def reorder_layer(
-            self,
-            name: str,
-            index: int | str | None = None,
-            before: str | None = None,
-            after: str | None = None
+        self,
+        name: str,
+        index: int | str | None = None,
+        before: str | None = None,
+        after: str | None = None,
     ):
         """
         Docstring for reorder_layer
-        
+
         :param self: Description
         :param name: Description
         :type name: str
@@ -465,48 +408,38 @@ class NapariViewerMC:
         Reorder layer from an image
         """
         if name not in self._viewer.layers:
-            return {
-                "status": "error",
-                "message": f"The layer {name} doesn't exist."
-            }
+            return {"status": "error", "message": f"The layer {name} doesn't exist."}
         if sum(x is not None for x in (index, before, after)) != 1:
             return {
                 "status": "error",
-                "message": "Provide exactly one of index, or before or after"
+                "message": "Provide exactly one of index, or before or after",
             }
-        
+
         cur = self._viewer.layers.index(name)
         target = cur
         if index is not None:
             target = max(0, min(int(index), len(self._viewer.layers) - 1))
         elif before is not None:
             if before not in self._viewer.layers:
-                return {
-                    "status": "error",
-                    "message": f"The layer {before} doesn't exist."
-                }
+                return {"status": "error", "message": f"The layer {before} doesn't exist."}
             target = self._viewer.layers.index(before)
         elif after is not None:
             if after not in self._viewer.layers:
-                return {
-                    "status": "error",
-                    "message": f"The layer {after} doesn't exist."
-                }
+                return {"status": "error", "message": f"The layer {after} doesn't exist."}
             target = self._viewer.layers.index(after)
-        
+
         if target != cur:
             self._viewer.layers.move(cur, target)
 
         return {
             "status": "successfull",
-            "message":f"The layer {name} was moved at the new index {self._viewer.layers.index(name)}"
-
+            "message": f"The layer {name} was moved at the new index {self._viewer.layers.index(name)}",
         }
-    
+
     def set_active_layer(self, name: str):
         """
         Docstring for set_active_layer
-        
+
         :param self: Description
         :param name: Description
         :type name: str
@@ -514,41 +447,32 @@ class NapariViewerMC:
         Set the new activae layer from the session
         """
         if name not in self._viewer.layers:
-            return {
-                "status": "error",
-                "message": f"The layer {name} doesn't exist."
-            }
+            return {"status": "error", "message": f"The layer {name} doesn't exist."}
         self._viewer.layers.selection = {self._viewer.layers[name]}
 
-        return {
-            "status": "success",
-            "message": f"The new activate layer {name} was set."
-        }
-    
+        return {"status": "success", "message": f"The new activate layer {name} was set."}
+
     def reset_view(self):
         """
         Docstring for reset_view
-        
+
         :param self: Description
 
         Reset the view to contain all the data
         """
         self._viewer.reset_view()
 
-        return {
-            "status": "success", 
-            "message": "The camera view was reset."
-        }
-    
+        return {"status": "success", "message": "The camera view was reset."}
+
     def set_camera(
-            self,
-            center: list[float] | None = None,
-            zoom: float | str | None = None,
-            angle: float | str | None = None
+        self,
+        center: list[float] | None = None,
+        zoom: float | str | None = None,
+        angle: float | str | None = None,
     ):
         """
         Docstring for set_camera
-        
+
         :param self: Description
         :param center: Description
         :type center: list[float] | None
@@ -569,13 +493,13 @@ class NapariViewerMC:
         return {
             "status": "success",
             "center": list(map(float, self._viewer.camera.center)),
-            "zoom": float(self._viewer.camera.zoom)
+            "zoom": float(self._viewer.camera.zoom),
         }
-    
+
     def set_ndisplay(self, ndisplay: int | str):
         """
         Docstring for set_ndisplay
-        
+
         :param self: Description
         :param ndisplay: Description
         :type ndisplay: int | str
@@ -586,13 +510,13 @@ class NapariViewerMC:
 
         return {
             "status": "success",
-            "message": f"The number of displayed dimension was set to {ndisplay}"
+            "message": f"The number of displayed dimension was set to {ndisplay}",
         }
 
     def set_dims_current_step(self, axis: int | str, value: int | str):
         """
         Docstring for set_dims_current_step
-        
+
         :param self: Description
         :param axis: Description
         :type axis: int | str
@@ -603,15 +527,12 @@ class NapariViewerMC:
         """
         self._viewer.dims.set_current_step(int(axis), int(value))
 
-        return {
-            "status": "success", 
-            "message": f"For the axis {axis} was set {value}"
-        }
-    
-    def set_grid(self, enabled: bool = True): # bool | str
+        return {"status": "success", "message": f"For the axis {axis} was set {value}"}
+
+    def set_grid(self, enabled: bool = True):  # bool | str
         """
         Docstring for set_grid
-        
+
         :param self: Description
         :param enabled: Description
         :type enabled: bool | str
@@ -620,27 +541,26 @@ class NapariViewerMC:
         """
         self._viewer.grid.enabled = enabled
 
-        return {
-            "status": "success",
-            "message": f"The grid view was set to {enabled}"
-        }
-    
+        return {"status": "success", "message": f"The grid view was set to {enabled}"}
 
-    def add_tracks(self, 
-                   track_data: np.ndarray,
-                   features: dict[str, Any] | None = None, 
-                   tail_width: float | None = None, 
-                   tail_length: float | None = None):
+    def add_tracks(
+        self,
+        track_data: np.ndarray,
+        name: str | None = None,
+        features: dict[str, Any] | None = None,
+        tail_width: float | None = None,
+        tail_length: float | None = None,
+    ):
         """
         This function add a tracks layer to layer list.
 
         Parameters:
-            track_data: NxD+1 NumPy Array or list containig the coordinates of N vertices with a 
-                track ID and coordinats in D dimensions. The ordering of these dimensions is the same 
-                as the ordering of the dimensions for image layers. This array is always accessible through the 
+            track_data: NxD+1 NumPy Array or list containig the coordinates of N vertices with a
+                track ID and coordinats in D dimensions. The ordering of these dimensions is the same
+                as the ordering of the dimensions for image layers. This array is always accessible through the
                 layer.data property and will grow or shrink as new tracks are either added or deleted.
-                The Tracks layer assumes the first column is the track_id, the second column is the time axis, 
-                and columns 3-5 are Z, Y, and X, respectively. Other feature can be added in other coloumns. 
+                The Tracks layer assumes the first column is the track_id, the second column is the time axis,
+                and columns 3-5 are Z, Y, and X, respectively. Other feature can be added in other coloumns.
                 Each row is one vertex in a track. All vertices with the same track_id are joined into a single track.
 
             features: Features table where each row corresponds to a point and each column is a feature.
@@ -653,40 +573,41 @@ class NapariViewerMC:
 
         try:
             kwargs = {"data": np.asarray(track_data)}
+            if name is not None:
+                kwargs["name"] = name
             if features is not None:
                 kwargs["features"] = features
             if tail_width is not None:
                 kwargs["tail_width"] = int(tail_width)
             if tail_length is not None:
                 kwargs["tail_length"] = int(tail_length)
-            self._viewer.add_tracks(**kwargs)
+            layer = self._viewer.add_tracks(**kwargs)
 
             return {
                 "status": "success",
-                "message": "The tracks data was successfully added."
+                "name": layer.name,
+                "message": "The tracks data was successfully added.",
             }
 
         except Exception as e:
-            return {
-                "status": "error",
-                "message": f"Failed to add tracks: {e}"
-            }
-        
-    
-    def segment_image(self,
-                       path: str | None = None,
-                       img: np.ndarray | list[np.ndarray] | None = None,
-                       mask_name: str | None = None,
-                       batch_size: int = 8,
-                       resample: bool = True,
-                       channels_axis: int | None = None, 
-                       z_axis: int | None = None,
-                       normalize: bool = True,
-                       rescale: float | None = None,
-                       diameter: float | list[float] | None = None,
-                       flow_threshold: float = 0.4,
-                       cellprob_threshold: float = 0.0,
-                       augment: bool = False):
+            return {"status": "error", "message": f"Failed to add tracks: {e}"}
+
+    def segment_image(
+        self,
+        path: str | None = None,
+        img: np.ndarray | list[np.ndarray] | None = None,
+        mask_name: str | None = None,
+        batch_size: int = 8,
+        resample: bool = True,
+        channels_axis: int | None = None,
+        z_axis: int | None = None,
+        normalize: bool = True,
+        rescale: float | None = None,
+        diameter: float | list[float] | None = None,
+        flow_threshold: float = 0.4,
+        cellprob_threshold: float = 0.0,
+        augment: bool = False,
+    ):
         """
         This function segment a cell using cellpose
         """
@@ -705,7 +626,7 @@ class NapariViewerMC:
                 img_array = imread(path)
             else:
                 img_array = img
-            
+
             # check if the image is a 2d,3d,4d image
             # define CHANNELS to run segementation on
             # grayscale=0, R=1, G=2, B=3
@@ -722,19 +643,21 @@ class NapariViewerMC:
             # if you have a nuclear channel, you can use the nuclei restore model on the nuclear channel with
             # model = denoise.CellposeDenoiseModel(..., chan2_restore=True)
 
-            masks, flows, styles = model.eval(img_array,
-                                              batch_size=batch_size,
-                                              resample=resample,
-                                              channels=None,
-                                              channel_axis=channels_axis,
-                                              z_axis=z_axis,
-                                              normalize=normalize,
-                                              rescale=rescale,
-                                              diameter=diameter,
-                                              flow_threshold=flow_threshold,
-                                              cellprob_threshold=cellprob_threshold,
-                                              augment=augment)
-            
+            masks, flows, styles = model.eval(
+                img_array,
+                batch_size=batch_size,
+                resample=resample,
+                channels=None,
+                channel_axis=channels_axis,
+                z_axis=z_axis,
+                normalize=normalize,
+                rescale=rescale,
+                diameter=diameter,
+                flow_threshold=flow_threshold,
+                cellprob_threshold=cellprob_threshold,
+                augment=augment,
+            )
+
             # save the masks
             if mask_name is not None:
                 name = mask_name
@@ -752,9 +675,9 @@ class NapariViewerMC:
                 return {
                     "status": "success",
                     "mask_file_path": default_path,
-                    "number_of_masks": int(masks.max())
+                    "number_of_masks": int(masks.max()),
                 }
-            else: # list of arrays
+            else:  # list of arrays
                 temp_dir = tempfile.gettempdir()
                 saved_paths = []
                 for i, mask in enumerate(masks):
@@ -766,13 +689,12 @@ class NapariViewerMC:
                 return {
                     "status": "success",
                     "mask_file_paths": saved_paths,
-                    "number_of_masks": len(masks)
-
+                    "number_of_masks": len(masks),
                 }
 
         except Exception as e:
             logger.error(f"Cellpose segmentation failed: {type(e).__name__}: {e}", exc_info=True)
             return {
                 "status": "error",
-                "message": f"Failed to segment the image using cellpose: {str(e)}"
+                "message": f"Failed to segment the image using cellpose: {str(e)}",
             }

@@ -7,13 +7,13 @@ import os
 import re
 import sys
 from dataclasses import dataclass, field
-from datetime import datetime, timezone, timedelta
-from typing import Any, Literal
-
+from datetime import UTC, datetime
+from typing import Any
 
 # ---------------------------------------------------------------------------
 # Data structures
 # ---------------------------------------------------------------------------
+
 
 @dataclass
 class ToolResult:
@@ -82,17 +82,18 @@ class ParsedQueueOperation:
 
 @dataclass
 class ParsedLogEntry:
-    timestamp: str   # local time as written in the log file
+    timestamp: str  # local time as written in the log file
     timestamp_utc: str  # converted to UTC ISO for sorting/comparison
-    level: str       # DEBUG / INFO / WARN / ERROR
-    source: str      # Core, pymmcore-plus, LogManager, …
-    message: str     # may include multi-line traceback
+    level: str  # DEBUG / INFO / WARN / ERROR
+    source: str  # Core, pymmcore-plus, LogManager, …
+    message: str  # may include multi-line traceback
 
 
 @dataclass
 class ParsedMicroscopeLog:
     """Group of hardware log entries that occurred during one tool execution."""
-    timestamp: str           # UTC ISO of the first entry (for sorting)
+
+    timestamp: str  # UTC ISO of the first entry (for sorting)
     entries: list[ParsedLogEntry]
 
 
@@ -127,13 +128,28 @@ ParsedMessage = (
 # ---------------------------------------------------------------------------
 
 _MODEL_PRICING: dict[str, dict[str, float]] = {
-    "claude-opus-4-7":          {"input": 15.0,  "output": 75.0,  "cache_read": 1.50,  "cache_write": 18.75},
-    "claude-sonnet-4-6":        {"input": 3.0,   "output": 15.0,  "cache_read": 0.30,  "cache_write": 3.75},
-    "claude-haiku-4-5":         {"input": 0.8,   "output": 4.0,   "cache_read": 0.08,  "cache_write": 1.0},
-    "claude-haiku-4-5-20251001":{"input": 0.8,   "output": 4.0,   "cache_read": 0.08,  "cache_write": 1.0},
+    "claude-opus-4-7": {"input": 15.0, "output": 75.0, "cache_read": 1.50, "cache_write": 18.75},
+    "claude-sonnet-4-6": {"input": 3.0, "output": 15.0, "cache_read": 0.30, "cache_write": 3.75},
+    "claude-haiku-4-5": {"input": 0.8, "output": 4.0, "cache_read": 0.08, "cache_write": 1.0},
+    "claude-haiku-4-5-20251001": {
+        "input": 0.8,
+        "output": 4.0,
+        "cache_read": 0.08,
+        "cache_write": 1.0,
+    },
     # Legacy / fallback
-    "claude-3-5-sonnet-20241022":{"input": 3.0,  "output": 15.0,  "cache_read": 0.30,  "cache_write": 3.75},
-    "claude-3-opus-20240229":   {"input": 15.0,  "output": 75.0,  "cache_read": 1.50,  "cache_write": 18.75},
+    "claude-3-5-sonnet-20241022": {
+        "input": 3.0,
+        "output": 15.0,
+        "cache_read": 0.30,
+        "cache_write": 3.75,
+    },
+    "claude-3-opus-20240229": {
+        "input": 15.0,
+        "output": 75.0,
+        "cache_read": 1.50,
+        "cache_write": 18.75,
+    },
 }
 _DEFAULT_PRICING = {"input": 3.0, "output": 15.0, "cache_read": 0.30, "cache_write": 3.75}
 
@@ -153,6 +169,7 @@ def _cost_for_usage(model: str, usage: dict[str, Any]) -> float:
 # ---------------------------------------------------------------------------
 # Individual message parsers
 # ---------------------------------------------------------------------------
+
 
 def _safe_get(d: dict[str, Any], key: str, default: Any = None) -> Any:
     return d.get(key, default)
@@ -191,7 +208,7 @@ def parse_assistant_message(raw: dict[str, Any]) -> ParsedAssistantMessage:
     model = _safe_get(msg, "model", "")
 
     blocks: list[ContentBlock] = []
-    for block in (raw_content if isinstance(raw_content, list) else []):
+    for block in raw_content if isinstance(raw_content, list) else []:
         if not isinstance(block, dict):
             continue
         btype = _safe_get(block, "type", "")
@@ -200,12 +217,14 @@ def parse_assistant_message(raw: dict[str, Any]) -> ParsedAssistantMessage:
         elif btype == "thinking":
             blocks.append(ThinkingBlock(thinking=_safe_get(block, "thinking", "")))
         elif btype == "tool_use":
-            blocks.append(ToolUseBlock(
-                id=_safe_get(block, "id", ""),
-                name=_safe_get(block, "name", ""),
-                input=_safe_get(block, "input") or {},
-                caller=_safe_get(block, "caller"),
-            ))
+            blocks.append(
+                ToolUseBlock(
+                    id=_safe_get(block, "id", ""),
+                    name=_safe_get(block, "name", ""),
+                    input=_safe_get(block, "input") or {},
+                    caller=_safe_get(block, "caller"),
+                )
+            )
         # Unknown block types are silently skipped
 
     return ParsedAssistantMessage(
@@ -269,6 +288,7 @@ def _dispatch(raw: dict[str, Any]) -> ParsedMessage | None:
 # Stats computation
 # ---------------------------------------------------------------------------
 
+
 def compute_stats(messages: list[ParsedMessage]) -> ConversationStats:
     stats = ConversationStats()
 
@@ -306,9 +326,13 @@ def compute_stats(messages: list[ParsedMessage]) -> ConversationStats:
     first_user_ts = ""
     last_agent_ts = ""
     for msg in messages:
-        if (isinstance(msg, ParsedUserMessage)
-                and isinstance(msg.content, str) and msg.content
-                and not first_user_ts and msg.timestamp):
+        if (
+            isinstance(msg, ParsedUserMessage)
+            and isinstance(msg.content, str)
+            and msg.content
+            and not first_user_ts
+            and msg.timestamp
+        ):
             first_user_ts = msg.timestamp
         elif isinstance(msg, ParsedAssistantMessage) and msg.timestamp:
             last_agent_ts = msg.timestamp
@@ -322,6 +346,7 @@ def compute_stats(messages: list[ParsedMessage]) -> ConversationStats:
 # ---------------------------------------------------------------------------
 # Public API
 # ---------------------------------------------------------------------------
+
 
 def read_file(path: str) -> tuple[list[ParsedMessage], ConversationStats]:
     """Read and parse a Claude Code conversation JSONL file.
@@ -361,9 +386,7 @@ def read_file(path: str) -> tuple[list[ParsedMessage], ConversationStats]:
 # Hardware log parsing & merging
 # ---------------------------------------------------------------------------
 
-_LOG_LINE_RE = re.compile(
-    r'^(\d{4}-\d{2}-\d{2}T[\d:.]+)\s+tid\S+\s+\[(\w+),([^\]]+)\]\s*(.*)'
-)
+_LOG_LINE_RE = re.compile(r"^(\d{4}-\d{2}-\d{2}T[\d:.]+)\s+tid\S+\s+\[(\w+),([^\]]+)\]\s*(.*)")
 _LEVEL_MAP = {"IFO": "INFO", "DBG": "DEBUG", "ERR": "ERROR", "WRN": "WARN"}
 
 
@@ -375,10 +398,10 @@ def _log_ts_to_utc(ts_str: str) -> str:
     """
     try:
         # Normalise to max 6 decimal digits (fromisoformat is strict)
-        norm = re.sub(r'(\.\d{1,6})\d*$', r'\1', ts_str.strip())
+        norm = re.sub(r"(\.\d{1,6})\d*$", r"\1", ts_str.strip())
         naive = datetime.fromisoformat(norm)
         # astimezone() on a naive datetime uses the system's local timezone
-        utc_dt = naive.astimezone(timezone.utc)
+        utc_dt = naive.astimezone(UTC)
         return utc_dt.strftime("%Y-%m-%dT%H:%M:%S.%f") + "Z"
     except Exception:
         return ts_str
@@ -387,7 +410,9 @@ def _log_ts_to_utc(ts_str: str) -> str:
 def default_log_path() -> str | None:
     """Return the default pymmcore-plus log path for the current OS."""
     if sys.platform == "win32":
-        base = os.environ.get("LOCALAPPDATA", "") # to change. It depends where micromanager is installed. Make it more flexible.
+        base = os.environ.get(
+            "LOCALAPPDATA", ""
+        )  # to change. It depends where micromanager is installed. Make it more flexible.
     elif sys.platform == "darwin":
         base = os.path.expanduser("~/Library/Logs")
     else:
@@ -464,16 +489,15 @@ def merge_logs(
             and msg.timestamp
         ):
             window_start = last_assistant_ts
-            window_end   = msg.timestamp
+            window_end = msg.timestamp
 
-            matching = [
-                e for e in sorted_logs
-                if window_start <= e.timestamp_utc <= window_end
-            ]
+            matching = [e for e in sorted_logs if window_start <= e.timestamp_utc <= window_end]
             if matching:
-                result.append(ParsedMicroscopeLog(
-                    timestamp=matching[0].timestamp_utc,
-                    entries=matching,
-                ))
+                result.append(
+                    ParsedMicroscopeLog(
+                        timestamp=matching[0].timestamp_utc,
+                        entries=matching,
+                    )
+                )
 
     return result

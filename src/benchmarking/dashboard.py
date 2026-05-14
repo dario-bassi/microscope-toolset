@@ -12,11 +12,12 @@ from typing import Any
 
 try:
     import markdown as _md_lib
+
     _HAS_MARKDOWN = True
 except ImportError:
     _HAS_MARKDOWN = False
 
-from PyQt6.QtCore import Qt, QByteArray, QSize, QSizeF
+from PyQt6.QtCore import QByteArray, QSize, QSizeF, Qt
 from PyQt6.QtGui import QFont, QPixmap, QTextOption
 from PyQt6.QtWidgets import (
     QApplication,
@@ -41,7 +42,7 @@ from PyQt6.QtWidgets import (
 
 _BENCHMARKING_DIR = Path(__file__).parent
 
-from src.benchmarking.review_conversation import (
+from .review_conversation import (  # noqa: E402
     ConversationStats,
     ParsedAssistantMessage,
     ParsedFileSnapshot,
@@ -60,23 +61,23 @@ from src.benchmarking.review_conversation import (
 # Colours
 # ---------------------------------------------------------------------------
 
-USER_BG      = "#DBEAFE"
+USER_BG = "#DBEAFE"
 ASSISTANT_BG = "#F3F4F6"
-SYSTEM_BG    = "#FEF9C3"
-THINKING_BG  = "#EDE9FE"
-TOOL_USE_BG  = "#D1FAE5"
-TOOL_OK_BG   = "#ECFDF5"
-TOOL_ERR_BG  = "#FEE2E2"
-LOG_BG       = "#E0F2FE"   # light sky-blue for hardware logs
-CODE_BG      = "#1E1E1E"
-CODE_FG      = "#D4D4D4"
-WINDOW_BG    = "#FFFFFF"
+SYSTEM_BG = "#FEF9C3"
+THINKING_BG = "#EDE9FE"
+TOOL_USE_BG = "#D1FAE5"
+TOOL_OK_BG = "#ECFDF5"
+TOOL_ERR_BG = "#FEE2E2"
+LOG_BG = "#E0F2FE"  # light sky-blue for hardware logs
+CODE_BG = "#1E1E1E"
+CODE_FG = "#D4D4D4"
+WINDOW_BG = "#FFFFFF"
 
 _LOG_LEVEL_STYLE: dict[str, tuple[str, str]] = {
     # level → (badge-bg, badge-text)
     "DEBUG": ("#E5E7EB", "#374151"),
-    "INFO":  ("#DBEAFE", "#1E40AF"),
-    "WARN":  ("#FEF3C7", "#92400E"),
+    "INFO": ("#DBEAFE", "#1E40AF"),
+    "WARN": ("#FEF3C7", "#92400E"),
     "ERROR": ("#FEE2E2", "#991B1B"),
 }
 
@@ -88,6 +89,7 @@ _CONTENT_WIDTH = 820
 # ---------------------------------------------------------------------------
 # Number / cost formatting  (European style)
 # ---------------------------------------------------------------------------
+
 
 def _fmt_num(n: int) -> str:
     s = str(abs(n))
@@ -106,6 +108,7 @@ def _fmt_cost(c: float) -> str:
 # ---------------------------------------------------------------------------
 # General helpers
 # ---------------------------------------------------------------------------
+
 
 def _fmt_ts(ts: str) -> str:
     if not ts:
@@ -149,10 +152,11 @@ def _md_to_html(text: str) -> str:
             extensions=["fenced_code", "tables", "nl2br", "sane_lists"],
         )
     import html as _html
+
     t = _html.escape(text)
     t = re.sub(r"\*\*(.+?)\*\*", r"<b>\1</b>", t)
-    t = re.sub(r"\*(.+?)\*",     r"<i>\1</i>", t)
-    t = re.sub(r"`(.+?)`",       r"<code>\1</code>", t)
+    t = re.sub(r"\*(.+?)\*", r"<i>\1</i>", t)
+    t = re.sub(r"`(.+?)`", r"<code>\1</code>", t)
     return t.replace("\n", "<br>")
 
 
@@ -165,6 +169,7 @@ def _doc_height(widget: QTextBrowser | QTextEdit, width: int = _CONTENT_WIDTH) -
 # ---------------------------------------------------------------------------
 # Low-level content widgets  (no internal scrollbars — full content height)
 # ---------------------------------------------------------------------------
+
 
 def _make_markdown_widget(text: str, bg: str) -> QTextBrowser:
     w = QTextBrowser()
@@ -242,6 +247,7 @@ def _make_code_widget(code: str) -> QTextEdit:
 # Tool parameter table
 # ---------------------------------------------------------------------------
 
+
 def _make_param_table(params: dict[str, Any], bg: str) -> QWidget:
     """Render tool input as a labelled key/value table."""
     container = QWidget()
@@ -258,8 +264,7 @@ def _make_param_table(params: dict[str, Any], bg: str) -> QWidget:
         key_lbl.setFixedWidth(110)
         key_lbl.setAlignment(Qt.AlignmentFlag.AlignTop | Qt.AlignmentFlag.AlignLeft)
         key_lbl.setStyleSheet(
-            "font-size:10px; font-weight:bold; color:#065F46; "
-            f"background:{bg}; padding-top:2px;"
+            "font-size:10px; font-weight:bold; color:#065F46; " f"background:{bg}; padding-top:2px;"
         )
         row.addWidget(key_lbl)
 
@@ -281,7 +286,7 @@ def _make_param_table(params: dict[str, Any], bg: str) -> QWidget:
         if key != list(params.keys())[-1]:
             sep = QFrame()
             sep.setFrameShape(QFrame.Shape.HLine)
-            sep.setStyleSheet(f"color:rgba(0,0,0,0.08); background:transparent;")
+            sep.setStyleSheet("color:rgba(0,0,0,0.08); background:transparent;")
             grid.addWidget(sep)
 
     return container
@@ -291,9 +296,9 @@ def _make_param_table(params: dict[str, Any], bg: str) -> QWidget:
 # Collapsible content wrapper
 # ---------------------------------------------------------------------------
 
+
 class CollapsibleWidget(QWidget):
-    def __init__(self, text: str, bg: str, is_code: bool = False,
-                 parent: QWidget | None = None):
+    def __init__(self, text: str, bg: str, is_code: bool = False, parent: QWidget | None = None):
         super().__init__(parent)
         self._text = text
         self._bg = bg
@@ -311,10 +316,15 @@ class CollapsibleWidget(QWidget):
             if item.widget():
                 item.widget().deleteLater()
         display = (
-            self._text if (expanded or not self._needs_collapse)
+            self._text
+            if (expanded or not self._needs_collapse)
             else self._text[:MAX_COLLAPSED_CHARS] + "…"
         )
-        w = _make_code_widget(display) if self._is_code else _make_markdown_widget(display, self._bg)
+        w = (
+            _make_code_widget(display)
+            if self._is_code
+            else _make_markdown_widget(display, self._bg)
+        )
         self._layout.addWidget(w)
         if self._needs_collapse:
             btn = QPushButton("View all" if not expanded else "Close")
@@ -336,6 +346,7 @@ class CollapsibleWidget(QWidget):
 # Block renderers
 # ---------------------------------------------------------------------------
 
+
 def _render_text_block(text: str, bg: str, layout: QVBoxLayout) -> None:
     layout.addWidget(CollapsibleWidget(text, bg=bg))
 
@@ -349,12 +360,15 @@ def _render_thinking_block(thinking: str, layout: QVBoxLayout) -> None:
     fl = QVBoxLayout(frame)
     fl.setContentsMargins(8, 6, 8, 6)
     if thinking:
-        fl.addWidget(QLabel("<i>💭 Thinking</i>",
-                            styleSheet="color:#6D28D9;font-size:10px;"))
+        fl.addWidget(QLabel("<i>💭 Thinking</i>", styleSheet="color:#6D28D9;font-size:10px;"))
         fl.addWidget(CollapsibleWidget(thinking, bg=THINKING_BG))
     else:
-        fl.addWidget(QLabel("<i>💭 Thinking (content not stored)</i>",
-                            styleSheet="color:#9CA3AF;font-size:10px;"))
+        fl.addWidget(
+            QLabel(
+                "<i>💭 Thinking (content not stored)</i>",
+                styleSheet="color:#9CA3AF;font-size:10px;",
+            )
+        )
     layout.addWidget(frame)
 
 
@@ -371,8 +385,7 @@ def _render_tool_use_block(name: str, inp: dict[str, Any], layout: QVBoxLayout) 
     # Header
     hdr = QHBoxLayout()
     hdr.addWidget(QLabel("🔧", styleSheet="font-size:13px;"))
-    hdr.addWidget(QLabel(f"<b>{name}</b>",
-                         styleSheet="font-size:12px;color:#065F46;"))
+    hdr.addWidget(QLabel(f"<b>{name}</b>", styleSheet="font-size:12px;color:#065F46;"))
     hdr.addStretch()
     fl.addLayout(hdr)
 
@@ -404,8 +417,7 @@ def _make_image_widget(b64_data: str) -> QLabel:
 
 
 _PERSISTED_RE = re.compile(
-    r"<persisted-output>\s*Output too large \(([^)]+)\)[^\n]*\n"
-    r".*?Preview \([^)]+\):\n(.*)",
+    r"<persisted-output>\s*Output too large \(([^)]+)\)[^\n]*\n" r".*?Preview \([^)]+\):\n(.*)",
     re.DOTALL,
 )
 
@@ -429,10 +441,10 @@ def _clean_persisted_output(text: str) -> tuple[str, bool]:
 
 
 def _render_tool_result(result: ToolResult, layout: QVBoxLayout) -> None:
-    color    = TOOL_ERR_BG if result.is_error else TOOL_OK_BG
-    txt_col  = "#991B1B"   if result.is_error else "#065F46"
-    icon     = "❌" if result.is_error else "✅"
-    label    = "Tool error" if result.is_error else "Tool result"
+    color = TOOL_ERR_BG if result.is_error else TOOL_OK_BG
+    txt_col = "#991B1B" if result.is_error else "#065F46"
+    icon = "❌" if result.is_error else "✅"
+    label = "Tool error" if result.is_error else "Tool result"
 
     frame = QFrame()
     frame.setStyleSheet(
@@ -445,12 +457,11 @@ def _render_tool_result(result: ToolResult, layout: QVBoxLayout) -> None:
 
     # Header
     hdr = QHBoxLayout()
-    hdr.addWidget(QLabel(icon,  styleSheet="font-size:13px;"))
-    hdr.addWidget(QLabel(f"<b>{label}</b>",
-                         styleSheet=f"font-size:12px;color:{txt_col};"))
-    hdr.addWidget(QLabel(
-        f"<span style='color:#9CA3AF;font-size:10px'>{result.tool_use_id[:14]}…</span>"
-    ))
+    hdr.addWidget(QLabel(icon, styleSheet="font-size:13px;"))
+    hdr.addWidget(QLabel(f"<b>{label}</b>", styleSheet=f"font-size:12px;color:{txt_col};"))
+    hdr.addWidget(
+        QLabel(f"<span style='color:#9CA3AF;font-size:10px'>{result.tool_use_id[:14]}…</span>")
+    )
     hdr.addStretch()
     fl.addLayout(hdr)
 
@@ -472,7 +483,7 @@ def _render_tool_result(result: ToolResult, layout: QVBoxLayout) -> None:
                 # Flush accumulated text first
                 if text_parts:
                     joined = "\n\n".join(text_parts).strip()
-                    segments.append(("text", joined, True))   # markdown
+                    segments.append(("text", joined, True))  # markdown
                     text_parts = []
                 segments.append(("image", item.get("data", "")))
         if text_parts:
@@ -481,11 +492,9 @@ def _render_tool_result(result: ToolResult, layout: QVBoxLayout) -> None:
     else:
         # Plain string — may be a <persisted-output> placeholder
         cleaned, was_truncated = _clean_persisted_output(result.content)
-        segments.append(("text", cleaned, False))   # plain text
+        segments.append(("text", cleaned, False))  # plain text
 
-    if not segments or all(
-        (s[0] == "text" and not s[1].strip()) for s in segments
-    ):
+    if not segments or all((s[0] == "text" and not s[1].strip()) for s in segments):
         fl.addWidget(QLabel("<i>(empty response)</i>"))
     else:
         sep = QFrame()
@@ -514,11 +523,12 @@ def _render_tool_result(result: ToolResult, layout: QVBoxLayout) -> None:
 # Microscope log bubble
 # ---------------------------------------------------------------------------
 
+
 def _short_log_ts(ts: str) -> str:
     """Show only HH:MM:SS.mmm from a log timestamp."""
     try:
         t = ts.split("T")[1] if "T" in ts else ts
-        return t[:12]   # HH:MM:SS.mmm
+        return t[:12]  # HH:MM:SS.mmm
     except Exception:
         return ts
 
@@ -545,13 +555,14 @@ class LogBubble(QFrame):
 
         # Header
         hdr = QHBoxLayout()
-        hdr.addWidget(QLabel("🔬  <b>Microscope Log</b>",
-                             styleSheet="font-size:11px;color:#0369A1;"))
-        hdr.addWidget(QLabel(f"{len(msg.entries)} entries",
-                             styleSheet="font-size:10px;color:#6B7280;"))
+        hdr.addWidget(
+            QLabel("🔬  <b>Microscope Log</b>", styleSheet="font-size:11px;color:#0369A1;")
+        )
+        hdr.addWidget(
+            QLabel(f"{len(msg.entries)} entries", styleSheet="font-size:10px;color:#6B7280;")
+        )
         hdr.addStretch()
-        hdr.addWidget(QLabel(_fmt_ts(msg.timestamp),
-                             styleSheet="font-size:10px;color:#6B7280;"))
+        hdr.addWidget(QLabel(_fmt_ts(msg.timestamp), styleSheet="font-size:10px;color:#6B7280;"))
         outer.addLayout(hdr)
 
         sep = QFrame()
@@ -610,6 +621,7 @@ class LogBubble(QFrame):
 # Message bubble
 # ---------------------------------------------------------------------------
 
+
 class MessageBubble(QFrame):
     def __init__(self, msg: ParsedMessage, parent: QWidget | None = None):
         super().__init__(parent)
@@ -640,20 +652,20 @@ class MessageBubble(QFrame):
 
         # Header
         hdr = QHBoxLayout()
-        hdr.addWidget(QLabel(f"<b>{role}</b>",
-                             styleSheet="font-size:11px;color:#111827;"))
+        hdr.addWidget(QLabel(f"<b>{role}</b>", styleSheet="font-size:11px;color:#111827;"))
         ts = getattr(msg, "timestamp", "")
         if ts:
-            hdr.addWidget(QLabel(_fmt_ts(ts),
-                                 styleSheet="font-size:10px;color:#6B7280;"))
+            hdr.addWidget(QLabel(_fmt_ts(ts), styleSheet="font-size:10px;color:#6B7280;"))
         hdr.addStretch()
         if isinstance(msg, ParsedAssistantMessage) and msg.usage:
             u = msg.usage
-            hdr.addWidget(QLabel(
-                f"↓{_fmt_num(u.get('input_tokens',0))}  "
-                f"↑{_fmt_num(u.get('output_tokens',0))} tok",
-                styleSheet="font-size:10px;color:#6B7280;",
-            ))
+            hdr.addWidget(
+                QLabel(
+                    f"↓{_fmt_num(u.get('input_tokens',0))}  "
+                    f"↑{_fmt_num(u.get('output_tokens',0))} tok",
+                    styleSheet="font-size:10px;color:#6B7280;",
+                )
+            )
         outer.addLayout(hdr)
 
         sep = QFrame()
@@ -677,9 +689,9 @@ class MessageBubble(QFrame):
                 elif isinstance(block, ToolUseBlock):
                     _render_tool_use_block(block.name, block.input, outer)
         elif isinstance(msg, ParsedFileSnapshot):
-            outer.addWidget(QLabel(
-                f"<i>File snapshot {'updated' if msg.is_snapshot_update else 'saved'}</i>"
-            ))
+            outer.addWidget(
+                QLabel(f"<i>File snapshot {'updated' if msg.is_snapshot_update else 'saved'}</i>")
+            )
         elif isinstance(msg, ParsedQueueOperation):
             outer.addWidget(QLabel(f"<i>Queue: {msg.operation}</i>"))
             if msg.content:
@@ -689,6 +701,7 @@ class MessageBubble(QFrame):
 # ---------------------------------------------------------------------------
 # Stats panel
 # ---------------------------------------------------------------------------
+
 
 class StatsPanel(QWidget):
     def __init__(self, stats: ConversationStats, parent: QWidget | None = None):
@@ -701,38 +714,36 @@ class StatsPanel(QWidget):
         layout.setContentsMargins(14, 18, 14, 18)
         layout.setSpacing(8)
 
-        layout.addWidget(QLabel("<b>Experiment Statistics</b>",
-                                styleSheet="font-size:13px;"))
+        layout.addWidget(QLabel("<b>Experiment Statistics</b>", styleSheet="font-size:13px;"))
         layout.addWidget(self._sep())
 
         sid = stats.session_id
-        self._row(layout, "Session",     sid[:16] + "…" if len(sid) > 16 else sid)
-        self._row(layout, "Git branch",  stats.git_branch or "—")
+        self._row(layout, "Session", sid[:16] + "…" if len(sid) > 16 else sid)
+        self._row(layout, "Git branch", stats.git_branch or "—")
         if stats.cwd:
             self._row(layout, "Working dir", _short_cwd(stats.cwd))
-        self._row(layout, "Duration",
-                  _duration(stats.first_timestamp, stats.last_timestamp))
+        self._row(layout, "Duration", _duration(stats.first_timestamp, stats.last_timestamp))
 
         layout.addWidget(self._sep())
         layout.addWidget(QLabel("<b>Tokens</b>"))
-        self._row(layout, "Input",       _fmt_num(stats.total_input_tokens))
-        self._row(layout, "Output",      _fmt_num(stats.total_output_tokens))
+        self._row(layout, "Input", _fmt_num(stats.total_input_tokens))
+        self._row(layout, "Output", _fmt_num(stats.total_output_tokens))
         self._row(layout, "Cache write", _fmt_num(stats.total_cache_creation_tokens))
-        self._row(layout, "Cache read",  _fmt_num(stats.total_cache_read_tokens))
+        self._row(layout, "Cache read", _fmt_num(stats.total_cache_read_tokens))
 
         layout.addWidget(self._sep())
         layout.addWidget(QLabel("<b>Cost (est.)</b>"))
-        self._row(layout, "Total USD",   _fmt_cost(stats.estimated_cost_usd))
+        self._row(layout, "Total USD", _fmt_cost(stats.estimated_cost_usd))
 
         layout.addWidget(self._sep())
         layout.addWidget(QLabel("<b>Activity</b>"))
-        self._row(layout, "User turns",  _fmt_num(stats.num_user_turns))
+        self._row(layout, "User turns", _fmt_num(stats.num_user_turns))
         self._row(layout, "Agent turns", _fmt_num(stats.num_assistant_turns))
-        self._row(layout, "Tool calls",  _fmt_num(stats.num_tool_calls))
+        self._row(layout, "Tool calls", _fmt_num(stats.num_tool_calls))
 
         layout.addWidget(self._sep())
         layout.addWidget(QLabel("<b>Models</b>"))
-        for m in (stats.models_used or ["—"]):
+        for m in stats.models_used or ["—"]:
             lbl = QLabel(f"• {m}")
             lbl.setWordWrap(True)
             lbl.setStyleSheet("font-size:11px;")
@@ -763,6 +774,7 @@ class StatsPanel(QWidget):
 # Grading window
 # ---------------------------------------------------------------------------
 
+
 class GradingWindow(QMainWindow):
     """Popup window for scoring a test run against grading.json criteria."""
 
@@ -771,7 +783,7 @@ class GradingWindow(QMainWindow):
         self.setWindowTitle("Test Grading")
         self.resize(680, 780)
 
-        self._spinboxes:  dict[str, tuple[QSpinBox, int]] = {}
+        self._spinboxes: dict[str, tuple[QSpinBox, int]] = {}
         self._checkboxes: dict[str, QCheckBox] = {}
         self._current_test: Path | None = None
         self._criteria: list[dict] = []
@@ -815,9 +827,7 @@ class GradingWindow(QMainWindow):
 
         # ── Score summary ────────────────────────────────────────────────────
         self._score_label = QLabel("Score: 0 / 0  (0%)")
-        self._score_label.setStyleSheet(
-            "font-size:13px; font-weight:bold; color:#111827;"
-        )
+        self._score_label.setStyleSheet("font-size:13px; font-weight:bold; color:#111827;")
         root.addWidget(self._score_label)
 
         # ── Notes ────────────────────────────────────────────────────────────
@@ -825,9 +835,7 @@ class GradingWindow(QMainWindow):
         self._notes = QTextEdit()
         self._notes.setFixedHeight(72)
         self._notes.setPlaceholderText("Optional notes about this grading…")
-        self._notes.setStyleSheet(
-            "border:1px solid #D1D5DB; border-radius:4px; font-size:11px;"
-        )
+        self._notes.setStyleSheet("border:1px solid #D1D5DB; border-radius:4px; font-size:11px;")
         root.addWidget(self._notes)
 
         # ── Save button ──────────────────────────────────────────────────────
@@ -881,14 +889,13 @@ class GradingWindow(QMainWindow):
         self._checkboxes.clear()
 
         for crit in self._criteria:
-            cid   = crit["id"]
-            name  = crit["name"]
+            cid = crit["id"]
+            name = crit["name"]
             ctype = crit.get("type", "scored")
 
             row_w = QWidget()
             row_w.setStyleSheet(
-                "QWidget{background:#F9FAFB; border-radius:4px;}"
-                " QLabel{background:transparent;}"
+                "QWidget{background:#F9FAFB; border-radius:4px;}" " QLabel{background:transparent;}"
             )
             rl = QHBoxLayout(row_w)
             rl.setContentsMargins(10, 6, 10, 6)
@@ -922,9 +929,9 @@ class GradingWindow(QMainWindow):
         self._update_score()
 
     def _update_score(self) -> None:
-        total  = sum(mp for _, mp in self._spinboxes.values())
+        total = sum(mp for _, mp in self._spinboxes.values())
         earned = sum(sb.value() for sb, _ in self._spinboxes.values())
-        pct    = int(100 * earned / total) if total else 0
+        pct = int(100 * earned / total) if total else 0
         self._score_label.setText(f"Score: {earned} / {total}  ({pct}%)")
 
     def _save_grade(self) -> None:
@@ -934,37 +941,36 @@ class GradingWindow(QMainWindow):
         grades_dir.mkdir(exist_ok=True)
 
         result: dict = {
-            "test":      self._current_test.name,
+            "test": self._current_test.name,
             "timestamp": datetime.now().isoformat(),
-            "criteria":  {},
-            "notes":     self._notes.toPlainText().strip(),
+            "criteria": {},
+            "notes": self._notes.toPlainText().strip(),
         }
         for crit in self._criteria:
             cid = crit["id"]
             if crit.get("type") == "pass_fail":
                 result["criteria"][cid] = {
-                    "type":   "pass_fail",
+                    "type": "pass_fail",
                     "passed": self._checkboxes[cid].isChecked(),
                 }
             else:
                 sb, max_pts = self._spinboxes[cid]
                 result["criteria"][cid] = {
-                    "type":  "scored",
+                    "type": "scored",
                     "score": sb.value(),
-                    "max":   max_pts,
+                    "max": max_pts,
                 }
 
         stamp = datetime.now().strftime("%Y%m%d_%H%M%S")
         out_path = grades_dir / f"grade_{stamp}.json"
-        out_path.write_text(
-            json.dumps(result, indent=4, ensure_ascii=False), encoding="utf-8"
-        )
+        out_path.write_text(json.dumps(result, indent=4, ensure_ascii=False), encoding="utf-8")
         QMessageBox.information(self, "Saved", f"Grade saved to:\n{out_path}")
 
 
 # ---------------------------------------------------------------------------
 # Main window
 # ---------------------------------------------------------------------------
+
 
 class ConversationDashboard(QMainWindow):
     def __init__(self, messages: list[ParsedMessage], stats: ConversationStats):
@@ -1008,20 +1014,18 @@ class ConversationDashboard(QMainWindow):
             else:
                 widget = MessageBubble(msg)
 
-            widget.setSizePolicy(
-                QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Preferred
-            )
+            widget.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Preferred)
 
             row = QHBoxLayout()
             row.setContentsMargins(0, 0, 0, 0)
             row.setSpacing(0)
 
             if isinstance(msg, ParsedUserMessage) and isinstance(msg.content, str):
-                row.addWidget(widget, 3)   # 3/4 left
+                row.addWidget(widget, 3)  # 3/4 left
                 row.addStretch(1)
             else:
                 row.addStretch(1)
-                row.addWidget(widget, 3)   # 3/4 right
+                row.addWidget(widget, 3)  # 3/4 right
 
             row_w = QWidget()
             row_w.setLayout(row)
@@ -1052,6 +1056,7 @@ class ConversationDashboard(QMainWindow):
 # ---------------------------------------------------------------------------
 # Entry point
 # ---------------------------------------------------------------------------
+
 
 def launch_dashboard(messages: list[ParsedMessage], stats: ConversationStats) -> None:
     """Launch the PyQt6 dashboard. Blocks until the window is closed."""

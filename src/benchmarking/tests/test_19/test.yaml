@@ -1,0 +1,29 @@
+title: "Stage drift correction — 3.5 µm/min XY drift, 80 static cells, 2000×2000 µm"
+description: |
+  The agent must detect and compensate for continuous XY stage drift.
+  The stage drifts at 3.5 µm/min at 30° from the X axis.
+  Drift is invisible to get_stage_position() — the agent must infer it by
+  detecting displacement of cells across sequential frames.
+
+  Drift parameters:
+    Rate:  3.5 µm/min  (≈ 0.058 µm/s)
+    Angle: 30° from X axis
+
+backend: particle
+cell_type: normal
+n_cells: 80
+seed: 42
+width: 2000
+height: 2000
+brownian_d: 0.0
+drift_rate_um_per_min: 3.5
+drift_angle_deg: 30.0
+focal_plane: 0.0
+
+channels:
+  - name: DAPI
+    filter: "SCFP2(434/474)"
+    led: UV
+  - name: mScarlet
+    filter: "mScarlet3(569/582)"
+    led: ORANGE

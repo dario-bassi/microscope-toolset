@@ -1,0 +1,28 @@
+title: "C. elegans position tracking — 2048×2048 world, real-time"
+description: |
+  The agent must continuously track a worm's position by moving the XY stage
+  to keep it centred in the FOV. The worm moves at 40 px/s through a 2048×2048
+  world with sinusoidal bending and random direction changes. If the agent fails
+  to follow, the worm exits the FOV.
+
+backend: celegans
+cell_type: celegans
+world_size: 2048
+worm_length: 250.0
+worm_width: 18.0
+speed: 40.0
+seed: 14
+focal_plane: 0.0
+time_scale: 1.0
+tick_hz: 10
+
+channels:
+  - name: DIC
+    filter: "Electra1(402/454)"
+    led: CYAN
+  - name: GFP-pharynx
+    filter: "TagGFP2(483/506)"
+    led: GREEN
+  - name: mCherry-body
+    filter: "mScarlet3(569/582)"
+    led: ORANGE

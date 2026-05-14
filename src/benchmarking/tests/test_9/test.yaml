@@ -1,0 +1,24 @@
+title: "Cell-cycle apoptosis — DAPI + mScarlet, 100 cells, 1500x1500 µm"
+description: |
+  Cells are distributed with a bias toward high division counts so that
+  apoptosis events are frequent and visible from the start:
+    - 2 cells already dying, spread across all apoptosis stages
+    - 30 cells one or two divisions away from death (n_div 8-9)
+    - remaining cells with low division counts (n_div 0-7)
+
+backend: particle
+cell_type: cycle
+n_cells: 100
+seed: 11
+width: 1500
+height: 1500
+brownian_d: 0.0
+focal_plane: 0.0
+
+channels:
+  - name: DAPI
+    filter: "SCFP2(434/474)"
+    led: UV
+  - name: mScarlet
+    filter: "mScarlet3(569/582)"
+    led: ORANGE

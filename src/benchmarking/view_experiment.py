@@ -12,9 +12,9 @@ from __future__ import annotations
 import sys
 from pathlib import Path
 
-from src.benchmarking.experiment_saver import EXPERIMENTS_DIR, list_experiments
-from src.benchmarking.review_conversation import read_file
-from src.benchmarking.dashboard import launch_dashboard
+from .dashboard import launch_dashboard
+from .experiment_saver import EXPERIMENTS_DIR, list_experiments
+from .review_conversation import read_file
 
 
 def _pick_experiment() -> Path | None:
@@ -29,7 +29,7 @@ def _pick_experiment() -> Path | None:
         conv = folder / "conversation.jsonl"
         size_kb = conv.stat().st_size / 1024
         has_agents = (folder / "session_data" / "subagents").exists()
-        has_tools  = (folder / "session_data" / "tool-results").exists()
+        has_tools = (folder / "session_data" / "tool-results").exists()
         extras = []
         if has_agents:
             n = len(list((folder / "session_data" / "subagents").glob("*.jsonl")))

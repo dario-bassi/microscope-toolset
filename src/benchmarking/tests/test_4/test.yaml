@@ -1,0 +1,24 @@
+title: "Optogenetics — single-cell steering, 50 cells, 1000x1000 µm"
+description: |
+  Same setup as test_3. The experiment targets one cell with a directional
+  SLM mask to steer it across the field of view.
+
+backend: particle
+cell_type: optogenetic
+n_cells: 50
+seed: 7
+width: 1000
+height: 1000
+radius_min: 17.0
+radius_max: 22.0
+brownian_d: 0.5
+time_scale: 5.0
+tick_hz: 10
+focal_plane: 0.0
+phase_contrast: true
+slm: true
+
+channels:
+  - name: stimulation
+    filter: "mScarlet3(569/582)"
+    led: ORANGE
