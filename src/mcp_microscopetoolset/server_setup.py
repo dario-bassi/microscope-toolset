@@ -68,12 +68,12 @@ def create_mcp_server(
     )
 
     # If a raw mmc instance is provided inside microscope_status, wrap it so tools run safely
-    try:
-        raw_mmc = getattr(microscope_status, "mmc", None)
-        if raw_mmc is not None and not isinstance(raw_mmc, GatekeeperCore):
-            microscope_status.mmc = GatekeeperCore(raw_mmc)
-    except Exception:
-        pass
+    #try:
+    #    raw_mmc = getattr(microscope_status, "mmc", None)
+    #    if raw_mmc is not None and not isinstance(raw_mmc, GatekeeperCore):
+    #        microscope_status.mmc = GatekeeperCore(raw_mmc)
+    #except Exception:
+    #    pass
 
     # Set up benchmark logger if provided
     global benchmark_logger
@@ -258,46 +258,46 @@ def create_mcp_server(
                     execution_time_ms=execution_time_ms,
                 )
 
-    @mcp.tool(
-        name="reformulate_user_query",
-        description="Rephrase a user question into an optimized search query for database retrieval via BM25 text matching and embedding vectors.",
-    )
-    def reformulate_user_query(
-        user_question: str = Field(..., description="The user original question"),
-        user_query: str = Field(
-            "", description="(Optional) The original user query, used for logging only."
-        ),
-    ) -> dict[str, Any]:
-        start_time = time.time()
-        result = None
-        try:
-            if database_agent is None:
-                result = {
-                    "user_query": user_question,
-                    "error": "Database agent not available (Elasticsearch not configured)",
-                }
-                return result
-            # add check that structured response is getting the correct answer
-            result = database_agent.rephrase_query(user_question)
-            return result
-        except Exception as e:
-            logger.error(f"Error in reformulate_user_query: {e}", exc_info=True)
-            result = {
-                "user_question": user_question,
-                "error": f"Error reformulating query: {str(e)}",
-            }
-            return result
-        finally:
-            execution_time_ms = (time.time() - start_time) * 1000
-            if benchmark_logger and user_query:
-                benchmark_logger.set_query(user_query)
-            if benchmark_logger and result is not None:
-                benchmark_logger.log_tool_call(
-                    tool_name="reformulate_user_query",
-                    input_params={"user_question": user_question, "user_query": user_query},
-                    result=result,
-                    execution_time_ms=execution_time_ms,
-                )
+    # @mcp.tool(
+    #     name="reformulate_user_query",
+    #     description="Rephrase a user question into an optimized search query for database retrieval via BM25 text matching and embedding vectors.",
+    # )
+    # def reformulate_user_query(
+    #     user_question: str = Field(..., description="The user original question"),
+    #     user_query: str = Field(
+    #         "", description="(Optional) The original user query, used for logging only."
+    #     ),
+    # ) -> dict[str, Any]:
+    #     start_time = time.time()
+    #     result = None
+    #     try:
+    #         if database_agent is None:
+    #             result = {
+    #                 "user_query": user_question,
+    #                 "error": "Database agent not available (Elasticsearch not configured)",
+    #             }
+    #             return result
+    #         # add check that structured response is getting the correct answer
+    #         result = database_agent.rephrase_query(user_question)
+    #         return result
+    #     except Exception as e:
+    #         logger.error(f"Error in reformulate_user_query: {e}", exc_info=True)
+    #         result = {
+    #             "user_question": user_question,
+    #             "error": f"Error reformulating query: {str(e)}",
+    #         }
+    #         return result
+    #     finally:
+    #         execution_time_ms = (time.time() - start_time) * 1000
+    #         if benchmark_logger and user_query:
+    #             benchmark_logger.set_query(user_query)
+    #         if benchmark_logger and result is not None:
+    #             benchmark_logger.log_tool_call(
+    #                 tool_name="reformulate_user_query",
+    #                 input_params={"user_question": user_question, "user_query": user_query},
+    #                 result=result,
+    #                 execution_time_ms=execution_time_ms,
+    #             )
 
     @mcp.tool(
         name="log_session",
@@ -412,67 +412,67 @@ def create_mcp_server(
                     execution_time_ms=execution_time_ms,
                 )
 
-    @mcp.tool(
-        name="get_microscope_settings",
-        description="Return the current microscope state: device property schemas, current values, and configuration groups.",
-    )
-    def get_microscope_settings(
-        user_query: str = Field(
-            "", description="(Optional) The original user query, used for logging only."
-        ),
-    ) -> dict[str, Any]:
-        start_time = time.time()
-        result = None
-        try:
-            # Get Properties of the microscope
-            logger.info("Getting microscope properties...")
-            microscope_properties_response = microscope_status.get_properties()
-            logger.info(f"Properties retrieved: {type(microscope_properties_response)}")
-
-            # Get current settings
-            logger.info("Getting microscope current status...")
-            microscope_status_response = microscope_status.get_current_status()
-            logger.info(f"Status retrieved: {type(microscope_status_response)}")
-
-            # Get configuration settings
-            logger.info("Getting microscope available configs...")
-            config_settings = microscope_status.get_available_configs()
-            logger.info(f"Configs retrieved: {type(config_settings)}")
-
-            result = {
-                "properties_schema": microscope_properties_response,
-                "current_properties_status": microscope_status_response,
-                "configuration_groups_settings": config_settings,
-            }
-            logger.info(
-                {
-                    "tool": "get_microscope_settings",
-                    "properties_schema": microscope_properties_response,
-                    "current_properties_status": microscope_status_response,
-                    "configuration_groups_settings": config_settings,
-                }
-            )
-            return result
-        except Exception as e:
-            logger.error(f"Error in get_microscope_settings: {e}", exc_info=True)
-            result = {
-                "error": f"Failed to get microscope settings: {str(e)}",
-                "properties_schema": {},
-                "current_properties_status": {},
-                "configuration_groups_settings": {},
-            }
-            return result
-        finally:
-            execution_time_ms = (time.time() - start_time) * 1000
-            if benchmark_logger and user_query:
-                benchmark_logger.set_query(user_query)
-            if benchmark_logger and result is not None:
-                benchmark_logger.log_tool_call(
-                    tool_name="get_microscope_settings",
-                    input_params={"user_query": user_query},
-                    result=result,
-                    execution_time_ms=execution_time_ms,
-                )
+    # @mcp.tool(
+    #     name="get_microscope_settings",
+    #     description="Return the current microscope state: device property schemas, current values, and configuration groups.",
+    # )
+    # def get_microscope_settings(
+    #     user_query: str = Field(
+    #         "", description="(Optional) The original user query, used for logging only."
+    #     ),
+    # ) -> dict[str, Any]:
+    #     start_time = time.time()
+    #     result = None
+    #     try:
+    #         # Get Properties of the microscope
+    #         logger.info("Getting microscope properties...")
+    #         microscope_properties_response = microscope_status.get_properties()
+    #         logger.info(f"Properties retrieved: {type(microscope_properties_response)}")
+    #
+    #         # Get current settings
+    #         logger.info("Getting microscope current status...")
+    #         microscope_status_response = microscope_status.get_current_status()
+    #         logger.info(f"Status retrieved: {type(microscope_status_response)}")
+    #
+    #         # Get configuration settings
+    #         logger.info("Getting microscope available configs...")
+    #         config_settings = microscope_status.get_available_configs()
+    #         logger.info(f"Configs retrieved: {type(config_settings)}")
+    #
+    #         result = {
+    #             "properties_schema": microscope_properties_response,
+    #             "current_properties_status": microscope_status_response,
+    #             "configuration_groups_settings": config_settings,
+    #         }
+    #         logger.info(
+    #             {
+    #                 "tool": "get_microscope_settings",
+    #                 "properties_schema": microscope_properties_response,
+    #                 "current_properties_status": microscope_status_response,
+    #                 "configuration_groups_settings": config_settings,
+    #             }
+    #         )
+    #         return result
+    #     except Exception as e:
+    #         logger.error(f"Error in get_microscope_settings: {e}", exc_info=True)
+    #         result = {
+    #             "error": f"Failed to get microscope settings: {str(e)}",
+    #             "properties_schema": {},
+    #             "current_properties_status": {},
+    #             "configuration_groups_settings": {},
+    #         }
+    #         return result
+    #     finally:
+    #         execution_time_ms = (time.time() - start_time) * 1000
+    #         if benchmark_logger and user_query:
+    #             benchmark_logger.set_query(user_query)
+    #         if benchmark_logger and result is not None:
+    #             benchmark_logger.log_tool_call(
+    #                 tool_name="get_microscope_settings",
+    #                 input_params={"user_query": user_query},
+    #                 result=result,
+    #                 execution_time_ms=execution_time_ms,
+    #             )
 
     @mcp.tool(
         name="answer_no_coding_query",
@@ -510,432 +510,432 @@ def create_mcp_server(
         except Exception as log_err:
             logger.warning(f"Failed to write run log: {log_err}")
 
-    @mcp.tool(
-        name="install_packages",
-        description=(
-            "Install one or more Python packages into the current Python environment using pip. "
-            "Call this after execute_python_code returns a 'packages_required' response, then retry execute_python_code. "
-            "Returns a per-package status indicating whether each install succeeded or failed. "
-            "⚠️ IMPORTANT — USER CONSENT REQUIRED: Before calling this tool you MUST explicitly inform the user "
-            "which packages will be installed and ask for their approval. Installing unknown or untrusted packages "
-            "can modify the active conda/uv environment and may pose a security risk. "
-            "Only proceed if the user has confirmed they recognise and trust the listed packages."
-        ),
-    )
-    def install_packages(
-        packages: list[str] = Field(
-            ..., description="List of package names to install (e.g. ['numpy', 'tifffile'])."
-        ),
-        user_query: str = Field(
-            "", description="(Optional) The original user query, used for logging only."
-        ),
-    ) -> dict[str, Any]:
-        start_time = time.time()
-        result = None
-        try:
-            results = {}
-            for pkg in packages:
-                success = executor._install_library(pkg)
-                results[pkg] = "installed" if success else "failed"
-                if success:
-                    logger.info(f"Package '{pkg}' installed successfully.")
-                else:
-                    logger.warning(f"Package '{pkg}' installation failed.")
-            all_ok = all(v == "installed" for v in results.values())
-            result = {
-                "status": "ok" if all_ok else "partial_failure",
-                "packages": results,
-                "message": (
-                    "All packages installed. You can now retry execute_python_code."
-                    if all_ok
-                    else f"Some packages failed to install: {[p for p, s in results.items() if s == 'failed']}. "
-                    "Try installing them manually."
-                ),
-            }
-            return result
-        except Exception as e:
-            logger.error(f"Error in install_packages: {e}", exc_info=True)
-            result = {"status": "error", "error": str(e)}
-            return result
-        finally:
-            execution_time_ms = (time.time() - start_time) * 1000
-            if benchmark_logger and user_query:
-                benchmark_logger.set_query(user_query)
-            if benchmark_logger and result is not None:
-                benchmark_logger.log_tool_call(
-                    tool_name="install_packages",
-                    input_params={"packages": packages, "user_query": user_query},
-                    result=result,
-                    execution_time_ms=execution_time_ms,
-                )
-
-    @mcp.tool(
-        name="execute_python_code",
-        description=(
-            "Execute Python code on the microscope. The code runs in a namespace with a pre-configured `mmc` instance (CMMCorePlus/UniMMCore). Returns execution output or error details. "
-            "IMPORTANT: Choose execution_mode carefully — using the wrong mode is a common source of bugs. "
-            "Use 'live' whenever your code does multiple hardware operations that depend on each other (e.g., move stage then snap, or any loop with snap+analyze+move). "
-            "Use 'buffered' only for simple single-shot operations or pure analysis of already-captured data. "
-            "FEEDBACK WORKFLOWS (tracking, adaptive acquisition, timelapse with analysis): Use `run_mda_with_feedback(events, on_frame)` — a pre-configured helper available in the namespace. "
-            "It runs pymmcore-plus MDA with a generator of MDAEvent objects, calling on_frame(image, event, metadata) synchronously after each frame. "
-            "The generator can read shared state updated by on_frame to adapt subsequent events (e.g., re-center on a moving cell). "
-            "This is the recommended approach over manual time.sleep() loops — it uses the microscope's hardware timing and handles all napari compatibility automatically. "
-            "Requires execution_mode='live'. "
-            "SMART ACQUISITION HELPERS (also available in namespace, require execution_mode='live'): "
-            "- `center_on_cell(pixel_size_um=0.25, threshold_sigma=2.5, min_peak_above_bg=30.0, max_iterations=2)` → snap, find brightest region, re-center stage on it iteratively. Returns dict with image, centered (bool), peak, offset_um, centroid_px. "
-            "- `find_bright_centroid(image, threshold_sigma=2.5)` → returns (cy, cx, area_px, peak) of bright region centroid. "
-            "- `detect_cells(image, threshold_sigma=2.5, min_area_px=50, pixel_size_um=1.0, fill_holes=True, global_stats=None)` → returns list of cell dicts with centroid_px, area_um2, peak, bbox. Use fill_holes=True for brightfield. For multi-frame stacks, compute global (mean, std) once and pass as global_stats to avoid per-frame threshold drift. "
-            "SLM / TARGETED STIMULATION: For optogenetics, FRAP, photoactivation — build pixel-accurate masks from segmentation (NOT bounding boxes). "
-            "The SLM mask is 512x512 uint8 in viewport/camera space. Set via `mmc.setSLMDevice('SLM'); mmc.setSLMImage('SLM', mask); mmc.displaySLMImage('SLM')`. "
-            "For dynamic experiments, update the mask each frame in the on_frame callback using `mmc.setSLMImage('SLM', new_mask); mmc.displaySLMImage('SLM')`. Always use the standard API — never use virtual-microscope internals like bridge.set_slm_mask(). "
-            "Save mask stacks as 3D TIFFs alongside timelapses so the user can verify targeting."
-        ),
-    )
-    def execute_python_code(
-        code: str = Field(
-            ...,
-            description=(
-                "Python code to execute. Constraints: "
-                "- Use `mmc` (pre-configured CMMCorePlus instance) for hardware calls; do NOT re-instantiate it. "
-                "- `run_mda_with_feedback(events, on_frame)` is available for MDA-based feedback workflows. "
-                "- `center_on_cell(**kw)`, `find_bright_centroid(image)`, `detect_cells(image)` are available for smart acquisition. "
-                "  events: Iterable[MDAEvent] (list or generator). on_frame: callback(image, event, metadata). "
-                "  Returns list of (image, event, metadata) if on_frame is None. "
-                "  MDAEvent fields: x_pos, y_pos (stage um), exposure (ms), min_start_time (s from MDA start), "
-                "  index (dict e.g. {'t': 0, 'p': 0}), metadata (dict e.g. {'cell_id': 0}). "
-                "  Generator pattern: yield MDAEvent(...) in a loop; on_frame updates shared state; generator reads it for next yield. "
-                "- Do NOT access `viewer` directly (runs in daemon thread, no Qt/OpenGL access); use viewer_* tools instead. "
-                "- Print results so they appear in the output. "
-                "- After mmc.setXYPosition(), always call mmc.waitForDevice(mmc.getXYStageDevice()) before snapping. "
-                "- To save multi-dimensional data (timelapse, multi-position), save as TIFF with tifffile.imwrite() then use viewer_add_image to display."
-            ),
-        ),
-        execution_mode: Annotated[
-            Literal["buffered", "live"],
-            Field(
-                description=(
-                    "Execution mode — CRITICAL choice: "
-                    "'buffered': hardware calls are intercepted and replayed atomically after code finishes. Redundant calls are deduplicated. "
-                    "WARNING: In buffered mode, all snapImage() calls produce the SAME image because they execute at the same moment. "
-                    "Use buffered ONLY for single-snap analysis or non-hardware code. "
-                    "'live': direct hardware access, each call executes immediately. "
-                    "REQUIRED for: any workflow involving move-then-snap, timelapse, tracking, multi-position imaging, "
-                    "run_mda_with_feedback(), or any code where hardware state must change between operations."
-                )
-            ),
-        ] = "buffered",
-        user_query: str = Field(
-            "", description="(Optional) The original user query, used for logging only."
-        ),
-        strategy: str = Field("", description="(Optional) The strategy used, for logging only."),
-    ) -> dict[str, Any]:
-        """
-        Prepares and executes Python code using the Execute agent.
-        Returns a dictionary with 'output' (the execution result) and 'error' (if any).
-        """
-        start_time = time.time()
-        result = None
-        try:
-            prepare_code_to_run = code
-
-            # Check for missing packages before running — require explicit approval
-            missing = executor._get_missing_imports(prepare_code_to_run)
-            if missing:
-                result = {
-                    "status": "packages_required",
-                    "missing_packages": missing,
-                    "message": (
-                        f"The following packages are not installed: {', '.join(missing)}. "
-                        "Use the install_packages tool to install them, then retry execute_python_code."
-                    ),
-                }
-                return result
-
-            cache_idx = event_cache.snapshot() if event_cache is not None else None
-            execution_output = executor.run_code_new(prepare_code_to_run, execution_mode)
-
-            # Append hardware events that fired during execution
-            if cache_idx is not None:
-                new_events = event_cache.events_since(cache_idx)
-                event_log = event_cache.format_events(new_events)
-                if event_log:
-                    execution_output = execution_output + event_log
-
-            if "Error" in execution_output:
-                logger.error(
-                    {"tool": "execute_python_code", "code": code, "error": execution_output}
-                )
-                _log_run(code, None, execution_output, execution_mode, user_query, strategy)
-                result = {"code": code, "error": execution_output}
-                return result
-            elif "viewer" in execution_output:
-                err_msg = "Code references 'viewer' or 'napari.current_viewer()'. These are blocked because MCP tools run on a daemon thread — accessing the napari GUI directly will crash it. Use viewer_* MCP tools instead, or get_layer_data to export layer data to a TIFF file."
-                logger.info({"tool": "execute_python_code", "code": code, "error": err_msg})
-                _log_run(code, None, err_msg, execution_mode, user_query, strategy)
-                result = {"code": code, "error": err_msg}
-                return result
-            else:
-                logger.info(
-                    {"tool": "execute_python_code", "code": code, "output": execution_output}
-                )
-                _log_run(code, execution_output, None, execution_mode, user_query, strategy)
-                result = {"code": code, "output": execution_output}
-                return result
-        except Exception as e:
-            err_msg = f"Code preparation/execution failed: {e}"
-            logger.error({"tool": "execute_python_code", "code": code, "error": err_msg})
-            _log_run(code, None, err_msg, execution_mode, user_query, strategy)
-            result = {"code": code, "error": err_msg}
-            return result
-        finally:
-            execution_time_ms = (time.time() - start_time) * 1000
-            if benchmark_logger and user_query:
-                benchmark_logger.set_query(user_query)
-            if benchmark_logger and result is not None:
-                benchmark_logger.log_tool_call(
-                    tool_name="execute_python_code",
-                    input_params={
-                        "code": code[:100] + "..." if len(code) > 100 else code,
-                        "execution_mode": execution_mode,
-                        "user_query": user_query,
-                    },
-                    result=result,
-                    execution_time_ms=execution_time_ms,
-                )
+    # @mcp.tool(
+    #     name="install_packages",
+    #     description=(
+    #         "Install one or more Python packages into the current Python environment using pip. "
+    #         "Call this after execute_python_code returns a 'packages_required' response, then retry execute_python_code. "
+    #         "Returns a per-package status indicating whether each install succeeded or failed. "
+    #         "⚠️ IMPORTANT — USER CONSENT REQUIRED: Before calling this tool you MUST explicitly inform the user "
+    #         "which packages will be installed and ask for their approval. Installing unknown or untrusted packages "
+    #         "can modify the active conda/uv environment and may pose a security risk. "
+    #         "Only proceed if the user has confirmed they recognise and trust the listed packages."
+    #     ),
+    # )
+    # def install_packages(
+    #     packages: list[str] = Field(
+    #         ..., description="List of package names to install (e.g. ['numpy', 'tifffile'])."
+    #     ),
+    #     user_query: str = Field(
+    #         "", description="(Optional) The original user query, used for logging only."
+    #     ),
+    # ) -> dict[str, Any]:
+    #     start_time = time.time()
+    #     result = None
+    #     try:
+    #         results = {}
+    #         for pkg in packages:
+    #             success = executor._install_library(pkg)
+    #             results[pkg] = "installed" if success else "failed"
+    #             if success:
+    #                 logger.info(f"Package '{pkg}' installed successfully.")
+    #             else:
+    #                 logger.warning(f"Package '{pkg}' installation failed.")
+    #         all_ok = all(v == "installed" for v in results.values())
+    #         result = {
+    #             "status": "ok" if all_ok else "partial_failure",
+    #             "packages": results,
+    #             "message": (
+    #                 "All packages installed. You can now retry execute_python_code."
+    #                 if all_ok
+    #                 else f"Some packages failed to install: {[p for p, s in results.items() if s == 'failed']}. "
+    #                 "Try installing them manually."
+    #             ),
+    #         }
+    #         return result
+    #     except Exception as e:
+    #         logger.error(f"Error in install_packages: {e}", exc_info=True)
+    #         result = {"status": "error", "error": str(e)}
+    #         return result
+    #     finally:
+    #         execution_time_ms = (time.time() - start_time) * 1000
+    #         if benchmark_logger and user_query:
+    #             benchmark_logger.set_query(user_query)
+    #         if benchmark_logger and result is not None:
+    #             benchmark_logger.log_tool_call(
+    #                 tool_name="install_packages",
+    #                 input_params={"packages": packages, "user_query": user_query},
+    #                 result=result,
+    #                 execution_time_ms=execution_time_ms,
+    #             )
+    #
+    # @mcp.tool(
+    #     name="execute_python_code",
+    #     description=(
+    #         "Execute Python code on the microscope. The code runs in a namespace with a pre-configured `mmc` instance (CMMCorePlus/UniMMCore). Returns execution output or error details. "
+    #         "IMPORTANT: Choose execution_mode carefully — using the wrong mode is a common source of bugs. "
+    #         "Use 'live' whenever your code does multiple hardware operations that depend on each other (e.g., move stage then snap, or any loop with snap+analyze+move). "
+    #         "Use 'buffered' only for simple single-shot operations or pure analysis of already-captured data. "
+    #         "FEEDBACK WORKFLOWS (tracking, adaptive acquisition, timelapse with analysis): Use `run_mda_with_feedback(events, on_frame)` — a pre-configured helper available in the namespace. "
+    #         "It runs pymmcore-plus MDA with a generator of MDAEvent objects, calling on_frame(image, event, metadata) synchronously after each frame. "
+    #         "The generator can read shared state updated by on_frame to adapt subsequent events (e.g., re-center on a moving cell). "
+    #         "This is the recommended approach over manual time.sleep() loops — it uses the microscope's hardware timing and handles all napari compatibility automatically. "
+    #         "Requires execution_mode='live'. "
+    #         "SMART ACQUISITION HELPERS (also available in namespace, require execution_mode='live'): "
+    #         "- `center_on_cell(pixel_size_um=0.25, threshold_sigma=2.5, min_peak_above_bg=30.0, max_iterations=2)` → snap, find brightest region, re-center stage on it iteratively. Returns dict with image, centered (bool), peak, offset_um, centroid_px. "
+    #         "- `find_bright_centroid(image, threshold_sigma=2.5)` → returns (cy, cx, area_px, peak) of bright region centroid. "
+    #         "- `detect_cells(image, threshold_sigma=2.5, min_area_px=50, pixel_size_um=1.0, fill_holes=True, global_stats=None)` → returns list of cell dicts with centroid_px, area_um2, peak, bbox. Use fill_holes=True for brightfield. For multi-frame stacks, compute global (mean, std) once and pass as global_stats to avoid per-frame threshold drift. "
+    #         "SLM / TARGETED STIMULATION: For optogenetics, FRAP, photoactivation — build pixel-accurate masks from segmentation (NOT bounding boxes). "
+    #         "The SLM mask is 512x512 uint8 in viewport/camera space. Set via `mmc.setSLMDevice('SLM'); mmc.setSLMImage('SLM', mask); mmc.displaySLMImage('SLM')`. "
+    #         "For dynamic experiments, update the mask each frame in the on_frame callback using `mmc.setSLMImage('SLM', new_mask); mmc.displaySLMImage('SLM')`. Always use the standard API — never use virtual-microscope internals like bridge.set_slm_mask(). "
+    #         "Save mask stacks as 3D TIFFs alongside timelapses so the user can verify targeting."
+    #     ),
+    # )
+    # def execute_python_code(
+    #     code: str = Field(
+    #         ...,
+    #         description=(
+    #             "Python code to execute. Constraints: "
+    #             "- Use `mmc` (pre-configured CMMCorePlus instance) for hardware calls; do NOT re-instantiate it. "
+    #             "- `run_mda_with_feedback(events, on_frame)` is available for MDA-based feedback workflows. "
+    #             "- `center_on_cell(**kw)`, `find_bright_centroid(image)`, `detect_cells(image)` are available for smart acquisition. "
+    #             "  events: Iterable[MDAEvent] (list or generator). on_frame: callback(image, event, metadata). "
+    #             "  Returns list of (image, event, metadata) if on_frame is None. "
+    #             "  MDAEvent fields: x_pos, y_pos (stage um), exposure (ms), min_start_time (s from MDA start), "
+    #             "  index (dict e.g. {'t': 0, 'p': 0}), metadata (dict e.g. {'cell_id': 0}). "
+    #             "  Generator pattern: yield MDAEvent(...) in a loop; on_frame updates shared state; generator reads it for next yield. "
+    #             "- Do NOT access `viewer` directly (runs in daemon thread, no Qt/OpenGL access); use viewer_* tools instead. "
+    #             "- Print results so they appear in the output. "
+    #             "- After mmc.setXYPosition(), always call mmc.waitForDevice(mmc.getXYStageDevice()) before snapping. "
+    #             "- To save multi-dimensional data (timelapse, multi-position), save as TIFF with tifffile.imwrite() then use viewer_add_image to display."
+    #         ),
+    #     ),
+    #     execution_mode: Annotated[
+    #         Literal["buffered", "live"],
+    #         Field(
+    #             description=(
+    #                 "Execution mode — CRITICAL choice: "
+    #                 "'buffered': hardware calls are intercepted and replayed atomically after code finishes. Redundant calls are deduplicated. "
+    #                 "WARNING: In buffered mode, all snapImage() calls produce the SAME image because they execute at the same moment. "
+    #                 "Use buffered ONLY for single-snap analysis or non-hardware code. "
+    #                 "'live': direct hardware access, each call executes immediately. "
+    #                 "REQUIRED for: any workflow involving move-then-snap, timelapse, tracking, multi-position imaging, "
+    #                 "run_mda_with_feedback(), or any code where hardware state must change between operations."
+    #             )
+    #         ),
+    #     ] = "buffered",
+    #     user_query: str = Field(
+    #         "", description="(Optional) The original user query, used for logging only."
+    #     ),
+    #     strategy: str = Field("", description="(Optional) The strategy used, for logging only."),
+    # ) -> dict[str, Any]:
+    #     """
+    #     Prepares and executes Python code using the Execute agent.
+    #     Returns a dictionary with 'output' (the execution result) and 'error' (if any).
+    #     """
+    #     start_time = time.time()
+    #     result = None
+    #     try:
+    #         prepare_code_to_run = code
+    #
+    #         # Check for missing packages before running — require explicit approval
+    #         missing = executor._get_missing_imports(prepare_code_to_run)
+    #         if missing:
+    #             result = {
+    #                 "status": "packages_required",
+    #                 "missing_packages": missing,
+    #                 "message": (
+    #                     f"The following packages are not installed: {', '.join(missing)}. "
+    #                     "Use the install_packages tool to install them, then retry execute_python_code."
+    #                 ),
+    #             }
+    #             return result
+    #
+    #         cache_idx = event_cache.snapshot() if event_cache is not None else None
+    #         execution_output = executor.run_code_new(prepare_code_to_run, execution_mode)
+    #
+    #         # Append hardware events that fired during execution
+    #         if cache_idx is not None:
+    #             new_events = event_cache.events_since(cache_idx)
+    #             event_log = event_cache.format_events(new_events)
+    #             if event_log:
+    #                 execution_output = execution_output + event_log
+    #
+    #         if "Error" in execution_output:
+    #             logger.error(
+    #                 {"tool": "execute_python_code", "code": code, "error": execution_output}
+    #             )
+    #             _log_run(code, None, execution_output, execution_mode, user_query, strategy)
+    #             result = {"code": code, "error": execution_output}
+    #             return result
+    #         elif "viewer" in execution_output:
+    #             err_msg = "Code references 'viewer' or 'napari.current_viewer()'. These are blocked because MCP tools run on a daemon thread — accessing the napari GUI directly will crash it. Use viewer_* MCP tools instead, or get_layer_data to export layer data to a TIFF file."
+    #             logger.info({"tool": "execute_python_code", "code": code, "error": err_msg})
+    #             _log_run(code, None, err_msg, execution_mode, user_query, strategy)
+    #             result = {"code": code, "error": err_msg}
+    #             return result
+    #         else:
+    #             logger.info(
+    #                 {"tool": "execute_python_code", "code": code, "output": execution_output}
+    #             )
+    #             _log_run(code, execution_output, None, execution_mode, user_query, strategy)
+    #             result = {"code": code, "output": execution_output}
+    #             return result
+    #     except Exception as e:
+    #         err_msg = f"Code preparation/execution failed: {e}"
+    #         logger.error({"tool": "execute_python_code", "code": code, "error": err_msg})
+    #         _log_run(code, None, err_msg, execution_mode, user_query, strategy)
+    #         result = {"code": code, "error": err_msg}
+    #         return result
+    #     finally:
+    #         execution_time_ms = (time.time() - start_time) * 1000
+    #         if benchmark_logger and user_query:
+    #             benchmark_logger.set_query(user_query)
+    #         if benchmark_logger and result is not None:
+    #             benchmark_logger.log_tool_call(
+    #                 tool_name="execute_python_code",
+    #                 input_params={
+    #                     "code": code[:100] + "..." if len(code) > 100 else code,
+    #                     "execution_mode": execution_mode,
+    #                     "user_query": user_query,
+    #                 },
+    #                 result=result,
+    #                 execution_time_ms=execution_time_ms,
+    #             )
 
     # ------------------------------------------#
     # Simple microscope tools
     # ------------------------------------------#
-    def _get_raw_mmc():
-        """Get the raw mmc instance (CMMCorePlus or UniMMCore) from the executor namespace."""
-        mmc_wrapper = executor.namespace["mmc"]
-        return mmc_wrapper._mmc if hasattr(mmc_wrapper, "_mmc") else mmc_wrapper
-
-    @mcp.tool(
-        name="snap_image",
-        description=(
-            "Snap a single image with the current camera settings. Returns image metadata only (shape, dtype, min, max, mean) — NOT the pixel data itself. "
-            "The image is also displayed automatically in the napari-micromanager live view. "
-            "To access actual pixel data for analysis, use execute_python_code with mmc.snapImage() + mmc.getImage() instead."
-        ),
-    )
-    def snap_image(
-        user_query: str = Field(
-            "", description="(Optional) The original user query, used for logging only."
-        ),
-    ) -> dict[str, Any]:
-        start_time = time.time()
-        result = None
-        try:
-            raw_mmc = _get_raw_mmc()
-            try:
-                raw_mmc.snapImage()
-                img = raw_mmc.getImage()
-            except RuntimeError:
-                # Fallback: some cameras (e.g. Photometrics PVCAM) fail on
-                # snapImage() but work with single-frame sequence acquisition.
-                logger.warning(
-                    "snapImage() failed, falling back to single-frame sequence acquisition"
-                )
-                raw_mmc.clearCircularBuffer()
-                raw_mmc.startSequenceAcquisition(1, 0, True)
-                timeout_ms = raw_mmc.getExposure() + 5000
-                start_wait = time.time()
-                while raw_mmc.isSequenceRunning():
-                    time.sleep(0.05)
-                    if (time.time() - start_wait) * 1000 > timeout_ms:
-                        raw_mmc.stopSequenceAcquisition()
-                        raise RuntimeError("Sequence acquisition timed out") from None
-                if raw_mmc.getRemainingImageCount() < 1:
-                    raise RuntimeError(
-                        "No image returned from sequence acquisition fallback"
-                    ) from None
-                img = raw_mmc.popNextImage()
-            result = {
-                "status": "success",
-                "shape": list(img.shape),
-                "dtype": str(img.dtype),
-                "min": float(np.min(img)),
-                "max": float(np.max(img)),
-                "mean": float(np.mean(img)),
-            }
-            return result
-        except Exception as e:
-            result = {"status": "error", "message": str(e)}
-            return result
-        finally:
-            execution_time_ms = (time.time() - start_time) * 1000
-            if benchmark_logger and user_query:
-                benchmark_logger.set_query(user_query)
-            if benchmark_logger and result is not None:
-                benchmark_logger.log_tool_call(
-                    tool_name="snap_image",
-                    input_params={"user_query": user_query},
-                    result=result,
-                    execution_time_ms=execution_time_ms,
-                )
-
-    @mcp.tool(
-        name="move_stage",
-        description=(
-            "Move the XY stage to an absolute or relative position. Returns the final stage position after the move. "
-            "Coordinate system: stage position defines the center of the camera viewport in world coordinates (micrometers). "
-            "The mapping between pixels and world coordinates: world = stage + (pixel - 256) * pixel_size_um. "
-            "You must determine pixel_size_um for the current setup (e.g., via calibration or get_microscope_settings). "
-            "To center a detected object at pixel (px, py): compute world_x = stage_x + (px - 256) * pixel_size_um, then move directly to (world_x, world_y). "
-            "This tool automatically waits for the stage to finish moving before returning."
-        ),
-    )
-    def move_stage(
-        x: float = Field(
-            ...,
-            description="X coordinate (absolute) or X displacement (relative), in micrometers. Stage X maps to image columns.",
-        ),
-        y: float = Field(
-            ...,
-            description="Y coordinate (absolute) or Y displacement (relative), in micrometers. Stage Y maps to image rows.",
-        ),
-        relative: bool = Field(
-            False,
-            description="If True, move relative to current position. If False, move to absolute coordinates.",
-        ),
-        user_query: str = Field(
-            "", description="(Optional) The original user query, used for logging only."
-        ),
-    ) -> dict[str, Any]:
-        start_time = time.time()
-        result = None
-        try:
-            raw_mmc = _get_raw_mmc()
-            if relative:
-                raw_mmc.setRelativeXYPosition(x, y)
-            else:
-                raw_mmc.setXYPosition(x, y)
-            raw_mmc.waitForDevice(raw_mmc.getXYStageDevice())
-            final_x, final_y = raw_mmc.getXPosition(), raw_mmc.getYPosition()
-            result = {"status": "success", "x": final_x, "y": final_y}
-            return result
-        except Exception as e:
-            result = {"status": "error", "message": str(e)}
-            return result
-        finally:
-            execution_time_ms = (time.time() - start_time) * 1000
-            if benchmark_logger and user_query:
-                benchmark_logger.set_query(user_query)
-            if benchmark_logger and result is not None:
-                benchmark_logger.log_tool_call(
-                    tool_name="move_stage",
-                    input_params={"x": x, "y": y, "relative": relative, "user_query": user_query},
-                    result=result,
-                    execution_time_ms=execution_time_ms,
-                )
-
-    @mcp.tool(
-        name="set_objective",
-        description="Switch the objective lens by setting the state label on the Objective device. Returns the new current objective.",
-    )
-    def set_objective(
-        label: str = Field(
-            ...,
-            description="Objective label to switch to (e.g. 'Nikon 10X S Fluor', '20x'). Use get_microscope_settings to discover available labels.",
-        ),
-        user_query: str = Field(
-            "", description="(Optional) The original user query, used for logging only."
-        ),
-    ) -> dict[str, Any]:
-        start_time = time.time()
-        result = None
-        try:
-            raw_mmc = _get_raw_mmc()
-            # Find the Objective state device
-            obj_device = None
-            for dev in raw_mmc.getLoadedDevices():
-                dev_type = raw_mmc.getDeviceType(dev)
-                # DeviceType 6 = StateDevice
-                if "objective" in dev or (
-                    hasattr(dev_type, "value") and dev_type.value == 6 and "objective" in dev
-                ):
-                    obj_device = dev
-                    break
-            if obj_device is None:
-                # Fallback: try common names
-                for name in ["Objective", "ObjectiveTurret", "Nosepiece"]:
-                    try:
-                        raw_mmc.getDeviceType(name)
-                        obj_device = name
-                        break
-                    except Exception:
-                        continue
-            if obj_device is None:
-                result = {
-                    "status": "error",
-                    "message": "Could not find an Objective device. Use get_microscope_settings to check available devices.",
-                }
-                return result
-            raw_mmc.setProperty(obj_device, "Label", label)
-            raw_mmc.waitForDevice(obj_device)
-            current = raw_mmc.getProperty(obj_device, "Label")
-            result = {"status": "success", "device": obj_device, "objective": current}
-            return result
-        except Exception as e:
-            result = {"status": "error", "message": str(e)}
-            return result
-        finally:
-            execution_time_ms = (time.time() - start_time) * 1000
-            if benchmark_logger and user_query:
-                benchmark_logger.set_query(user_query)
-            if benchmark_logger and result is not None:
-                benchmark_logger.log_tool_call(
-                    tool_name="set_objective",
-                    input_params={"label": label, "user_query": user_query},
-                    result=result,
-                    execution_time_ms=execution_time_ms,
-                )
-
-    @mcp.tool(
-        name="get_stage_position",
-        description=(
-            "Return the current X, Y, and Z stage positions in micrometers. "
-            "The stage position defines the center of the camera viewport in world coordinates. "
-            "An object at pixel (px, py) in an image is at world position (stage_x + (px - 256) * pixel_size_um, stage_y + (py - 256) * pixel_size_um), "
-            "where pixel_size_um depends on the current objective and camera configuration."
-        ),
-    )
-    def get_stage_position(
-        user_query: str = Field(
-            "", description="(Optional) The original user query, used for logging only."
-        ),
-    ) -> dict[str, Any]:
-        start_time = time.time()
-        result = None
-        try:
-            raw_mmc = _get_raw_mmc()
-            x = raw_mmc.getXPosition()
-            y = raw_mmc.getYPosition()
-            try:
-                z = (
-                    raw_mmc.getZPosition()
-                    if hasattr(raw_mmc, "getZPosition")
-                    else raw_mmc.getPosition()
-                )
-            except Exception:
-                z = None
-            result = {"status": "success", "x": x, "y": y, "z": z}
-            return result
-        except Exception as e:
-            result = {"status": "error", "message": str(e)}
-            return result
-        finally:
-            execution_time_ms = (time.time() - start_time) * 1000
-            if benchmark_logger and user_query:
-                benchmark_logger.set_query(user_query)
-            if benchmark_logger and result is not None:
-                benchmark_logger.log_tool_call(
-                    tool_name="get_stage_position",
-                    input_params={"user_query": user_query},
-                    result=result,
-                    execution_time_ms=execution_time_ms,
-                )
+    # def _get_raw_mmc():
+    #     """Get the raw mmc instance (CMMCorePlus or UniMMCore) from the executor namespace."""
+    #     mmc_wrapper = executor.namespace["mmc"]
+    #     return mmc_wrapper._mmc if hasattr(mmc_wrapper, "_mmc") else mmc_wrapper
+    #
+    # @mcp.tool(
+    #     name="snap_image",
+    #     description=(
+    #         "Snap a single image with the current camera settings. Returns image metadata only (shape, dtype, min, max, mean) — NOT the pixel data itself. "
+    #         "The image is also displayed automatically in the napari-micromanager live view. "
+    #         "To access actual pixel data for analysis, use execute_python_code with mmc.snapImage() + mmc.getImage() instead."
+    #     ),
+    # )
+    # def snap_image(
+    #     user_query: str = Field(
+    #         "", description="(Optional) The original user query, used for logging only."
+    #     ),
+    # ) -> dict[str, Any]:
+    #     start_time = time.time()
+    #     result = None
+    #     try:
+    #         raw_mmc = _get_raw_mmc()
+    #         try:
+    #             raw_mmc.snapImage()
+    #             img = raw_mmc.getImage()
+    #         except RuntimeError:
+    #             # Fallback: some cameras (e.g. Photometrics PVCAM) fail on
+    #             # snapImage() but work with single-frame sequence acquisition.
+    #             logger.warning(
+    #                 "snapImage() failed, falling back to single-frame sequence acquisition"
+    #             )
+    #             raw_mmc.clearCircularBuffer()
+    #             raw_mmc.startSequenceAcquisition(1, 0, True)
+    #             timeout_ms = raw_mmc.getExposure() + 5000
+    #             start_wait = time.time()
+    #             while raw_mmc.isSequenceRunning():
+    #                 time.sleep(0.05)
+    #                 if (time.time() - start_wait) * 1000 > timeout_ms:
+    #                     raw_mmc.stopSequenceAcquisition()
+    #                     raise RuntimeError("Sequence acquisition timed out") from None
+    #             if raw_mmc.getRemainingImageCount() < 1:
+    #                 raise RuntimeError(
+    #                     "No image returned from sequence acquisition fallback"
+    #                 ) from None
+    #             img = raw_mmc.popNextImage()
+    #         result = {
+    #             "status": "success",
+    #             "shape": list(img.shape),
+    #             "dtype": str(img.dtype),
+    #             "min": float(np.min(img)),
+    #             "max": float(np.max(img)),
+    #             "mean": float(np.mean(img)),
+    #         }
+    #         return result
+    #     except Exception as e:
+    #         result = {"status": "error", "message": str(e)}
+    #         return result
+    #     finally:
+    #         execution_time_ms = (time.time() - start_time) * 1000
+    #         if benchmark_logger and user_query:
+    #             benchmark_logger.set_query(user_query)
+    #         if benchmark_logger and result is not None:
+    #             benchmark_logger.log_tool_call(
+    #                 tool_name="snap_image",
+    #                 input_params={"user_query": user_query},
+    #                 result=result,
+    #                 execution_time_ms=execution_time_ms,
+    #             )
+    #
+    # @mcp.tool(
+    #     name="move_stage",
+    #     description=(
+    #         "Move the XY stage to an absolute or relative position. Returns the final stage position after the move. "
+    #         "Coordinate system: stage position defines the center of the camera viewport in world coordinates (micrometers). "
+    #         "The mapping between pixels and world coordinates: world = stage + (pixel - 256) * pixel_size_um. "
+    #         "You must determine pixel_size_um for the current setup (e.g., via calibration or get_microscope_settings). "
+    #         "To center a detected object at pixel (px, py): compute world_x = stage_x + (px - 256) * pixel_size_um, then move directly to (world_x, world_y). "
+    #         "This tool automatically waits for the stage to finish moving before returning."
+    #     ),
+    # )
+    # def move_stage(
+    #     x: float = Field(
+    #         ...,
+    #         description="X coordinate (absolute) or X displacement (relative), in micrometers. Stage X maps to image columns.",
+    #     ),
+    #     y: float = Field(
+    #         ...,
+    #         description="Y coordinate (absolute) or Y displacement (relative), in micrometers. Stage Y maps to image rows.",
+    #     ),
+    #     relative: bool = Field(
+    #         False,
+    #         description="If True, move relative to current position. If False, move to absolute coordinates.",
+    #     ),
+    #     user_query: str = Field(
+    #         "", description="(Optional) The original user query, used for logging only."
+    #     ),
+    # ) -> dict[str, Any]:
+    #     start_time = time.time()
+    #     result = None
+    #     try:
+    #         raw_mmc = _get_raw_mmc()
+    #         if relative:
+    #             raw_mmc.setRelativeXYPosition(x, y)
+    #         else:
+    #             raw_mmc.setXYPosition(x, y)
+    #         raw_mmc.waitForDevice(raw_mmc.getXYStageDevice())
+    #         final_x, final_y = raw_mmc.getXPosition(), raw_mmc.getYPosition()
+    #         result = {"status": "success", "x": final_x, "y": final_y}
+    #         return result
+    #     except Exception as e:
+    #         result = {"status": "error", "message": str(e)}
+    #         return result
+    #     finally:
+    #         execution_time_ms = (time.time() - start_time) * 1000
+    #         if benchmark_logger and user_query:
+    #             benchmark_logger.set_query(user_query)
+    #         if benchmark_logger and result is not None:
+    #             benchmark_logger.log_tool_call(
+    #                 tool_name="move_stage",
+    #                 input_params={"x": x, "y": y, "relative": relative, "user_query": user_query},
+    #                 result=result,
+    #                 execution_time_ms=execution_time_ms,
+    #             )
+    #
+    # @mcp.tool(
+    #     name="set_objective",
+    #     description="Switch the objective lens by setting the state label on the Objective device. Returns the new current objective.",
+    # )
+    # def set_objective(
+    #     label: str = Field(
+    #         ...,
+    #         description="Objective label to switch to (e.g. 'Nikon 10X S Fluor', '20x'). Use get_microscope_settings to discover available labels.",
+    #     ),
+    #     user_query: str = Field(
+    #         "", description="(Optional) The original user query, used for logging only."
+    #     ),
+    # ) -> dict[str, Any]:
+    #     start_time = time.time()
+    #     result = None
+    #     try:
+    #         raw_mmc = _get_raw_mmc()
+    #         # Find the Objective state device
+    #         obj_device = None
+    #         for dev in raw_mmc.getLoadedDevices():
+    #             dev_type = raw_mmc.getDeviceType(dev)
+    #             # DeviceType 6 = StateDevice
+    #             if "objective" in dev or (
+    #                 hasattr(dev_type, "value") and dev_type.value == 6 and "objective" in dev
+    #             ):
+    #                 obj_device = dev
+    #                 break
+    #         if obj_device is None:
+    #             # Fallback: try common names
+    #             for name in ["Objective", "ObjectiveTurret", "Nosepiece"]:
+    #                 try:
+    #                     raw_mmc.getDeviceType(name)
+    #                     obj_device = name
+    #                     break
+    #                 except Exception:
+    #                     continue
+    #         if obj_device is None:
+    #             result = {
+    #                 "status": "error",
+    #                 "message": "Could not find an Objective device. Use get_microscope_settings to check available devices.",
+    #             }
+    #             return result
+    #         raw_mmc.setProperty(obj_device, "Label", label)
+    #         raw_mmc.waitForDevice(obj_device)
+    #         current = raw_mmc.getProperty(obj_device, "Label")
+    #         result = {"status": "success", "device": obj_device, "objective": current}
+    #         return result
+    #     except Exception as e:
+    #         result = {"status": "error", "message": str(e)}
+    #         return result
+    #     finally:
+    #         execution_time_ms = (time.time() - start_time) * 1000
+    #         if benchmark_logger and user_query:
+    #             benchmark_logger.set_query(user_query)
+    #         if benchmark_logger and result is not None:
+    #             benchmark_logger.log_tool_call(
+    #                 tool_name="set_objective",
+    #                 input_params={"label": label, "user_query": user_query},
+    #                 result=result,
+    #                 execution_time_ms=execution_time_ms,
+    #             )
+    #
+    # @mcp.tool(
+    #     name="get_stage_position",
+    #     description=(
+    #         "Return the current X, Y, and Z stage positions in micrometers. "
+    #         "The stage position defines the center of the camera viewport in world coordinates. "
+    #         "An object at pixel (px, py) in an image is at world position (stage_x + (px - 256) * pixel_size_um, stage_y + (py - 256) * pixel_size_um), "
+    #         "where pixel_size_um depends on the current objective and camera configuration."
+    #     ),
+    # )
+    # def get_stage_position(
+    #     user_query: str = Field(
+    #         "", description="(Optional) The original user query, used for logging only."
+    #     ),
+    # ) -> dict[str, Any]:
+    #     start_time = time.time()
+    #     result = None
+    #     try:
+    #         raw_mmc = _get_raw_mmc()
+    #         x = raw_mmc.getXPosition()
+    #         y = raw_mmc.getYPosition()
+    #         try:
+    #             z = (
+    #                 raw_mmc.getZPosition()
+    #                 if hasattr(raw_mmc, "getZPosition")
+    #                 else raw_mmc.getPosition()
+    #             )
+    #         except Exception:
+    #             z = None
+    #         result = {"status": "success", "x": x, "y": y, "z": z}
+    #         return result
+    #     except Exception as e:
+    #         result = {"status": "error", "message": str(e)}
+    #         return result
+    #     finally:
+    #         execution_time_ms = (time.time() - start_time) * 1000
+    #         if benchmark_logger and user_query:
+    #             benchmark_logger.set_query(user_query)
+    #         if benchmark_logger and result is not None:
+    #             benchmark_logger.log_tool_call(
+    #                 tool_name="get_stage_position",
+    #                 input_params={"user_query": user_query},
+    #                 result=result,
+    #                 execution_time_ms=execution_time_ms,
+    #             )
 
     @mcp.tool(
         name="get_microscope_events",
