@@ -497,27 +497,62 @@ class BenchmarkWorker(QObject):
         self._host = host
         self._port = port
         self._process = None
+        self._err_path = None
 
     @pyqtSlot()
     def run(self):
+        import socket
         import urllib.request as _req
 
+        # Fail fast if something is already bound to the port (zombie from a
+        # previous session, or the server was launched twice).
+        with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as _s:
+            _s.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+            try:
+                _s.bind((self._host, self._port))
+            except OSError:
+                self.error.emit(
+                    f"Port {self._port} is already in use. "
+                    "A previous test server may still be running — "
+                    "stop it or choose a different port."
+                )
+                return
+
         try:
+            import tempfile as _tf
+
+            _err_file = _tf.NamedTemporaryFile(
+                mode="w", suffix=".log", prefix="test_server_err_", delete=False
+            )
+            self._err_path = _err_file.name
             cmd = [
                 sys.executable,
                 "-m",
-                "src.benchmarking.test_server",
+                "benchmarking.test_server",  # installed package, works from any cwd
                 self._test_name,
                 "--host",
                 self._host,
                 "--port",
                 str(self._port),
             ]
-            self._process = subprocess.Popen(cmd)
+            self._process = subprocess.Popen(cmd, stderr=_err_file)
+            _err_file.close()
 
             url = f"http://{self._host}:{self._port}"
-            deadline = time.monotonic() + 30.0
+            deadline = time.monotonic() + 180.0
             while time.monotonic() < deadline:
+                # Detect immediate crash (e.g. port conflict, import error).
+                if self._process.poll() is not None:
+                    try:
+                        with open(self._err_path, errors="replace") as _f:
+                            stderr = _f.read()
+                    except Exception:
+                        stderr = ""
+                    self._process = None
+                    self.error.emit(
+                        f"Test server exited unexpectedly: {stderr[-300:].strip() or '(no output)'}"
+                    )
+                    return
                 try:
                     with _req.urlopen(f"{url}/health", timeout=1.0) as r:  # nosec B310
                         if r.status == 200:
@@ -528,7 +563,7 @@ class BenchmarkWorker(QObject):
                 time.sleep(0.5)
 
             self._kill()
-            self.error.emit("Test server did not start within 30 s")
+            self.error.emit("Test server did not start within 3 min")
         except Exception as e:
             self._kill()
             self.error.emit(str(e))
@@ -540,10 +575,21 @@ class BenchmarkWorker(QObject):
         if self._process is not None:
             try:
                 self._process.terminate()
-                self._process.wait(timeout=5)
+                try:
+                    self._process.wait(timeout=5)
+                except subprocess.TimeoutExpired:
+                    self._process.kill()
+                    self._process.wait(timeout=2)
             except Exception:
                 pass
             self._process = None
+        if self._err_path is not None:
+            try:
+                import os as _os
+                _os.unlink(self._err_path)
+            except Exception:
+                pass
+            self._err_path = None
 
 
 # ── Main widget ─────────────────────────────────────────────────────────────
