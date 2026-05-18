@@ -1,8 +1,6 @@
 # Smart Microscope — Agent Guide
 
-You are an AI assistant driving a real pymmcore-plus microscope. You write Python code and execute it directly on the user's machine using your shell tools (Bash / PowerShell). You do **not** use the `execute_python_code` MCP tool — the code runs locally, unrestricted.
-
-See `ARCHITECTURE.md` for a full map of where everything lives.
+You are an AI assistant driving a real pymmcore-plus microscope. You write Python code and execute it directly on the user's machine using your shell tools (Bash / PowerShell).
 
 ---
 
@@ -46,9 +44,6 @@ print(core.getConfigGroupState("Channel"))
 print(core.getXPosition(), core.getYPosition())
 print(core.getPosition())  # Z
 
-# Auto-discover the channel group (works with any config)
-from self_learn.hardware.config import resolve_channel_group
-group = resolve_channel_group(core, None)
 ```
 
 ---
@@ -61,43 +56,34 @@ Use pymmcore-plus natively. Don't wrap what the framework already provides. All 
 
 ```python
 from useq import MDASequence
-from self_learn.hardware.core import run_events
 
 seq = MDASequence(
     time_plan={"loops": 10, "interval": 1.0},
     channels=[{"config": "GFP", "exposure": 50}],
     stage_positions=[{"x": 100, "y": 200}],
 )
-results = run_events(core, list(seq))
-# run_events() delegates to core.mda.run() via frameReady signal.
-# Works identically for local CMMCorePlus and remote pymmcore-proxy.
+core.mda.run(seq)
 ```
 
 ### Multi-position timelapse → `MDASequence`
 
 ```python
 from useq import MDASequence
-from self_learn.hardware.core import run_events
-from self_learn.hardware.config import resolve_channel_group
 
-group = resolve_channel_group(core, None)
 seq = MDASequence(
     time_plan={"loops": 20, "interval": 2.0},
     stage_positions=[{"x": 100, "y": 200}, {"x": 300, "y": 400}],
-    channels=[{"config": "brightfield", "group": group}],
+    channels=[{"config": "brightfield", "group": "mScarlet"}], # example
     axis_order="tpc",   # time → position → channel
 )
-results = run_events(core, list(seq))
+core.mda.run(seq)
 ```
 
 ### Adaptive / closed-loop → generator with feedback
 
 ```python
 from useq import MDAEvent
-from self_learn.hardware.core import run_events
-from self_learn.hardware.config import resolve_channel_group
 
-group = resolve_channel_group(core, None)
 shared = {"cell_count": 0}
 
 def on_frame(img, event):
@@ -108,9 +94,9 @@ def my_generator():
     for i in range(50):
         if shared["cell_count"] > 100:   # early stop
             return
-        yield MDAEvent(channel={"config": "BF", "group": group})
+        yield MDAEvent(channel={"config": "BF", "group":"mScarlet"}) #example
 
-results = run_events(core, my_generator(), on_frame=on_frame)
+core.mda.run(my_generator())
 ```
 
 This pattern covers everything: autofocus (`yield MDAEvent(z_pos=z)` after scoring the previous frame), SLM-react (`yield MDAEvent(slm_image=mask)` after deciding where to fire), adaptive Z. Closed-loop is **not** a reason to fall back to a snap-loop — generators + `on_frame` handle it cleanly.
@@ -143,13 +129,6 @@ tmp = Path(tempfile.gettempdir())
 core.snapImage()
 img = core.getImage()
 Image.fromarray(img).save(tmp / "preview.png")
-# Then read the file with your Read tool to inspect it visually
-```
-
-For overlays and multi-panel figures, use:
-```python
-from self_learn.utils.diagnostics import save_snapshot, save_overlay
-from self_learn.utils.showcase import make_showcase, Panel
 ```
 
 Save TIFFs for timelapse / multi-dimensional data:
@@ -177,24 +156,11 @@ The user's napari window is the live view. You interact with it via the **MCP `v
 
 ## Your Codebase
 
-Install as an editable package so imports resolve everywhere:
-```bash
-pip install -e .   # or: uv sync
-```
-
-Then import as:
-```python
-from self_learn.hardware.core import snap, run_events
-from self_learn.analysis.tracking import track_cells
-from self_learn.workflows.batch import multichannel_scan
-```
-
 Two complementary resources — **code** for computation:
 
 ```
 src/mcp_microscopetoolset/   — MCP server (viewer_*, snap_image, databases, …)
 src/local/                   — Execute, GatekeeperCore, MDA helpers
-src/benchmarking/            — test harness and experiment saver
 src/plugin_napari.py         — napari plugin entry point
 ```
 
@@ -236,11 +202,9 @@ tifffile.imwrite(workspace / "result.tif", result_stack)
 
 ## Key API Gotchas
 
-- `resolve_channel_group(core, None)` — always pass `None` to auto-discover; never hardcode `'Fake'` or `'Channel'`
 - `set_objective(core, 40)` — integer argument, not string `"40x"`
 - `detect_foci()` returns **list of dicts** `{'cy','cx','sigma','area',...}` — not tuples
 - `rgb2hed()` for H&E stain separation — not `color_deconvolution()`
 - After `core.setXYPosition()`, call `core.waitForDevice(core.getXYStageDevice())` before snapping
 - `event.properties` for per-event device property changes: `[('Camera', 'Gain', '4')]`
 - `/tmp/` is not cross-platform — use `Path(tempfile.gettempdir())` everywhere
-- `run_events_checked()` returns a **dict** — check `report["complete"]`, `report["actual"]`, `report["expected"]`; not object attributes
