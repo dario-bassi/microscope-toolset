@@ -79,10 +79,11 @@ def serve_test(test_name: str, host: str = "127.0.0.1", port: int = 5601) -> Non
     Steps:
     1. Load the test module to extract public info.
     2. Call run_test() — creates the simulation, sets GLOBAL_BRIDGE, generates cfg.
-    3. Load the generated cfg into a fresh CMMCorePlus singleton.
+    3. Load the generated cfg into the right core type (UniMMCore for #py virtual
+       configs, CMMCorePlus for real hardware configs).
     4. Start TestProxyServer (blocking until Ctrl-C or process kill).
     """
-    from pymmcore_plus import CMMCorePlus
+    import os
 
     from .test_runner import _load_test_module, run_test
 
@@ -92,7 +93,28 @@ def serve_test(test_name: str, host: str = "127.0.0.1", port: int = 5601) -> Non
 
     cfg_path = run_test(test_name)
 
-    core = CMMCorePlus.instance()
+    from utils.cfg_utils import classify_cfg
+
+    cfg_type = classify_cfg(str(cfg_path))
+
+    # Force psygnal signals — Qt signals silently fail in uvicorn's asyncio thread.
+    _old_backend = os.environ.get("PYMM_SIGNALS_BACKEND")
+    os.environ["PYMM_SIGNALS_BACKEND"] = "psygnal"
+    try:
+        if cfg_type == "virtual":
+            from pymmcore_plus.experimental.unicore import UniMMCore
+
+            core = UniMMCore()
+        else:
+            from pymmcore_plus import CMMCorePlus
+
+            core = CMMCorePlus()
+    finally:
+        if _old_backend is None:
+            os.environ.pop("PYMM_SIGNALS_BACKEND", None)
+        else:
+            os.environ["PYMM_SIGNALS_BACKEND"] = _old_backend
+
     core.loadSystemConfiguration(str(cfg_path))
 
     server = TestProxyServer(core, test_info=test_info, host=host, port=port)
