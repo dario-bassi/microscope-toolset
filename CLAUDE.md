@@ -19,10 +19,10 @@ try:
     img = core.getImage()      # real numpy array — returned locally
     # ... rest of the experiment ...
 finally:
-    core.disconnect()
+    core.close()
 ```
 
-**Always wrap experiment code in `try/finally` and call `core.disconnect()` at the end.** The OS will clean up the WebSocket when the script exits anyway, but an explicit disconnect is cleaner and prevents stale connections in iterative sessions where you run multiple scripts back-to-back. Exception: if you are iterating quickly in a single session (snap → inspect → adjust → snap again), a single connection across snippets is fine — disconnect once at the very end.
+**Always wrap experiment code in `try/finally` and call `core.close()` at the end.** The OS will clean up the WebSocket when the script exits anyway, but an explicit close is cleaner and prevents stale connections in iterative sessions where you run multiple scripts back-to-back. Exception: if you are iterating quickly in a single session (snap → inspect → adjust → snap again), a single connection across snippets is fine — close once at the very end.
 
 The proxy is a complete drop-in: all methods, signals, and MDA work identically to a local `CMMCorePlus`. It is installed as `pymmcore-proxy` (editable clone at `./pymmcore-proxy/`).
 

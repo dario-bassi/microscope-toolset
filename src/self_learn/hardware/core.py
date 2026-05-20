@@ -417,7 +417,7 @@ def run_events(core, events, on_frame=None):
     if is_generator:
         return _manual_run(core, _filtered(events), on_frame)
 
-    # For lists/tuples/MDASequence: materialize and try MDA engine first
+    # For lists/tuples/MDASequence: use the MDA engine.
     event_list = list(events)
     frames = []
 

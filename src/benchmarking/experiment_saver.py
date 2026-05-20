@@ -31,7 +31,9 @@ import sys
 from datetime import UTC, datetime
 from pathlib import Path
 
-EXPERIMENTS_DIR = Path(__file__).parent / "experiments"
+_PROJECT_ROOT = Path(__file__).parent.parent.parent
+DEFAULT_EXPERIMENTS_DIR = _PROJECT_ROOT / "experiments"
+EXPERIMENTS_DIR = DEFAULT_EXPERIMENTS_DIR  # backward-compat alias
 MARKER_FILE = Path(".experiment_marker.json")
 
 
@@ -93,21 +95,29 @@ def _line_count(path: Path) -> int:
 # ---------------------------------------------------------------------------
 
 
-def start_experiment(name: str | None = None) -> tuple[str, Path]:
+def start_experiment(
+    name: str | None = None, base_dir: Path | str | None = None
+) -> tuple[str, Path]:
     """Record the start of an experiment and return (name, workspace_dir).
 
     Creates the experiment folder and a workspace/ subdirectory immediately so
     the agent can start saving files there. Writes a `.experiment_marker.json`
     file with the folder paths and the current JSONL line offset.
+
+    Args:
+        name: optional experiment name; auto-generated if omitted.
+        base_dir: parent directory for all experiments; defaults to
+            ``DEFAULT_EXPERIMENTS_DIR`` (project root / "experiments").
     """
     if name is None:
         name = f"exp_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
 
+    experiments_dir = Path(base_dir) if base_dir else EXPERIMENTS_DIR
     # Pre-create the experiment folder so the agent has a workspace from the start
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
     safe_name = name.replace(" ", "_").replace("/", "-")
-    EXPERIMENTS_DIR.mkdir(parents=True, exist_ok=True)
-    exp_dir = EXPERIMENTS_DIR / f"{safe_name}_{timestamp}"
+    experiments_dir.mkdir(parents=True, exist_ok=True)
+    exp_dir = experiments_dir / f"{safe_name}_{timestamp}"
     workspace_dir = exp_dir / "workspace"
     workspace_dir.mkdir(parents=True, exist_ok=True)
 

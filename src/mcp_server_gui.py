@@ -14,6 +14,8 @@ from PyQt6.QtCore import QObject, QSettings, Qt, QThread, QTimer, pyqtSignal, py
 from PyQt6.QtGui import QIntValidator
 from PyQt6.QtWidgets import (
     QComboBox,
+    QDialog,
+    QFileDialog,
     QFrame,
     QGroupBox,
     QHBoxLayout,
@@ -802,7 +804,18 @@ class MCPServer(QWidget):
         self._bench_info_lbl.setVisible(False)
         bench_lay.addWidget(self._bench_info_lbl)
 
-        main.addWidget(bench_grp)
+        self._bench_grp = bench_grp
+        self._bench_dialog: QDialog | None = None
+        if os.getenv("SHOW_BENCHMARKING_PANEL", "").lower() in ("1", "true", "yes"):
+            main.addWidget(bench_grp)
+        else:
+            self._bench_open_btn = QPushButton("Benchmarking…")
+            self._bench_open_btn.setStyleSheet(
+                "QPushButton{font-size:10px;padding:3px 8px;border-radius:3px;"
+                "background:#e8e8e8;color:#333;border:1px solid #bbb;text-align:left;}"
+                "QPushButton:hover{background:#d0d0d0;}"
+            )
+            main.addWidget(self._bench_open_btn)
 
         # ── Experiment Tracking group ──────────────────────────────────────
         track_grp = QGroupBox("Experiment Tracking")
@@ -833,6 +846,26 @@ class MCPServer(QWidget):
         track_row.addWidget(self._track_start_btn)
         track_row.addWidget(self._track_stop_btn)
         track_lay.addLayout(track_row)
+
+        dir_row = QHBoxLayout()
+        dir_row.setSpacing(4)
+        dir_lbl = QLabel("Save to:")
+        dir_lbl.setStyleSheet("font-size:10px;")
+        dir_lbl.setFixedWidth(48)
+        self._track_dir_edit = QLineEdit()
+        self._track_dir_edit.setStyleSheet("font-size:10px;")
+        self._track_dir_edit.setToolTip("Parent folder for all experiment results")
+        self._track_browse_btn = QPushButton("Browse…")
+        self._track_browse_btn.setFixedWidth(58)
+        self._track_browse_btn.setStyleSheet(
+            "QPushButton{font-size:10px;padding:1px 4px;border-radius:3px;"
+            "background:#e0e0e0;color:#333;}"
+            "QPushButton:hover{background:#bdbdbd;}"
+        )
+        dir_row.addWidget(dir_lbl)
+        dir_row.addWidget(self._track_dir_edit)
+        dir_row.addWidget(self._track_browse_btn)
+        track_lay.addLayout(dir_row)
 
         info_row = QHBoxLayout()
         info_row.setSpacing(4)
@@ -872,9 +905,12 @@ class MCPServer(QWidget):
         self._mcp_panel.btn.clicked.connect(self._toggle_mcp_server)
         self._remote_connect_btn.clicked.connect(self._toggle_remote_core)
         self._bench_panel.btn.clicked.connect(self._toggle_benchmark)
+        if hasattr(self, "_bench_open_btn"):
+            self._bench_open_btn.clicked.connect(self._open_benchmarking_dialog)
         self._track_start_btn.clicked.connect(self._start_tracking)
         self._track_stop_btn.clicked.connect(self._stop_tracking)
         self._track_open_btn.clicked.connect(self._open_workspace)
+        self._track_browse_btn.clicked.connect(self._browse_experiments_dir)
 
         # ── Restore persisted settings ────────────────────────────────────
         # For proxy host/port: cascade QSettings → .env → hardcoded default.
@@ -894,6 +930,10 @@ class MCPServer(QWidget):
         self._mcp_host_edit.setText(self._settings.value("mcp_host", "127.0.0.1"))
         self._mcp_port_edit.setText(self._settings.value("mcp_port", "5500"))
         self._bench_port_edit.setText(self._settings.value("bench_port", "5602"))
+        from benchmarking.experiment_saver import DEFAULT_EXPERIMENTS_DIR
+        self._track_dir_edit.setText(
+            self._settings.value("experiments_dir") or str(DEFAULT_EXPERIMENTS_DIR)
+        )
 
         # ── Populate test catalog ─────────────────────────────────────────
         self._refresh_bench_tests()
@@ -1116,6 +1156,18 @@ class MCPServer(QWidget):
             self._bench_combo.setEnabled(True)
             self._bench_panel.btn.setEnabled(True)
 
+    def _open_benchmarking_dialog(self):
+        if self._bench_dialog is None:
+            self._bench_dialog = QDialog(self)
+            self._bench_dialog.setWindowTitle("Benchmarking")
+            lay = QVBoxLayout(self._bench_dialog)
+            lay.setContentsMargins(8, 8, 8, 8)
+            lay.addWidget(self._bench_grp)
+            self._bench_dialog.setMinimumWidth(340)
+        self._bench_dialog.show()
+        self._bench_dialog.raise_()
+        self._bench_dialog.activateWindow()
+
     def _toggle_benchmark(self):
         if self._bench_running:
             self._stop_benchmark()
@@ -1207,8 +1259,11 @@ class MCPServer(QWidget):
         from benchmarking import start_experiment
 
         name = self._track_name_edit.text().strip() or None
+        base_dir = self._track_dir_edit.text().strip() or None
+        if base_dir:
+            self._settings.setValue("experiments_dir", base_dir)
         try:
-            exp_name, workspace = start_experiment(name)
+            exp_name, workspace = start_experiment(name, base_dir=base_dir)
             self._tracking_active = True
             self._tracking_name = exp_name
             self._tracking_workspace = workspace
@@ -1272,6 +1327,13 @@ class MCPServer(QWidget):
             _sp.Popen(["open", str(target)])
         else:
             _sp.Popen(["xdg-open", str(target)])
+
+    def _browse_experiments_dir(self):
+        current = self._track_dir_edit.text().strip()
+        chosen = QFileDialog.getExistingDirectory(self, "Select experiments folder", current)
+        if chosen:
+            self._track_dir_edit.setText(chosen)
+            self._settings.setValue("experiments_dir", chosen)
 
     # ── Remote core ─────────────────────────────────────────────────────────
 
