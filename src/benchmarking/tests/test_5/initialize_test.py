@@ -28,4 +28,5 @@ def create_sim_override():
         sim.radii[i] = r
 
     sim.areas[:] = np.pi * radii_um**2
+    sim.brownian_d = TEST_CONFIG["brownian_d"]
     return sim
