@@ -10,7 +10,7 @@ cell_type: celegans
 world_size: 2048
 worm_length: 250.0
 worm_width: 18.0
-speed: 40.0
+speed: 20.0
 seed: 14
 focal_plane: 0.0
 time_scale: 1.0
