@@ -1,7 +1,7 @@
 # Microscope Toolset
 
 [![CI](https://github.com/ddd42-star/microscope-toolset/actions/workflows/ci.yml/badge.svg)](https://github.com/ddd42-star/microscope-toolset/actions/workflows/ci.yml)
-[![Python](https://img.shields.io/badge/python-%203.12%20|%203.13-blue)](https://www.python.org)
+[![Python](https://img.shields.io/badge/python-%203.12%20|%203.13%20|%203.14-blue)](https://www.python.org)
 [![License](https://img.shields.io/badge/license-BSD%203--Clause-green)](LICENSE)
 
 **Microscope Toolset** is a research platform that connects a Claude Code AI agent to a **real** or **virtual** microscope through an [MCP](https://modelcontextprotocol.io) server embedded in a [napari](https://napari.org) GUI. The agent can control real or simulated hardware, execute image-analysis code, query a curated knowledge database, and track complete experiment sessions — all from a natural-language prompt.
