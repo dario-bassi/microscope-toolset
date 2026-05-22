@@ -405,6 +405,7 @@ class MCPServerWorker(QObject):
                     viewer=viewer_instance,
                     event_cache=event_cache,
                     viewer_proxy=self._viewer_proxy,
+                    core=self._mmc,
                     benchmark_logger_instance=bench_logger,
                     host=self._host,
                     port=self._port,
@@ -1818,6 +1819,56 @@ class MCPServer(QWidget):
             self._status_lbl.setStyleSheet(f"{base}color:#2196F3;font-weight:bold;")
         else:
             self._status_lbl.setStyleSheet(f"{base}color:#666;")
+
+    def shutdown(self):
+        """Gracefully release hardware, then stop the MCP and proxy servers on quit.
+
+        Closing napari does NOT otherwise stop these servers (``closeEvent``
+        only hides the dock widget), so without this they are orphaned: with
+        an MCP/SSE client still attached, the MCP server's asyncio shutdown
+        watcher wedges and the process lingers holding its ports. Each stop
+        below force-exits its uvicorn server, cancelling open connections
+        instead of waiting for them to drain. Idempotent and exception-safe so
+        it can run from the quit path even after the Qt event loop has ended.
+
+        Hardware first: unload all devices on the *still-running* proxy before
+        tearing it down. napari-micromanager's own close-time unload is gated on
+        ``owns=True``, but the toolset installs the remote core with
+        ``owns=False`` (the proxy owns the real core), so that path never fires
+        here. Doing it explicitly runs each adapter's ``Shutdown()`` on the
+        proxy's own thread (verified clean/fast) — a graceful hardware shutdown,
+        and it clears the real devices that otherwise wedge the multi-threaded
+        process teardown. The exit watchdog + ``TerminateProcess`` in
+        ``plugin_napari._shutdown_and_exit`` still backstop a stuck driver.
+        """
+        mmc = getattr(self, "_mmc", None)
+        if mmc is not None:
+            try:
+                mmc.unloadAllDevices()  # RPC to the live proxy → graceful device Shutdown()
+                logger.info("Unloaded all devices before teardown")
+            except Exception as e:
+                logger.warning(f"unloadAllDevices during shutdown failed: {e}")
+
+        worker = getattr(self, "_mcp_worker", None)
+        if worker is not None:
+            try:
+                worker.stop_mcp()  # _stop_uvicorn(force_exit=True)
+            except Exception as e:
+                logger.warning(f"Error stopping MCP server during shutdown: {e}")
+            self._mcp_worker = None
+            self._mcp_thread = None
+
+        proxy = getattr(self, "_proxy_worker", None)
+        if proxy is not None:
+            try:
+                proxy.stop()  # force_exit=True
+                if self._proxy_thread is not None:
+                    self._proxy_thread.quit()
+                    self._proxy_thread.wait(2000)
+            except Exception as e:
+                logger.warning(f"Error stopping proxy server during shutdown: {e}")
+            self._proxy_worker = None
+            self._proxy_thread = None
 
     def closeEvent(self, event):
         self.hide()

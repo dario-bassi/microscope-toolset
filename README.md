@@ -134,7 +134,7 @@ On the right there is the panel control that will start or stop the MCP Microsco
 ```
 Add the mcp server to you claude code account
 
-$ claude code add --transport http microscope http://127.0.0.1:5500/mcp
+$ claude mcp add --transport http microscope http://127.0.0.1:5500/mcp
 
 Then goes in /mcp
 

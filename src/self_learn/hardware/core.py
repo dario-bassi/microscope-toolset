@@ -263,6 +263,61 @@ def apply_slm(core, mask, device=None):
     core.displaySLMImage(device)
 
 
+def dmd_on(core, mask=None, device=None):
+    """Light the DMD/SLM so the sample can be imaged.
+
+    A displayed pattern is held only for the device's ``ExposureTime``,
+    then the DMD drops it and frames come back as pure camera noise. On the
+    Andor Mosaic3 (``TriggerMode='InternalExpose'``) that is a single
+    exposure of ``ExposureTime`` seconds — e.g. ~2 s, or ~120 s in some
+    configs. So call this just before acquiring (snap within the hold
+    window); to keep it lit continuously, refresh it at < ``ExposureTime``
+    (the ``keep_dmd_alive`` MCP tool does this automatically).
+
+    Args:
+        core: pymmcore-plus core instance.
+        mask: uint8 SLM array to display. If None, a full-bright mask
+            (all mirrors on) sized to the device is used.
+        device: SLM device name. If None, auto-discovers from config.
+
+    Returns:
+        str | None: the SLM device label that was lit, or None if no SLM
+        device is available.
+    """
+    if device is None:
+        device = get_config(core).slm_device
+        if device is None:
+            warnings.warn("No SLM/DMD device available")
+            return None
+    if mask is None:
+        w, h = core.getSLMWidth(device), core.getSLMHeight(device)
+        mask = np.full((h, w), 255, dtype=np.uint8)
+    core.setSLMImage(device, mask)
+    core.displaySLMImage(device)
+    return device
+
+
+def dmd_off(core, device=None):
+    """Blank the DMD/SLM (all mirrors off) — display an all-zero mask.
+
+    Args:
+        core: pymmcore-plus core instance.
+        device: SLM device name. If None, auto-discovers from config.
+
+    Returns:
+        str | None: the SLM device label, or None if no SLM is available.
+    """
+    if device is None:
+        device = get_config(core).slm_device
+        if device is None:
+            warnings.warn("No SLM/DMD device available")
+            return None
+    w, h = core.getSLMWidth(device), core.getSLMHeight(device)
+    core.setSLMImage(device, np.zeros((h, w), dtype=np.uint8))
+    core.displaySLMImage(device)
+    return device
+
+
 # ---------------------------------------------------------------------------
 # Coordinate conversion
 # ---------------------------------------------------------------------------
