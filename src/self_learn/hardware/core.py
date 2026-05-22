@@ -11,12 +11,12 @@ import warnings
 
 import numpy as np
 
-from .config import get_config, refresh_config, _mag_to_pixel_size
-
+from .config import _mag_to_pixel_size, get_config, refresh_config
 
 # ---------------------------------------------------------------------------
 # Image acquisition
 # ---------------------------------------------------------------------------
+
 
 def snap(core, channel=None, exposure=None):
     """Snap an image, optionally switching channel/exposure first.
@@ -53,7 +53,7 @@ def snap_all_channels(core, exposure=None):
     cfg = get_config(core)
     if cfg.channel_group is None or not cfg.available_channels:
         # No channel group — just snap a single image
-        return {'default': snap(core, exposure=exposure)}
+        return {"default": snap(core, exposure=exposure)}
 
     images = {}
     for ch in cfg.available_channels:
@@ -64,6 +64,7 @@ def snap_all_channels(core, exposure=None):
 # ---------------------------------------------------------------------------
 # Stage movement
 # ---------------------------------------------------------------------------
+
 
 def move_to(core, x, y, wait=True):
     """Move stage to (x, y) in world coordinates."""
@@ -87,6 +88,7 @@ def get_position(core):
 # ---------------------------------------------------------------------------
 # Objectives
 # ---------------------------------------------------------------------------
+
 
 def set_objective(core, mag):
     """Set objective by magnification (e.g. 10, 20, 40, 100).
@@ -119,10 +121,7 @@ def set_objective(core, mag):
     except Exception:
         pass
     available = [lbl for _, lbl in cfg.objective_labels]
-    raise ValueError(
-        f"No objective with magnification {mag}x found. "
-        f"Available: {available}"
-    )
+    raise ValueError(f"No objective with magnification {mag}x found. " f"Available: {available}")
 
 
 def set_objective_verified(core, mag, max_wait=2.0):
@@ -197,6 +196,7 @@ def fov_size(core):
 # Z / Focus
 # ---------------------------------------------------------------------------
 
+
 def set_z(core, z, wait=True):
     """Set Z position."""
     cfg = get_config(core)
@@ -219,6 +219,7 @@ def get_z(core):
 # SLM
 # ---------------------------------------------------------------------------
 
+
 def make_slm_circle(center, radius, size=None, intensity=255, core=None):
     """Create a circular SLM mask in viewport coordinates.
 
@@ -240,7 +241,7 @@ def make_slm_circle(center, radius, size=None, intensity=255, core=None):
             size = 512
     mask = np.zeros((size, size), dtype=np.uint8)
     yy, xx = np.ogrid[:size, :size]
-    dist_sq = (xx - center[0])**2 + (yy - center[1])**2
+    dist_sq = (xx - center[0]) ** 2 + (yy - center[1]) ** 2
     mask[dist_sq <= radius**2] = intensity
     return mask
 
@@ -257,7 +258,7 @@ def apply_slm(core, mask, device=None):
         cfg = get_config(core)
         device = cfg.slm_device
         if device is None:
-            warnings.warn("No SLM device available")
+            warnings.warn("No SLM device available", stacklevel=2)
             return
     core.setSLMImage(device, mask)
     core.displaySLMImage(device)
@@ -287,7 +288,7 @@ def dmd_on(core, mask=None, device=None):
     if device is None:
         device = get_config(core).slm_device
         if device is None:
-            warnings.warn("No SLM/DMD device available")
+            warnings.warn("No SLM/DMD device available", stacklevel=2)
             return None
     if mask is None:
         w, h = core.getSLMWidth(device), core.getSLMHeight(device)
@@ -310,7 +311,7 @@ def dmd_off(core, device=None):
     if device is None:
         device = get_config(core).slm_device
         if device is None:
-            warnings.warn("No SLM/DMD device available")
+            warnings.warn("No SLM/DMD device available", stacklevel=2)
             return None
     w, h = core.getSLMWidth(device), core.getSLMHeight(device)
     core.setSLMImage(device, np.zeros((h, w), dtype=np.uint8))
@@ -321,6 +322,7 @@ def dmd_off(core, device=None):
 # ---------------------------------------------------------------------------
 # Coordinate conversion
 # ---------------------------------------------------------------------------
+
 
 def world_to_viewport(world_x, world_y, stage_x, stage_y, viewport_size=512):
     """Convert world coordinates to viewport pixel coordinates.
@@ -341,8 +343,7 @@ def world_to_viewport(world_x, world_y, stage_x, stage_y, viewport_size=512):
     return vx, vy
 
 
-def pixel_to_world(px, py, stage_x, stage_y, config=None, core=None,
-                    mag=None, pixel_size=None):
+def pixel_to_world(px, py, stage_x, stage_y, config=None, core=None, mag=None, pixel_size=None):
     """Convert pixel coordinates to world coordinates.
 
     Uses config for image center and pixel size. Falls back to legacy
@@ -381,8 +382,7 @@ def pixel_to_world(px, py, stage_x, stage_y, config=None, core=None,
     return round(wx, 1), round(wy, 1)
 
 
-def world_to_pixel(wx, wy, stage_x, stage_y, config=None, core=None,
-                    mag=None, pixel_size=None):
+def world_to_pixel(wx, wy, stage_x, stage_y, config=None, core=None, mag=None, pixel_size=None):
     """Convert world coordinates to pixel coordinates.
 
     Args:
@@ -420,6 +420,7 @@ def world_to_pixel(wx, wy, stage_x, stage_y, config=None, core=None,
 # ---------------------------------------------------------------------------
 # MDA helpers
 # ---------------------------------------------------------------------------
+
 
 def run_events(core, events, on_frame=None, collect=True):
     """Execute MDAEvent generators via core.mda.run() with optional frame callback.
@@ -462,10 +463,10 @@ def run_events(core, events, on_frame=None, collect=True):
     def _filtered(events):
         """Strip CustomAction events and execute them inline."""
         for event in events:
-            action = getattr(event, 'action', None)
-            if action is not None and type(action).__name__ == 'CustomAction':
-                if action.name == 'switch_objective':
-                    set_objective(core, action.data.get('mag', 10))
+            action = getattr(event, "action", None)
+            if action is not None and type(action).__name__ == "CustomAction":
+                if action.name == "switch_objective":
+                    set_objective(core, action.data.get("mag", 10))
             else:
                 yield event
 
@@ -500,13 +501,22 @@ def run_events(core, events, on_frame=None, collect=True):
             or "websocket" in err.lower()
             or "connection" in err.lower()
             or "websockets" in type(e).__module__
-            or type(e).__name__ in ("ConnectionClosedError", "ConnectionClosedOK",
-                                    "WebSocketDisconnect", "TimeoutError")
+            or type(e).__name__
+            in (
+                "ConnectionClosedError",
+                "ConnectionClosedOK",
+                "WebSocketDisconnect",
+                "TimeoutError",
+            )
         )
         if not _retriable:
             raise
         import warnings
-        warnings.warn(f"MDA engine error ({type(e).__name__}: {e}) — retrying with manual acquisition")
+
+        warnings.warn(
+            f"MDA engine error ({type(e).__name__}: {e}) — retrying with manual acquisition",
+            stacklevel=2,
+        )
 
     return _manual_run(core, _filtered(event_list), on_frame, collect=collect)
 
@@ -518,11 +528,12 @@ def _manual_run(core, events, on_frame=None, collect=True):
     the caller may have between event yields (e.g., SLM device control).
     """
     import time
+
     frames = []
     t0 = time.time()
     for event in events:
         # Apply timing
-        min_start = getattr(event, 'min_start_time', None)
+        min_start = getattr(event, "min_start_time", None)
         if min_start is not None:
             target = t0 + min_start
             now = time.time()
@@ -530,27 +541,27 @@ def _manual_run(core, events, on_frame=None, collect=True):
                 time.sleep(target - now)
 
         # Apply channel
-        ch = getattr(event, 'channel', None)
+        ch = getattr(event, "channel", None)
         if ch is not None:
-            group = getattr(ch, 'group', None)
-            config = getattr(ch, 'config', None)
+            group = getattr(ch, "group", None)
+            config = getattr(ch, "config", None)
             if group and config:
                 core.setConfig(group, config)
                 core.waitForConfig(group, config)
 
         # Apply exposure
-        exposure = getattr(event, 'exposure', None)
+        exposure = getattr(event, "exposure", None)
         if exposure is not None:
             core.setExposure(exposure)
 
         # Apply stage position
-        x_pos = getattr(event, 'x_pos', None)
-        y_pos = getattr(event, 'y_pos', None)
+        x_pos = getattr(event, "x_pos", None)
+        y_pos = getattr(event, "y_pos", None)
         if x_pos is not None and y_pos is not None:
             core.setXYPosition(x_pos, y_pos)
             core.waitForDevice(core.getXYStageDevice())
 
-        z_pos = getattr(event, 'z_pos', None)
+        z_pos = getattr(event, "z_pos", None)
         if z_pos is not None:
             core.setPosition(z_pos)
             core.waitForDevice(core.getFocusDevice())
@@ -566,8 +577,7 @@ def _manual_run(core, events, on_frame=None, collect=True):
     return frames
 
 
-def timelapse(core, n_frames, interval_s=1.0, channel=None, exposure=None,
-              on_frame=None):
+def timelapse(core, n_frames, interval_s=1.0, channel=None, exposure=None, on_frame=None):
     """Acquire a timelapse via the MDA engine.
 
     Convenience wrapper around :func:`run_events` that handles the most
@@ -589,16 +599,17 @@ def timelapse(core, n_frames, interval_s=1.0, channel=None, exposure=None,
     from useq import MDASequence
 
     seq_kwargs = {
-        'time_plan': {'loops': int(n_frames), 'interval': float(interval_s)},
+        "time_plan": {"loops": int(n_frames), "interval": float(interval_s)},
     }
     if channel is not None:
         cfg = get_config(core)
         from .config import resolve_channel_group
+
         group = cfg.channel_group or resolve_channel_group(core, None)
-        seq_kwargs['channels'] = [{'config': channel, 'group': group}]
+        seq_kwargs["channels"] = [{"config": channel, "group": group}]
     if exposure is not None:
-        if 'channels' in seq_kwargs:
-            seq_kwargs['channels'][0]['exposure'] = float(exposure)
+        if "channels" in seq_kwargs:
+            seq_kwargs["channels"][0]["exposure"] = float(exposure)
 
     seq = MDASequence(**seq_kwargs)
     frames = run_events(core, list(seq), on_frame=on_frame)

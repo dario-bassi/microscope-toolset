@@ -49,16 +49,17 @@ from ..utils.image import auto_contrast
 from .focus_map import predict_z, refine_focus_map
 from .tiling import tile_positions
 
-
 # ---------------------------------------------------------------------------
 # Image helpers
 # ---------------------------------------------------------------------------
+
 
 def _as_gray_float(img):
     """Return a 2D float64 view of an image (collapses RGB if needed)."""
     arr = np.asarray(img)
     if arr.ndim == 3:
         from ..utils.image import to_grayscale
+
         return to_grayscale(arr)
     return arr.astype(np.float64)
 
@@ -68,7 +69,7 @@ def _crop(img, crop):
     if crop is None:
         return img
     x0, y0, w, h = crop
-    return img[y0:y0 + h, x0:x0 + w]
+    return img[y0 : y0 + h, x0 : x0 + w]
 
 
 def _snap(core, channel, exposure, crop=None, *, retries=4, refresh_dmd=True):
@@ -91,7 +92,7 @@ def _snap(core, channel, exposure, crop=None, *, retries=4, refresh_dmd=True):
 
 def _fov_wh(fov_um):
     """Normalise a scalar or (w, h) FOV spec to (fov_w, fov_h) floats."""
-    if isinstance(fov_um, (int, float)):
+    if isinstance(fov_um, int | float):
         return float(fov_um), float(fov_um)
     return float(fov_um[0]), float(fov_um[1])
 
@@ -99,6 +100,7 @@ def _fov_wh(fov_um):
 def _edge_energy(g):
     """Mean Sobel gradient magnitude — a texture/edge sharpness proxy."""
     from scipy.ndimage import sobel
+
     gx = sobel(g, axis=1)
     gy = sobel(g, axis=0)
     return float(np.sqrt(gx * gx + gy * gy).mean())
@@ -108,9 +110,10 @@ def _edge_energy(g):
 # Illumination footprint (DMD/Mosaic field smaller than the sensor)
 # ---------------------------------------------------------------------------
 
-def measure_illumination_footprint(core, channel, *, exposure=None, n=11,
-                                   jitter_um=250.0, frac=0.2, blur_sigma=15.0,
-                                   pfs=True):
+
+def measure_illumination_footprint(
+    core, channel, *, exposure=None, n=11, jitter_um=250.0, frac=0.2, blur_sigma=15.0, pfs=True
+):
     """Find the illuminated camera sub-region by per-pixel variance over moves.
 
     Snaps ``n`` frames while jittering XY; pixels inside the illuminated field
@@ -127,9 +130,19 @@ def measure_illumination_footprint(core, channel, *, exposure=None, n=11,
     x0c, y0c = hw.get_position(core)
     offs = [(0, 0)]
     r = jitter_um
-    ring = [(-r, -r), (0, -r), (r, -r), (-r, 0), (r, 0),
-            (-r, r), (0, r), (r, r), (r / 2, -r / 2), (-r / 2, r / 2)]
-    offs += ring[:max(0, n - 1)]
+    ring = [
+        (-r, -r),
+        (0, -r),
+        (r, -r),
+        (-r, 0),
+        (r, 0),
+        (-r, r),
+        (0, r),
+        (r, r),
+        (r / 2, -r / 2),
+        (-r / 2, r / 2),
+    ]
+    offs += ring[: max(0, n - 1)]
 
     stack = []
     for dx, dy in offs:
@@ -163,6 +176,7 @@ def measure_illumination_footprint(core, channel, *, exposure=None, n=11,
 # Well-wall detection
 # ---------------------------------------------------------------------------
 
+
 def wall_baseline(images):
     """Characterise interior (cell-covered) tiles for wall comparison."""
     meds, p99s, edges = [], [], []
@@ -178,8 +192,7 @@ def wall_baseline(images):
     }
 
 
-def detect_well_wall(img, baseline, *, bright_frac_thresh=0.04,
-                     edge_ratio_thresh=3.0):
+def detect_well_wall(img, baseline, *, bright_frac_thresh=0.04, edge_ratio_thresh=3.0):
     """Heuristically decide whether an image shows a well wall / edge artifact.
 
     Combines two cues vs an interior ``baseline``:
@@ -205,8 +218,9 @@ def detect_well_wall(img, baseline, *, bright_frac_thresh=0.04,
         is_wall = True
         reasons.append(f"edge_ratio={edge_ratio:.2f}>{edge_ratio_thresh}")
 
-    conf = min(1.0, 0.5 * (bright_frac / bright_frac_thresh)
-               + 0.5 * (edge_ratio / edge_ratio_thresh))
+    conf = min(
+        1.0, 0.5 * (bright_frac / bright_frac_thresh) + 0.5 * (edge_ratio / edge_ratio_thresh)
+    )
     return {
         "is_wall": is_wall,
         "confidence": round(float(conf), 3),
@@ -220,6 +234,7 @@ def detect_well_wall(img, baseline, *, bright_frac_thresh=0.04,
 # ---------------------------------------------------------------------------
 # Perfect Focus System (PFS) helpers
 # ---------------------------------------------------------------------------
+
 
 def pfs_available(core):
     """True if the core exposes a hardware continuous-autofocus device."""
@@ -245,8 +260,7 @@ def pfs_settle(core, timeout_s=1.5, poll_s=0.05):
         return False
 
 
-def _software_autofocus(core, channel, exposure, *, z_range=15.0,
-                        coarse_step=2.0, fine_step=0.5):
+def _software_autofocus(core, channel, exposure, *, z_range=15.0, coarse_step=2.0, fine_step=0.5):
     """Relative coarse+fine software autofocus around the current Z.
 
     Sweeps relative to the current Z (not absolute [-z_range, +z_range] like
@@ -268,13 +282,15 @@ def _software_autofocus(core, channel, exposure, *, z_range=15.0,
         core.setExposure(float(exposure))
     hw.dmd_on(core)
     z0 = hw.get_z(core)
-    coarse = sweep_focus(core, z0 - z_range, z0 + z_range, coarse_step,
-                         channel=channel, method="brenner")
+    coarse = sweep_focus(
+        core, z0 - z_range, z0 + z_range, coarse_step, channel=channel, method="brenner"
+    )
     zc = coarse["best_z"]
     hw.dmd_on(core)
     fine_half = coarse_step * 1.5
-    fine = sweep_focus(core, zc - fine_half, zc + fine_half, fine_step,
-                       channel=channel, method="brenner")
+    fine = sweep_focus(
+        core, zc - fine_half, zc + fine_half, fine_step, channel=channel, method="brenner"
+    )
     hw.set_z(core, fine["best_z"])
 
     if cf_was_on:
@@ -286,8 +302,9 @@ def _software_autofocus(core, channel, exposure, *, z_range=15.0,
     return float(fine["best_z"])
 
 
-def _focus_tile(core, use_pfs, channel, exposure, settle_s, af_fallback=True,
-                focus_map=None, xy=None):
+def _focus_tile(
+    core, use_pfs, channel, exposure, settle_s, af_fallback=True, focus_map=None, xy=None
+):
     """Focus the current tile. Returns (method, z).
 
     Order of preference:
@@ -340,9 +357,20 @@ def _focus_tile(core, use_pfs, channel, exposure, settle_s, af_fallback=True,
 # Boundary search
 # ---------------------------------------------------------------------------
 
-def find_well_bounds(core, *, fov_um, channel, exposure=None,
-                     max_search_um=9000.0, settle_s=1.0, use_pfs=True,
-                     crop=None, save_dir=None, wall_kwargs=None):
+
+def find_well_bounds(
+    core,
+    *,
+    fov_um,
+    channel,
+    exposure=None,
+    max_search_um=9000.0,
+    settle_s=1.0,
+    use_pfs=True,
+    crop=None,
+    save_dir=None,
+    wall_kwargs=None,
+):
     """Search outward for the well wall in 4 directions; return interior bbox.
 
     Steps one (footprint) FOV at a time from the current stage center along +X,
@@ -370,8 +398,12 @@ def find_well_bounds(core, *, fov_um, channel, exposure=None,
         save_dir.mkdir(parents=True, exist_ok=True)
         from ..utils.diagnostics import save_snapshot
 
-    directions = {"+x": (1, 0, fov_w), "-x": (-1, 0, fov_w),
-                  "+y": (0, 1, fov_h), "-y": (0, -1, fov_h)}
+    directions = {
+        "+x": (1, 0, fov_w),
+        "-x": (-1, 0, fov_w),
+        "+y": (0, 1, fov_h),
+        "-y": (0, -1, fov_h),
+    }
     edges = {"+x": cx, "-x": cx, "+y": cy, "-y": cy}
     probe_log = []
 
@@ -386,9 +418,16 @@ def find_well_bounds(core, *, fov_um, channel, exposure=None,
             locked = pfs_settle(core, timeout_s=settle_s) if use_pfs else False
             img = _snap(core, channel, exposure, crop)
             wall = detect_well_wall(img, baseline, **wall_kwargs)
-            probe_log.append({"dir": name, "dist_um": round(d, 1),
-                              "x": round(x, 1), "y": round(y, 1),
-                              "pfs_locked": bool(locked), **wall})
+            probe_log.append(
+                {
+                    "dir": name,
+                    "dist_um": round(d, 1),
+                    "x": round(x, 1),
+                    "y": round(y, 1),
+                    "pfs_locked": bool(locked),
+                    **wall,
+                }
+            )
             if save_dir:
                 save_snapshot(img, f"probe_{name}_{int(round(d))}um", save_dir=save_dir)
             if wall["is_wall"]:
@@ -418,6 +457,7 @@ def find_well_bounds(core, *, fov_um, channel, exposure=None,
 # Mosaic acquisition (streams cropped tiles to disk)
 # ---------------------------------------------------------------------------
 
+
 def _serpentine_order(n_cols, n_rows):
     """Row-major indices in serpentine acquisition order (minimal travel)."""
     order = []
@@ -428,10 +468,25 @@ def _serpentine_order(n_cols, n_rows):
     return order
 
 
-def mosaic_scan(core, bbox, *, pixel_size, fov_um, channel, group=None,
-                exposure=None, overlap=0.1, use_pfs=True, settle_s=1.0,
-                tiles_dir, crop=None, dmd_refresh=True, af_fallback=True,
-                focus_map=None, on_tile=None):
+def mosaic_scan(
+    core,
+    bbox,
+    *,
+    pixel_size,
+    fov_um,
+    channel,
+    group=None,
+    exposure=None,
+    overlap=0.1,
+    use_pfs=True,
+    settle_s=1.0,
+    tiles_dir,
+    crop=None,
+    dmd_refresh=True,
+    af_fallback=True,
+    focus_map=None,
+    on_tile=None,
+):
     """Tile ``bbox``, focus + snap each tile via MDA, crop, and stream to disk.
 
     Acquisition is MDA-native: an adaptive generator moves to each tile, focuses
@@ -481,9 +536,14 @@ def mosaic_scan(core, bbox, *, pixel_size, fov_um, channel, group=None,
         img = _crop(np.asarray(image), crop)
         shape["hw"] = img.shape[:2]
         tifffile.imwrite(tiles_dir / f"tile_{idx:04d}.tif", img, compression="zlib")
-        focus_log.append({"idx": idx, "method": md["method"],
-                          "z": round(float(md["z"]), 3),
-                          "xy": (round(md["x"], 2), round(md["y"], 2))})
+        focus_log.append(
+            {
+                "idx": idx,
+                "method": md["method"],
+                "z": round(float(md["z"]), 3),
+                "xy": (round(md["x"], 2), round(md["y"], 2)),
+            }
+        )
         if on_tile is not None:
             on_tile(int(md["k"]), idx, img, md["x"], md["y"])
 
@@ -493,23 +553,37 @@ def mosaic_scan(core, bbox, *, pixel_size, fov_um, channel, group=None,
             core.setXYPosition(x, y)
             if xy:
                 core.waitForDevice(xy)
-            method, z = _focus_tile(core, use_pfs, channel, exposure, settle_s,
-                                    af_fallback=af_fallback, focus_map=focus_map,
-                                    xy=(x, y))
+            method, z = _focus_tile(
+                core,
+                use_pfs,
+                channel,
+                exposure,
+                settle_s,
+                af_fallback=af_fallback,
+                focus_map=focus_map,
+                xy=(x, y),
+            )
             if dmd_refresh:
                 hw.dmd_on(core)
-            yield MDAEvent(channel=ch_spec, exposure=exposure,
-                           metadata={"idx": int(idx), "k": int(k),
-                                     "x": float(x), "y": float(y),
-                                     "z": float(z), "method": method})
+            yield MDAEvent(
+                channel=ch_spec,
+                exposure=exposure,
+                metadata={
+                    "idx": int(idx),
+                    "k": int(k),
+                    "x": float(x),
+                    "y": float(y),
+                    "z": float(z),
+                    "method": method,
+                },
+            )
 
     hw.run_events(core, _events(), on_frame=_write_frame, collect=False)
 
     H, W = shape["hw"]
     step_x = int(round(W * (1 - overlap)))
     step_y = int(round(H * (1 - overlap)))
-    tile_origins = [(c * step_x, r * step_y)
-                    for r in range(n_rows) for c in range(n_cols)]
+    tile_origins = [(c * step_x, r * step_y) for r in range(n_rows) for c in range(n_cols)]
     full_w = (n_cols - 1) * step_x + W
     full_h = (n_rows - 1) * step_y + H
 
@@ -534,8 +608,10 @@ def mosaic_scan(core, bbox, *, pixel_size, fov_um, channel, group=None,
 # Display mosaic
 # ---------------------------------------------------------------------------
 
-def build_display_mosaic(tiles_dir, grid_shape, tile_shape, step_px,
-                         *, max_dim=12000, row_order="topdown"):
+
+def build_display_mosaic(
+    tiles_dir, grid_shape, tile_shape, step_px, *, max_dim=12000, row_order="topdown"
+):
     """Stitch on-disk tiles into a (optionally downscaled) mosaic.
 
     Placement uses per-axis ``step_px`` (so rectangular tiles / per-axis overlap
@@ -576,14 +652,17 @@ def build_display_mosaic(tiles_dir, grid_shape, tile_shape, step_px,
         r, c = divmod(idx, n_cols)
         rr = (n_rows - 1 - r) if row_order == "bottomup" else r
         oy, ox = rr * dsy, c * dsx
-        region = mosaic[oy:oy + dH, ox:ox + dW]
-        mosaic[oy:oy + dH, ox:ox + dW] = np.maximum(region, t[:region.shape[0], :region.shape[1]])
+        region = mosaic[oy : oy + dH, ox : ox + dW]
+        mosaic[oy : oy + dH, ox : ox + dW] = np.maximum(
+            region, t[: region.shape[0], : region.shape[1]]
+        )
     return {"mosaic": mosaic, "scale": scale, "full_shape": (full_h, full_w)}
 
 
 # ---------------------------------------------------------------------------
 # Analysis: segmentation, coordinate mapping, dedup, statistics
 # ---------------------------------------------------------------------------
+
 
 def _dedup_cells(all_cells, tile_shape, min_dist_um):
     """Cluster cells within ``min_dist_um`` (world µm); keep a representative.
@@ -650,11 +729,24 @@ def _nonoverlap_count(all_cells, grid_shape, step_px):
     return count
 
 
-def analyze_mosaic(tiles_dir, positions, grid_shape, tile_origins, *,
-                   pixel_size, step_px, tile_shape, crop_origin=(0, 0),
-                   cam_center=None, threshold_sigma=2.5, min_area_px=30,
-                   max_area_px=None, dedup_world_dist_um=8.0, border_margin_px=3,
-                   detect_fn=None):
+def analyze_mosaic(
+    tiles_dir,
+    positions,
+    grid_shape,
+    tile_origins,
+    *,
+    pixel_size,
+    step_px,
+    tile_shape,
+    crop_origin=(0, 0),
+    cam_center=None,
+    threshold_sigma=2.5,
+    min_area_px=30,
+    max_area_px=None,
+    dedup_world_dist_um=8.0,
+    border_margin_px=3,
+    detect_fn=None,
+):
     """Segment every tile, map coordinates, de-duplicate, and compute stats.
 
     Two passes over the on-disk tiles keep memory flat: pass 1 accumulates a
@@ -704,33 +796,45 @@ def analyze_mosaic(tiles_dir, positions, grid_shape, tile_origins, *,
         if detect_fn is not None:
             cells = detect_fn(t)
         else:
-            cells = detect_cells(t, threshold_sigma=threshold_sigma,
-                                 min_area_px=min_area_px, max_area_px=max_area_px,
-                                 pixel_size_um=pixel_size, fill_holes=True,
-                                 global_stats=(gmean, gstd))
+            cells = detect_cells(
+                t,
+                threshold_sigma=threshold_sigma,
+                min_area_px=min_area_px,
+                max_area_px=max_area_px,
+                pixel_size_um=pixel_size,
+                fill_holes=True,
+                global_stats=(gmean, gstd),
+            )
         per_tile_counts[idx] = len(cells)
         ox, oy = tile_origins[idx]
         sx, sy = positions[idx]
         for c in cells:
             cx, cy = c["centroid_px"]
             bx, by, bw, bh = c["bbox"]
-            is_border = (bx <= border_margin_px or by <= border_margin_px
-                         or bx + bw >= W - border_margin_px
-                         or by + bh >= H - border_margin_px)
-            all_cells.append({
-                "tile_idx": int(idx),
-                "centroid_px": (float(cx), float(cy)),
-                "mosaic_px": (float(ox + cx), float(oy + cy)),
-                "world_um": (float(sx + (crop_x0 + cx - cam_cx) * pixel_size),
-                             float(sy + (crop_y0 + cy - cam_cy) * pixel_size)),
-                "area_px": int(c["area_px"]),
-                "area_um2": float(c["area_um2"]),
-                "bbox": (int(bx), int(by), int(bw), int(bh)),
-                "circularity": float(c["circularity"]),
-                "solidity": float(c["solidity"]),
-                "eccentricity": float(c["eccentricity"]),
-                "is_border": bool(is_border),
-            })
+            is_border = (
+                bx <= border_margin_px
+                or by <= border_margin_px
+                or bx + bw >= W - border_margin_px
+                or by + bh >= H - border_margin_px
+            )
+            all_cells.append(
+                {
+                    "tile_idx": int(idx),
+                    "centroid_px": (float(cx), float(cy)),
+                    "mosaic_px": (float(ox + cx), float(oy + cy)),
+                    "world_um": (
+                        float(sx + (crop_x0 + cx - cam_cx) * pixel_size),
+                        float(sy + (crop_y0 + cy - cam_cy) * pixel_size),
+                    ),
+                    "area_px": int(c["area_px"]),
+                    "area_um2": float(c["area_um2"]),
+                    "bbox": (int(bx), int(by), int(bw), int(bh)),
+                    "circularity": float(c["circularity"]),
+                    "solidity": float(c["solidity"]),
+                    "eccentricity": float(c["eccentricity"]),
+                    "is_border": bool(is_border),
+                }
+            )
         del t
 
     deduped = _dedup_cells(all_cells, tile_shape, dedup_world_dist_um)
@@ -761,6 +865,7 @@ def analyze_mosaic(tiles_dir, positions, grid_shape, tile_origins, *,
 # ---------------------------------------------------------------------------
 # Output helpers
 # ---------------------------------------------------------------------------
+
 
 def save_mosaic_outputs(mosaic, out_dir, *, basename="mosaic"):
     """Save a raw TIF and an auto-contrast PNG of the mosaic. Returns paths."""

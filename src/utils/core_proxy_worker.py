@@ -55,8 +55,8 @@ def install_single_read_getimage_shim(core):
         key = (numChannel, fix)
         with lock:
             if key in cache:
-                return cache[key]                 # read #2+ of this snap
-            img = orig_get(numChannel, fix=fix)   # read #1 (propagates on failure)
+                return cache[key]  # read #2+ of this snap
+            img = orig_get(numChannel, fix=fix)  # read #1 (propagates on failure)
             cache[key] = img
             return img
 
@@ -64,7 +64,8 @@ def install_single_read_getimage_shim(core):
     core.getImage = _get_image
     logger.info(
         "[getImage-shim] installed single-read-camera workaround on %s "
-        "(getImage cached per snapImage; see forum 107892)", type(core).__name__
+        "(getImage cached per snapImage; see forum 107892)",
+        type(core).__name__,
     )
 
 
