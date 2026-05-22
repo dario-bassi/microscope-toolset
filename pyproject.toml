@@ -60,6 +60,7 @@ dependencies = [
     "pygame>=2.5.0",
     # Simulation
     "virtual-microscope>=0.1.0",
+    "pymmcore-widgets",
 ]
 
 [project.optional-dependencies]
@@ -112,7 +113,9 @@ where = ["src"]
 
 [tool.uv.sources]
 virtual-microscope = { git = "https://github.com/hinderling/virtual-microscope" }
-pymmcore-proxy     = { git = "https://github.com/hinderling/pymmcore-proxy.git" }
+pymmcore-proxy = { git = "https://github.com/dario-bassi/pymmcore-proxy.git", rev = "fix-scarlette-and-old-functions" }
+napari-micromanager = { git = "https://github.com/dario-bassi/napari-micromanager.git", rev = "fix/mda-generator-keyerror" }
+pymmcore-widgets = { git = "https://github.com/pymmcore-plus/pymmcore-widgets.git", rev = "main" }
 
 # Local-clone alternative (comment out the git lines above and uncomment these):
 # virtual-microscope = { path = "./virtual-microscope", editable = true }

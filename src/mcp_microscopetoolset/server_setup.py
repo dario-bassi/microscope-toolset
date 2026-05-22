@@ -3,6 +3,7 @@ import datetime
 import json
 import logging
 import sys
+import threading
 import time
 from io import BytesIO
 from typing import Annotated, Any, Literal
@@ -54,6 +55,7 @@ def create_mcp_server(
     viewer,
     event_cache,
     viewer_proxy=None,
+    core: Any = None,
     benchmark_logger_instance: BenchmarkLogger | None = None,
     host: str = "127.0.0.1",
     port: int = 5500,
@@ -1009,6 +1011,186 @@ def create_mcp_server(
                     tool_name="get_last_microscope_event",
                     input_params={"event_type": event_type, "user_query": user_query},
                     result={"status": result.get("status")},
+                    execution_time_ms=execution_time_ms,
+                )
+
+    # ------------------------------------------#
+    # DMD / SLM keep-alive
+    # ------------------------------------------#
+    _dmd_keepalive: dict[str, Any] = {"thread": None, "stop": None, "interval_s": None}
+
+    def _get_raw_mmc():
+        """Resolve the live microscope core, or None if unavailable.
+
+        Prefers the proxy core handle the agent also uses (passed in as
+        ``core``), then the event cache's core, then the executor namespace.
+        This keeps hardware tools working independently of the code-execution
+        (executor) path, which is being retired. A GatekeeperCore wrapper is
+        unwrapped so the keep-alive thread talks to the raw core directly
+        (the gatekeeper's snapshot/commit model is for one-shot user code,
+        not a long-lived background thread).
+        """
+        for candidate in (
+            core,
+            getattr(event_cache, "_mmc", None),
+            (executor.namespace.get("mmc") if executor is not None else None),
+        ):
+            if candidate is None:
+                continue
+            return candidate._mmc if isinstance(candidate, GatekeeperCore) else candidate
+        return None
+
+    @mcp.tool(
+        name="keep_dmd_alive",
+        description=(
+            "Keep a DMD/SLM lit by periodically re-displaying its pattern so the controller "
+            "does not idle-time-out and drop it (e.g. Andor Mosaic3 holds a pattern only for its "
+            "ExposureTime, then frames come back as pure camera noise). action='start' launches a "
+            "background refresh thread, 'stop' ends it, 'status' reports state. The refresh "
+            "interval auto-adapts to the hardware: min(interval_s, 0.5 x the DMD's ExposureTime "
+            "hold window), so the pattern never gaps. Photo-safe: it only repositions DMD mirrors; "
+            "light reaches the sample only when the excitation source and shutter are separately "
+            "opened. Refresh pauses only while a useq MDA is running (so it never clobbers a stim "
+            "experiment's per-event pattern); an ordinary live view stays lit."
+        ),
+    )
+    def keep_dmd_alive(
+        action: Literal["start", "stop", "status"] = Field(
+            "start",
+            description="'start' to begin keep-alive, 'stop' to end it, 'status' to report state.",
+        ),
+        interval_s: float = Field(
+            60.0,
+            description="Upper bound on seconds between refreshes (default 60). The actual interval is min(this, 0.5 x the DMD's ExposureTime hold window), so it auto-adapts to the hardware.",
+        ),
+        user_query: str = Field(
+            "", description="(Optional) The original user query, used for logging only."
+        ),
+    ) -> dict[str, Any]:
+        """Start/stop/inspect a background thread that refreshes the DMD pattern."""
+        start_time = time.time()
+        result = None
+        try:
+            mmc = _get_raw_mmc()
+            if mmc is None:
+                result = {"status": "error", "message": "No live microscope core available"}
+                return result
+            try:
+                device = mmc.getSLMDevice() or None
+            except Exception:
+                device = None
+            if not device:
+                result = {"status": "error", "message": "No SLM/DMD device loaded"}
+                return result
+
+            thread = _dmd_keepalive["thread"]
+            running = bool(thread and thread.is_alive())
+
+            if action == "status":
+                try:
+                    exposing = mmc.getProperty(device, "IsExposing")
+                except Exception:
+                    exposing = None
+                result = {
+                    "status": "success",
+                    "device": device,
+                    "running": running,
+                    "interval_s": _dmd_keepalive["interval_s"],
+                    "is_exposing": exposing,
+                }
+                return result
+
+            if action == "stop":
+                if _dmd_keepalive["stop"] is not None:
+                    _dmd_keepalive["stop"].set()
+                if thread is not None:
+                    thread.join(timeout=2.0)
+                _dmd_keepalive.update(thread=None, stop=None, interval_s=None)
+                result = {"status": "success", "device": device, "running": False}
+                return result
+
+            # action == "start"
+            if running:
+                result = {
+                    "status": "success",
+                    "device": device,
+                    "running": True,
+                    "interval_s": _dmd_keepalive["interval_s"],
+                    "message": "already running",
+                }
+                return result
+
+            w, h = mmc.getSLMWidth(device), mmc.getSLMHeight(device)
+            mask = np.full((h, w), 255, dtype=np.uint8)
+
+            # A Mosaic3 holds a displayed pattern for only `ExposureTime`
+            # seconds (InternalExpose), then drops it — so re-display
+            # comfortably inside that window rather than at the fixed
+            # interval, or the pattern gaps and frames go dark. SLMs without
+            # an ExposureTime property typically don't time out, so fall back
+            # to interval_s for those.
+            try:
+                hold_s = float(mmc.getProperty(device, "ExposureTime"))
+            except Exception:
+                hold_s = 0.0
+            # Refresh at half the hold window: leaves ample margin for
+            # per-iteration RPC time and jitter so the projection never gaps
+            # (0.8x was too thin and let occasional dark frames through).
+            refresh_s = min(interval_s, 0.5 * hold_s) if hold_s > 0 else interval_s
+            refresh_s = max(0.5, refresh_s)
+            stop = threading.Event()
+
+            def _loop():
+                try:
+                    mmc.setSLMImage(device, mask)
+                    mmc.displaySLMImage(device)
+                except Exception:
+                    logger.exception("keep_dmd_alive: initial display failed")
+                while not stop.wait(refresh_s):
+                    # Pause only during an actual useq MDA (don't clobber a
+                    # stim experiment's per-event pattern). A plain continuous
+                    # live view is NOT an MDA, so the DMD stays lit while the
+                    # user images. Guard failure defaults to refreshing.
+                    try:
+                        if mmc.mda.is_running():
+                            continue
+                    except Exception:
+                        pass
+                    try:
+                        mmc.setSLMImage(device, mask)
+                        mmc.displaySLMImage(device)
+                    except Exception:
+                        logger.exception("keep_dmd_alive: refresh failed")
+
+            t = threading.Thread(target=_loop, name="dmd-keepalive", daemon=True)
+            t.start()
+            _dmd_keepalive.update(thread=t, stop=stop, interval_s=refresh_s)
+            result = {
+                "status": "success",
+                "device": device,
+                "running": True,
+                "interval_s": refresh_s,
+                "hold_s": hold_s or None,
+                "requested_interval_s": interval_s,
+            }
+            return result
+        except Exception as e:
+            logger.error(f"Error in keep_dmd_alive: {e}", exc_info=True)
+            result = {"status": "error", "message": str(e)}
+            return result
+        finally:
+            execution_time_ms = (time.time() - start_time) * 1000
+            if benchmark_logger and user_query:
+                benchmark_logger.set_query(user_query)
+            if benchmark_logger and result is not None:
+                benchmark_logger.log_tool_call(
+                    tool_name="keep_dmd_alive",
+                    input_params={
+                        "action": action,
+                        "interval_s": interval_s,
+                        "user_query": user_query,
+                    },
+                    result={"status": result.get("status"), "running": result.get("running")},
                     execution_time_ms=execution_time_ms,
                 )
 
