@@ -1,6 +1,5 @@
 # Viewer & microscope control
 napari[pyqt6,optional]
-napari-plugin-engine
 napari-micromanager
 pyqt6
 pymmcore-plus
@@ -10,7 +9,6 @@ git+https://github.com/hinderling/pymmcore-proxy.git
 # MCP server
 mcp
 uvicorn
-anyio
 
 # Image processing
 numpy
@@ -19,42 +17,21 @@ scikit-image
 opencv-python
 pillow
 tifffile
-imageio
-numba
 
 # AI / ML
 torch
-cellpose
 transformers
 sentence-transformers
 anthropic
-
+cellpose
 # Database / search
 elasticsearch
 pgvector
 psycopg2
 
-# Document processing
-pymupdf
-pymupdf4llm
-semantic_text_splitter
-tiktoken
-pdf2image
-beautifulsoup4
-markdown
-chardet
-
 # Utilities
 pydantic
 python-dotenv
-requests
-tqdm
-pandas
-pyyaml
-more-itertools
-protobuf
-griffe
-pygame
 
 # Simulation
 git+https://github.com/hinderling/virtual-microscope
