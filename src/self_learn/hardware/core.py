@@ -421,7 +421,7 @@ def world_to_pixel(wx, wy, stage_x, stage_y, config=None, core=None,
 # MDA helpers
 # ---------------------------------------------------------------------------
 
-def run_events(core, events, on_frame=None):
+def run_events(core, events, on_frame=None, collect=True):
     """Execute MDAEvent generators via core.mda.run() with optional frame callback.
 
     Works with both local CMMCorePlus and remote pymmcore-proxy. The MDA
@@ -449,9 +449,13 @@ def run_events(core, events, on_frame=None):
         core: Microscope core (CMMCorePlus or RemoteMMCore proxy).
         events: Iterable of MDAEvent objects (generator, list, or MDASequence).
         on_frame: Optional callback(image, event) called after each frame.
+        collect: If True (default), accumulate every (image, event) and return
+            them. Set False for large scans that stream each frame to disk in
+            ``on_frame`` — avoids holding hundreds of full frames in RAM.
 
     Returns:
-        list of (image, event) tuples for all acquired frames.
+        list of (image, event) tuples for all acquired frames (empty if
+        ``collect`` is False).
     """
     import types
 
@@ -470,14 +474,15 @@ def run_events(core, events, on_frame=None):
     is_generator = isinstance(events, types.GeneratorType)
 
     if is_generator:
-        return _manual_run(core, _filtered(events), on_frame)
+        return _manual_run(core, _filtered(events), on_frame, collect=collect)
 
     # For lists/tuples/MDASequence: use the MDA engine.
     event_list = list(events)
     frames = []
 
     def _handler(image, event, meta=None):
-        frames.append((image, event))
+        if collect:
+            frames.append((image, event))
         if on_frame is not None:
             on_frame(image, event)
 
@@ -503,10 +508,10 @@ def run_events(core, events, on_frame=None):
         import warnings
         warnings.warn(f"MDA engine error ({type(e).__name__}: {e}) — retrying with manual acquisition")
 
-    return _manual_run(core, _filtered(event_list), on_frame)
+    return _manual_run(core, _filtered(event_list), on_frame, collect=collect)
 
 
-def _manual_run(core, events, on_frame=None):
+def _manual_run(core, events, on_frame=None, collect=True):
     """Manual snap-based acquisition fallback.
 
     Processes events lazily (one at a time), preserving any side effects
@@ -553,7 +558,8 @@ def _manual_run(core, events, on_frame=None):
         # Snap and collect
         core.snapImage()
         image = core.getImage()
-        frames.append((image.copy(), event))
+        if collect:
+            frames.append((image.copy(), event))
         if on_frame is not None:
             on_frame(image, event)
 

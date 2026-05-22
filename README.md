@@ -184,6 +184,30 @@ Execute.register_runtime_guard("mylib", my_installer_fn)   # runs during exec
 
 If you need a guardrail for a library that is not yet covered, please [open an issue or submit a PR](https://github.com/ddd42-star/microscope-toolset/issues).
 
+### Camera compatibility — PVCAM single-read `getImage()` workaround
+
+Some camera device adapters (notably certain **PVCAM / Photometrics** builds) return the snapped
+frame from `getImage()` only **once** per `snapImage()`; a second consecutive `getImage()` raises
+`Camera image buffer read failed.` This breaks the napari **Snap** button, because the snap path
+reads the buffer **twice** per snap — `mmc.snap()` reads it once, and napari's `imageSnapped`
+handler (`_core_link._image_snapped`) reads it again to display it — so the second read throws even
+though the frame was acquired fine. The same camera works in MMStudio (which reads the buffer once).
+See [image.sc topic 107892](https://forum.image.sc/t/camera-image-buffer-read-fail-with-pvcam-only-from-pymmcore/107892).
+
+To fix this, the toolset installs **`install_single_read_getimage_shim()`**
+(`src/utils/core_proxy_worker.py`) on the proxy-side `CMMCorePlus` for real-hardware configs. It
+caches the frame on the first `getImage()` after each `snapImage()` and serves later reads of the
+*same* snap from the cache, so the failing second hardware read never happens. The cache is
+invalidated on every `snapImage()` (a stale frame is never returned) and a genuine first-read
+failure still propagates. It is **transparent for re-readable cameras** — the cache only mirrors the
+real frame — so it is safe to leave enabled for any camera; live/sequence acquisition
+(`getLastImage`/`popNextImage`) is untouched.
+
+Related config note: `Camera,CircularBufferEnabled,OFF` makes single snaps fail much more often
+(the adapter has no acquisition setup right after a fresh cfg load → `PL_ERR_ACQUISITION_SETUP_REQUIRED`);
+prefer `ON`. For robust high-throughput single frames you can also bypass `snapImage()` with a
+1-frame sequence acquisition (`startSequenceAcquisition(1, 0, True)` → `popNextImage()`).
+
 ### Testing
 
 Run the full test suite with:

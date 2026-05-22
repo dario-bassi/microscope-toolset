@@ -16,6 +16,58 @@ from .cfg_utils import classify_cfg
 logger = logging.getLogger("CoreProxyWorker")
 
 
+def install_single_read_getimage_shim(core):
+    """Make ``getImage()`` re-readable for single-read camera adapters.
+
+    Some camera device adapters (notably certain PVCAM builds) hand back the
+    snapped frame from ``GetImageBuffer()`` only ONCE per ``snapImage()`` — a
+    second ``getImage()`` raises *"Camera image buffer read failed."* This breaks
+    the napari snap path, which reads the buffer twice per snap: ``mmc.snap()``
+    calls ``snapImage()`` then ``getImage()`` (read #2), while ``snapImage()``
+    emits ``imageSnapped`` whose napari handler (`_core_link._image_snapped`)
+    calls ``getImage()`` to display (read #1). MMStudio and single-read clients
+    work because they read once; see image.sc forum topic 107892.
+
+    This caches the frame on the first ``getImage()`` after each ``snapImage()``
+    and serves later reads of the *same* snap from the cache, so the underlying
+    (failing) second hardware read never happens.
+
+    Safe for BOTH camera types:
+      * Re-readable cameras — the cache just mirrors the real frame; behaviour is
+        identical (repeated reads of one snap return the same pixels anyway).
+      * Single-read cameras — the failing 2nd read is avoided.
+    The cache is invalidated on every ``snapImage()`` and only served if it was
+    populated since the last snap, so a stale frame can never be returned and a
+    genuine first-read failure still raises (not masked). Live/sequence
+    acquisition uses ``getLastImage``/``popNextImage`` (untouched).
+    """
+    orig_snap = core.snapImage
+    orig_get = core.getImage
+    lock = threading.Lock()
+    cache: dict = {}  # (numChannel, fix) -> frame; cleared on each snapImage
+
+    def _snap_image(*args, **kwargs):
+        with lock:
+            cache.clear()
+        return orig_snap(*args, **kwargs)
+
+    def _get_image(numChannel=None, *, fix=True):
+        key = (numChannel, fix)
+        with lock:
+            if key in cache:
+                return cache[key]                 # read #2+ of this snap
+            img = orig_get(numChannel, fix=fix)   # read #1 (propagates on failure)
+            cache[key] = img
+            return img
+
+    core.snapImage = _snap_image
+    core.getImage = _get_image
+    logger.info(
+        "[getImage-shim] installed single-read-camera workaround on %s "
+        "(getImage cached per snapImage; see forum 107892)", type(core).__name__
+    )
+
+
 class CoreProxyWorker(QObject):
     """Starts a pymmcore-proxy HTTP server for a given .cfg file.
 
@@ -93,6 +145,10 @@ class CoreProxyWorker(QObject):
                     from pymmcore_plus import CMMCorePlus
 
                     core = CMMCorePlus()
+                    # Real hardware only: guard against single-read camera adapters
+                    # (e.g. PVCAM) whose getImage() fails on the napari snap path's
+                    # second read. No-op for re-readable cameras.
+                    install_single_read_getimage_shim(core)
             finally:
                 if _old_backend is None:
                     os.environ.pop("PYMM_SIGNALS_BACKEND", None)
