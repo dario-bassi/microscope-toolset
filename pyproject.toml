@@ -32,6 +32,7 @@ dependencies = [
     "elasticsearch>=9.3.0",
     "pgvector>=0.4.2",
     "psycopg2-binary>=2.9.0",
+    "cellpose",
     # Utilities
     "pydantic>=2.13.3",
     "python-dotenv>=1.2.2",
